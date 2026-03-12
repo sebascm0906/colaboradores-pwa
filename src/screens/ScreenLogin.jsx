@@ -258,7 +258,7 @@ export default function LoginScreen() {
       />
 
       {/* Card principal */}
-      <div className="relative w-full max-w-sm mx-auto px-6 flex flex-col items-center gap-7">
+      <div className="relative w-full max-w-[420px] mx-auto p-8 flex flex-col items-center gap-7 bg-[#091628]/80 border border-gray-600/50 rounded-3xl shadow-xl backdrop-blur-md">
         {/* Logo block */}
         <div className={`flex flex-col items-center gap-4 ${mounted ? "fade-up-1" : "opacity-0"}`}>
           <div className="relative flex items-center justify-center">
@@ -276,8 +276,7 @@ export default function LoginScreen() {
           </div>
 
           <div className="flex flex-col items-center gap-2">
-            <LogoGF width={204} />
-            <span className="text-white/30 text-[11px] font-medium tracking-[0.25em] uppercase">
+            <span className="text-white/30 text-[11px] font-medium tracking-[0.25em] uppercase mt-2">
               Trabajadores
             </span>
           </div>
