@@ -1,10 +1,21 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSession } from "../App";
 
-// ── Simulación de llamada a n8n W15 ──────────────────────────────────────
+// ── Llamada real a n8n W15 Auth Magic Link ───────────────────────────────
 async function requestMagicLink(phone) {
-  await new Promise((r) => setTimeout(r, 1800));
-  if (phone.replace(/\D/g, "").length < 10) throw new Error("Número inválido");
-  return { status: "sent" };
+  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL
+    || "https://car12los023.app.n8n.cloud/webhook";
+  const res = await fetch(`${webhookUrl}/pwa-auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `Error ${res.status}`);
+  }
+  return res.json(); // { status:"sent" } o { status:"ok", session_token:"..." }
 }
 
 // ── Design tokens ────────────────────────────────────────────────────────
@@ -38,7 +49,7 @@ const UI = {
   },
 };
 
-// ── Logos — public/icons/ ───────────────────────────────────────────────
+// ── Logos — public/icons/ ────────────────────────────────────────────────
 function IconGF({ size = 68 }) {
   return (
     <div
@@ -109,6 +120,8 @@ function IceParticles() {
 
 // ── Componente principal ────────────────────────────────────────────────
 export default function LoginScreen() {
+  const { login } = useSession();
+  const navigate = useNavigate();
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState("input"); // input | loading | sent
   const [error, setError] = useState("");
@@ -138,8 +151,22 @@ export default function LoginScreen() {
     setStep("loading");
 
     try {
-      await requestMagicLink(`+52${digits}`);
-      setStep("sent");
+      const result = await requestMagicLink(`+52${digits}`);
+      if (result?.session_token) {
+        // Respuesta inmediata con token (SSO / bypass dev)
+        let payload = { phone: `+52${digits}`, app: "pwa_colaboradores" };
+        try {
+          const parts = result.session_token.split(".");
+          if (parts.length === 3) {
+            payload = { ...JSON.parse(atob(parts[1].replace(/-/g,"+").replace(/_/g,"/"))), session_token: result.session_token };
+          }
+        } catch { /* JWT inválido — usar payload mínimo */ }
+        login(payload);
+        navigate("/", { replace: true });
+      } else {
+        // Flujo normal: link enviado a WhatsApp
+        setStep("sent");
+      }
     } catch (e) {
       setError(e.message || "Error enviando el código");
       setStep("input");
@@ -258,28 +285,37 @@ export default function LoginScreen() {
       />
 
       {/* Card principal */}
-      <div className="relative w-full max-w-[420px] mx-auto p-8 flex flex-col items-center gap-7 bg-[#091628]/80 border border-gray-600/50 rounded-3xl shadow-xl backdrop-blur-md">
-        {/* Logo block */}
+      <div className="relative w-full max-w-sm mx-auto px-6 flex flex-col items-center gap-7">
+        {/* Portada corporativa */}
         <div className={`flex flex-col items-center gap-4 ${mounted ? "fade-up-1" : "opacity-0"}`}>
-          <div className="relative flex items-center justify-center">
-            <div
-              className="absolute w-24 h-24 rounded-full border border-blue-400/20"
-              style={{ animation: "pulse-ring 2.6s ease-out infinite" }}
-            />
-            <div
-              className="absolute w-24 h-24 rounded-full border border-blue-400/10"
-              style={{ animation: "pulse-ring 2.6s 0.9s ease-out infinite" }}
-            />
-            <div className="relative">
-              <IconGF size={68} />
+          <div className="relative">
+            <div className="absolute -inset-3 rounded-[36px] bg-blue-500/12 blur-2xl" />
+            <div className="absolute inset-0 rounded-[32px] border border-blue-400/20 shadow-[0_0_28px_rgba(43,143,224,0.16)]" />
+
+            <div className="relative w-[228px] rounded-[32px] border border-white/10 bg-white/[0.04] px-7 py-7 backdrop-blur-xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_16px_40px_rgba(0,0,0,0.34),0_0_32px_rgba(43,143,224,0.18)]">
+              <div className="pointer-events-none absolute inset-[1px] rounded-[31px] bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent" />
+
+              <div className="relative flex flex-col items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center rounded-[22px] border border-white/15 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.28),0_0_20px_rgba(43,143,224,0.12)]">
+                  <img
+                    src="/icons/icon-grupo-frio.svg"
+                    alt="Icono Grupo Frío"
+                    className="h-14 w-14 object-contain"
+                  />
+                </div>
+
+                <img
+                  src="/icons/logo-grupo-frio.svg"
+                  alt="Grupo Frío"
+                  className="w-[168px] h-auto object-contain"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
-            <span className="text-white/30 text-[11px] font-medium tracking-[0.25em] uppercase mt-2">
-              Trabajadores
-            </span>
-          </div>
+          <span className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/35">
+            COLABORADORES
+          </span>
         </div>
 
         {/* Separador */}

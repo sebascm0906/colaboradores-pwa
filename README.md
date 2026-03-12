@@ -59,4 +59,3 @@ WhatsApp OTP → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_i
 ```
 
 El JWT tiene expiración de 7 días. `App.jsx` valida exp en cada carga.
-# colaboradores-pwa

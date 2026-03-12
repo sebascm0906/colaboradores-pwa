@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -113,6 +114,8 @@ const NAV_ITEMS = [
 ];
 
 function BottomNav({ sw }) {
+  const navigate = useNavigate();
+  const ROUTES = { home: "/", kpis: "/kpis", encuestas: "/surveys", logros: "/badges", badges: "/badges", perfil: "/profile" };
   const navH = sw < 340 ? 58 : 64;
   const itemW = sw < 340 ? 48 : 58;
 
@@ -122,12 +125,12 @@ function BottomNav({ sw }) {
         const isActive = item.id === "encuestas";
         const Icon = item.icon;
         return (
-          <div key={item.id} style={{ width:itemW, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
+          <button key={item.id} onClick={() => navigate(ROUTES[item.id] || "/")} style={{ width:itemW, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
             <div style={{ width:34, height:34, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", background:isActive?"rgba(43,143,224,0.10)":"transparent", border:isActive?"1px solid rgba(97,178,255,0.14)":"1px solid transparent", boxShadow:isActive?"0 0 16px rgba(43,143,224,0.12)":"none" }}>
               <Icon />
             </div>
             <span style={{ fontSize:9, fontWeight:isActive?700:500 }}>{item.label}</span>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -332,7 +335,7 @@ function SingleChoiceQuestion({ options, value, onChange, sw }) {
       {options.map((opt) => {
         const selected = value === opt;
         return (
-          <div
+          <button
             key={opt}
             onClick={() => onChange(opt)}
             style={{
@@ -367,7 +370,7 @@ function SingleChoiceQuestion({ options, value, onChange, sw }) {
             <span style={{ ...typo.body, color:selected ? TOKENS.colors.text : TOKENS.colors.textSoft, fontWeight:selected ? 700 : 500 }}>
               {opt}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -823,7 +826,7 @@ const DEVICES = [
 /* ============================================================================
    ROOT
 ============================================================================ */
-export default function MultiDeviceSurveysPreview() {
+export function MultiDeviceSurveysPreview() {
   return (
     <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
       <style>{`
@@ -856,3 +859,5 @@ export default function MultiDeviceSurveysPreview() {
     </div>
   );
 }
+
+export default SurveysScreen;

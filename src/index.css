@@ -1,11 +1,9 @@
+@import "tailwindcss";
+
 /* ══════════════════════════════════════════════════════════════
    GF PWA Colaboradores — Global Styles
    Design System tokens: ver App.jsx TOKENS object
    ══════════════════════════════════════════════════════════════ */
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 /* Reset */
 *, *::before, *::after {

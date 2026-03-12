@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSession } from "../App";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -170,6 +172,9 @@ const NAV_ITEMS = [
 ];
 
 function BottomNav({ sw }) {
+  const navigate = useNavigate();
+  const { logout } = useSession();
+  const ROUTES = { home: "/", kpis: "/kpis", encuestas: "/surveys", logros: "/badges", badges: "/badges", perfil: "/profile" };
   const navH = sw < 340 ? 58 : 64;
   const itemW = sw < 340 ? 48 : 58;
   return (
@@ -178,12 +183,12 @@ function BottomNav({ sw }) {
         const isActive = item.id === "perfil";
         const Icon = item.icon;
         return (
-          <div key={item.id} style={{ width:itemW, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
+          <button key={item.id} onClick={() => navigate(ROUTES[item.id] || "/")} style={{ width:itemW, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, color:isActive?TOKENS.colors.blue3:"rgba(255,255,255,0.42)", transition:`all ${TOKENS.motion.fast}` }}>
             <div style={{ width:34, height:34, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", background:isActive?"rgba(43,143,224,0.10)":"transparent", border:isActive?"1px solid rgba(97,178,255,0.14)":"1px solid transparent", boxShadow:isActive?"0 0 16px rgba(43,143,224,0.12)":"none" }}>
               <Icon />
             </div>
             <span style={{ fontSize:9, fontWeight:isActive?700:500 }}>{item.label}</span>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -631,8 +636,9 @@ function PerfilScreen({ sw = 390, sh = 844 }) {
     apiPost("/pwa-logout", {})
       .catch(() => {}) // fire-and-forget, limpiar igual
       .finally(() => {
-        clearSession();
-        setLogoutDone(true);
+        clearSession();   // limpia localStorage
+        logout();         // limpia SessionContext en memoria
+        navigate("/login", { replace: true });
       });
   };
 
@@ -772,7 +778,7 @@ function PerfilScreen({ sw = 390, sh = 844 }) {
           <div style={{ ...typo.h2, color:TOKENS.colors.text }}>¡Hasta pronto!</div>
           <div style={{ ...typo.caption, color:TOKENS.colors.textMuted }}>Sesión cerrada correctamente</div>
           <button
-            onClick={() => setLogoutDone(false)}
+            onClick={() => { setLogoutDone(false); navigate("/login", { replace: true }); }}
             style={{ marginTop:12, padding:"10px 24px", borderRadius:TOKENS.radius.pill, background:"rgba(43,143,224,0.12)", border:`1px solid ${TOKENS.colors.borderBlue}`, color:TOKENS.colors.blue3, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
           >
             Volver al inicio
@@ -815,7 +821,7 @@ const DEVICES = [
 /* ============================================================================
    ROOT
 ============================================================================ */
-export default function MultiDevicePerfilPreview() {
+export function MultiDevicePerfilPreview() {
   return (
     <div style={{ minHeight:"100vh", background:"radial-gradient(circle at center, #102a57 0%, #07183a 35%, #050d1a 75%, #030811 100%)", padding:"36px 20px 60px", fontFamily:"system-ui,sans-serif" }}>
       <style>{`
@@ -849,3 +855,5 @@ export default function MultiDevicePerfilPreview() {
     </div>
   );
 }
+
+export default PerfilScreen;

@@ -1,12 +1,15 @@
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
     plugins: [
       react(),
+      tailwindcss(),
 
       // PWA — selfDestroying=true durante v1. Cambiar a false para activar SW offline
       VitePWA({
