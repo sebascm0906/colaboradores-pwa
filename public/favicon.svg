@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Grupo Frío favicon">
+  <title>Grupo Frío favicon</title>
+  <rect width="64" height="64" rx="12" fill="#FFFFFF"/>
+  <g transform="translate(5,6) scale(0.095)">
+    <polygon points="290,0 400,64 400,190 290,126" fill="#B8BAC1"/>
+    <polygon points="290,0 180,64 180,190 290,126" fill="#C5C7CD"/>
+    <polygon points="430,78 510,125 510,255 430,208" fill="#B8BAC1"/>
+    <polygon points="150,78 70,125 70,255 150,208" fill="#C5C7CD"/>
+    <polygon points="290,132 400,196 400,332 290,268" fill="#C7CCD1"/>
+    <polygon points="290,132 180,196 180,332 290,268" fill="#D2D7DB"/>
+    <polygon points="150,208 70,255 70,385 150,338" fill="#1A4F9C"/>
+    <polygon points="290,268 180,332 180,463 290,399" fill="#1A4F9C"/>
+    <polygon points="430,208 510,255 510,385 430,338" fill="#1A4F9C"/>
+    <polygon points="290,126 372,173 290,220 208,173" fill="#D8DDE0"/>
+  </g>
+</svg>

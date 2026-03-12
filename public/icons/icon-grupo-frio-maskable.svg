@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Grupo Frío icono maskable">
+  <title>Grupo Frío icono maskable</title>
+  <rect width="512" height="512" rx="110" fill="#0A2C5C"/>
+  <g transform="translate(1,10) scale(0.9)">
+    <polygon points="290,0 400,64 400,190 290,126" fill="#B8BAC1"/>
+    <polygon points="290,0 180,64 180,190 290,126" fill="#C5C7CD"/>
+    <polygon points="430,78 510,125 510,255 430,208" fill="#B8BAC1"/>
+    <polygon points="150,78 70,125 70,255 150,208" fill="#C5C7CD"/>
+    <polygon points="290,132 400,196 400,332 290,268" fill="#C7CCD1"/>
+    <polygon points="290,132 180,196 180,332 290,268" fill="#D2D7DB"/>
+    <polygon points="150,208 70,255 70,385 150,338" fill="#1A4F9C"/>
+    <polygon points="290,268 180,332 180,463 290,399" fill="#1A4F9C"/>
+    <polygon points="430,208 510,255 510,385 430,338" fill="#1A4F9C"/>
+    <polygon points="290,126 372,173 290,220 208,173" fill="#D8DDE0"/>
+    <g fill="none" stroke="#F5F7F8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="290" y1="0" x2="290" y2="126" stroke-width="12"/>
+      <line x1="180" y1="64" x2="180" y2="463" stroke-width="12"/>
+      <line x1="400" y1="64" x2="400" y2="332" stroke-width="12"/>
+      <line x1="70" y1="255" x2="180" y2="332" stroke-width="12"/>
+      <line x1="400" y1="196" x2="510" y2="255" stroke-width="12"/>
+      <line x1="180" y1="196" x2="70" y2="125" stroke-width="12"/>
+      <line x1="400" y1="190" x2="510" y2="125" stroke-width="12"/>
+      <line x1="180" y1="190" x2="290" y2="126" stroke-width="12"/>
+      <line x1="290" y1="126" x2="400" y2="190" stroke-width="12"/>
+      <line x1="180" y1="332" x2="70" y2="255" stroke-width="12"/>
+      <line x1="180" y1="332" x2="290" y2="399" stroke-width="12"/>
+      <line x1="290" y1="399" x2="400" y2="332" stroke-width="12"/>
+      <line x1="400" y1="332" x2="510" y2="255" stroke-width="12"/>
+    </g>
+  </g>
+</svg>
