@@ -38,7 +38,7 @@ const UI = {
   },
 };
 
-// ── Logos — public/assets/ ───────────────────────────────────────────────
+// ── Logos — public/icons/ ───────────────────────────────────────────────
 function IconGF({ size = 68 }) {
   return (
     <div
@@ -53,7 +53,7 @@ function IconGF({ size = 68 }) {
       }}
     >
       <img
-        src="/assets/icon-grupo-frio.svg"
+        src="/icons/icon-grupo-frio.svg"
         alt="Grupo Frío"
         style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
       />
@@ -64,7 +64,7 @@ function IconGF({ size = 68 }) {
 function LogoGF({ width = 204 }) {
   return (
     <img
-      src="/assets/logo-grupo-frio.svg"
+      src="/icons/logo-grupo-frio.svg"
       alt="Grupo Frío"
       style={{ width, height: "auto", display: "block" }}
     />
