@@ -4,19 +4,36 @@ import { useSession } from "../App";
 
 // ── Llamada real a n8n W15 Auth Magic Link ───────────────────────────────
 async function requestMagicLink(phone) {
-  // En producción (Vercel), usamos el rewrite /api-n8n configurado en vercel.json para evitar CORS.
-  // En desarrollo local (Vite), el proxy está en vite.config.js.
   const webhookUrl = "/api-n8n";
   const res = await fetch(`${webhookUrl}/pwa-auth-request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
   });
+
+  // Si la respuesta no es OK (4xx, 5xx)
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `Error ${res.status}`);
+    const text = await res.text().catch(() => "");
+    let message = `Error ${res.status}`;
+    try {
+      const err = JSON.parse(text);
+      message = err.message || message;
+    } catch {
+      if (text) message = text;
+    }
+    throw new Error(message);
   }
-  return res.json(); // { status:"sent" } o { status:"ok", session_token:"..." }
+
+  // Leer como texto primero para evitar "Unexpected end of JSON input" si está vacío
+  const text = await res.text().catch(() => "");
+  if (!text) return { status: "sent" };
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Si no es JSON pero es OK, asumimos que se envió
+    return { status: "sent", message: text };
+  }
 }
 
 // ── Design tokens ────────────────────────────────────────────────────────
@@ -332,8 +349,8 @@ export default function LoginScreen() {
                 </span>
 
                 <div
-                  className="absolute left-[56px] top-3 bottom-3 w-px"
-                  style={{ background: "rgba(255,255,255,0.10)" }}
+                  className="absolute top-3 bottom-3 w-px"
+                  style={{ left: "68px", background: "rgba(255,255,255,0.10)" }}
                 />
 
                 <input
@@ -343,7 +360,8 @@ export default function LoginScreen() {
                   onKeyDown={handleKeyDown}
                   placeholder="(33) 1234-5678"
                   disabled={step === "loading"}
-                  className="input-gf w-full rounded-2xl py-4 pl-[76px] pr-4 text-base font-medium"
+                  className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
+                  style={{ paddingLeft: "88px" }}
                 />
               </div>
 
