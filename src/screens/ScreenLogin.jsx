@@ -7,7 +7,7 @@ async function requestMagicLink(phone) {
   // En producción (Vercel), usamos el rewrite /api-n8n configurado en vercel.json para evitar CORS.
   // En desarrollo local (Vite), el proxy está en vite.config.js.
   const webhookUrl = "/api-n8n";
-  const res = await fetch(`${webhookUrl}/pwa-auth`, {
+  const res = await fetch(`${webhookUrl}/pwa-auth-request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
