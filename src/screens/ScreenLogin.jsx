@@ -4,8 +4,9 @@ import { useSession } from "../App";
 
 // ── Llamada real a n8n W15 Auth Magic Link ───────────────────────────────
 async function requestMagicLink(phone) {
-  const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL
-    || "https://car12los023.app.n8n.cloud/webhook";
+  // En producción (Vercel), usamos el rewrite /api-n8n configurado en vercel.json para evitar CORS.
+  // En desarrollo local (Vite), el proxy está en vite.config.js.
+  const webhookUrl = "/api-n8n";
   const res = await fetch(`${webhookUrl}/pwa-auth`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -296,14 +297,6 @@ export default function LoginScreen() {
               <div className="pointer-events-none absolute inset-[1px] rounded-[31px] bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent" />
 
               <div className="relative flex flex-col items-center gap-4">
-                <div className="flex h-20 w-20 items-center justify-center rounded-[22px] border border-white/15 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.28),0_0_20px_rgba(43,143,224,0.12)]">
-                  <img
-                    src="/icons/icon-grupo-frio.svg"
-                    alt="Icono Grupo Frío"
-                    className="h-14 w-14 object-contain"
-                  />
-                </div>
-
                 <img
                   src="/icons/logo-grupo-frio.svg"
                   alt="Grupo Frío"
@@ -339,7 +332,7 @@ export default function LoginScreen() {
                 </span>
 
                 <div
-                  className="absolute left-[52px] top-3 bottom-3 w-px"
+                  className="absolute left-[56px] top-3 bottom-3 w-px"
                   style={{ background: "rgba(255,255,255,0.10)" }}
                 />
 
@@ -350,7 +343,7 @@ export default function LoginScreen() {
                   onKeyDown={handleKeyDown}
                   placeholder="(33) 1234-5678"
                   disabled={step === "loading"}
-                  className="input-gf w-full rounded-2xl py-4 pl-[68px] pr-4 text-base font-medium"
+                  className="input-gf w-full rounded-2xl py-4 pl-[76px] pr-4 text-base font-medium"
                 />
               </div>
 
