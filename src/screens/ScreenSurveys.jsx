@@ -64,7 +64,7 @@ function getTypo(sw) {
 /* ============================================================================
    API CONFIG
 ============================================================================ */
-const N8N_BASE = import.meta.env.VITE_N8N_WEBHOOK_URL;
+const N8N_BASE = "/api-n8n";
 const ODOO_BASE = import.meta.env.VITE_ODOO_URL;
 
 function getSession() {

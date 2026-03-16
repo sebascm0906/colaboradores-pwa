@@ -65,7 +65,7 @@ function getTypo(sw) {
 /* ============================================================================
    API CONFIG
 ============================================================================ */
-const N8N_BASE = import.meta.env.VITE_N8N_WEBHOOK_URL;
+const N8N_BASE = "/api-n8n";
 function getSession() {
   try { return JSON.parse(localStorage.getItem("gf_session") || "{}"); } catch { return {}; }
 }
