@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSession } from "../App";
 
 // ── Llamada real a n8n W15 Auth Magic Link ───────────────────────────────
+const WEBHOOK_URL = "/api-n8n";
+
 async function requestMagicLink(phone) {
-  const webhookUrl = "/api-n8n";
-  const res = await fetch(`${webhookUrl}/pwa-auth-request`, {
+  const res = await fetch(`${WEBHOOK_URL}/pwa-auth-request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
@@ -34,6 +35,31 @@ async function requestMagicLink(phone) {
     // Si no es JSON pero es OK, asumimos que se envió
     return { status: "sent", message: text };
   }
+}
+
+// ── Verificar token del magic link ───────────────────────────────────────
+async function verifyMagicToken(token, phone) {
+  const res = await fetch(`${WEBHOOK_URL}/pwa-auth-verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, phone, app: "pwa_colaboradores" }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let message = `Error ${res.status}`;
+    try {
+      const err = JSON.parse(text);
+      message = err.message || message;
+    } catch {
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+
+  const text = await res.text().catch(() => "");
+  if (!text) throw new Error("Respuesta vacía del servidor");
+  return JSON.parse(text);
 }
 
 // ── Design tokens ────────────────────────────────────────────────────────
@@ -140,14 +166,51 @@ function IceParticles() {
 export default function LoginScreen() {
   const { login } = useSession();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [phone, setPhone] = useState("");
-  const [step, setStep] = useState("input"); // input | loading | sent
+  const [step, setStep] = useState("input"); // input | loading | verifying | sent
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // ── Auto-verificar token del magic link (?token=...&phone=...) ──────
+  useEffect(() => {
+    const urlToken = searchParams.get("token");
+    const urlPhone = searchParams.get("phone");
+    if (!urlToken || !urlPhone) return;
+
+    setStep("verifying");
+
+    const phoneFormatted = urlPhone.startsWith("+") ? urlPhone : `+52${urlPhone.replace(/\D/g, "")}`;
+
+    verifyMagicToken(urlToken, phoneFormatted)
+      .then((result) => {
+        if (result?.session_token) {
+          let payload = { phone: phoneFormatted, app: "pwa_colaboradores" };
+          try {
+            const parts = result.session_token.split(".");
+            if (parts.length === 3) {
+              payload = {
+                ...JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))),
+                session_token: result.session_token,
+              };
+            }
+          } catch { /* JWT inválido — usar payload mínimo */ }
+          login(payload);
+          navigate("/", { replace: true });
+        } else {
+          setError("Token inválido o expirado. Solicita un nuevo enlace.");
+          setStep("input");
+        }
+      })
+      .catch((e) => {
+        setError(e.message || "Error verificando el código");
+        setStep("input");
+      });
+  }, [searchParams, login, navigate]);
 
   const formatPhone = (val) => {
     const digits = val.replace(/\D/g, "").slice(0, 10);
@@ -336,7 +399,15 @@ export default function LoginScreen() {
         </div>
 
         {/* Formulario */}
-        {step !== "sent" ? (
+        {step === "verifying" ? (
+          <div className={`w-full flex flex-col items-center gap-5 text-center ${mounted ? "fade-up-3" : "opacity-0"}`}>
+            <div
+              className="w-16 h-16 border-3 border-white/20 border-t-blue-400 rounded-full"
+              style={{ animation: "spin 0.8s linear infinite" }}
+            />
+            <p className="text-white/60 text-sm">Verificando acceso...</p>
+          </div>
+        ) : step !== "sent" ? (
           <div className={`w-full flex flex-col gap-4 ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div>
               <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
