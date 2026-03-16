@@ -689,6 +689,12 @@ function PerfilScreen({ sw = 390, sh = 844 }) {
             <SkeletonVacation />
             <SkeletonInfoCard />
           </>
+        ) : !employee ? (
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"32px 0", textAlign:"center" }}>
+            <div style={{ fontSize:28 }}>📡</div>
+            <div style={{ fontSize:14, fontWeight:500, color:TOKENS.colors.textMuted }}>No se pudo cargar el perfil</div>
+            <button onClick={()=>{ setIsLoading(true); apiGet("/pwa-employee-profile").then(r=>{ if(r.success&&r.data) setEmployee(mapOdooEmployee(r.data)); setIsLoading(false); }).catch(()=>setIsLoading(false)); }} style={{ border:"none", cursor:"pointer", padding:"10px 22px", minHeight:44, borderRadius:TOKENS.radius.pill, background:"linear-gradient(90deg,#15499B,#2B8FE0)", color:"white", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>Reintentar</button>
+          </div>
         ) : (
           <>
             <HeroCard employee={employee} sw={sw} delay={40} onEditPhoto={() => setShowEditPhoto(true)} />
