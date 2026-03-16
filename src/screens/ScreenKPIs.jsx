@@ -280,7 +280,7 @@ function MockMetabaseDashboard({ period, sw }) {
 /* ============================================================================
    METABASE FRAME (switcher loading → mock/real)
 ============================================================================ */
-function MetabaseFrame({ period, sw, sh, embedHeight, jobKey }) {
+function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) {
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [embedUrl, setEmbedUrl] = useState(null);
@@ -314,7 +314,7 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey }) {
       })
       .catch(() => { if (!cancelled) { setHasError(true); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [retryKey, jobKey, period]);
+  }, [retryKey, refreshKey, jobKey, period]);
 
   const handleRetry = () => {
     setLoading(true);
@@ -380,10 +380,13 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey }) {
 ============================================================================ */
 function KPIScreen({ sw = 390, sh = 844 }) {
   const [period, setPeriod] = useState("hoy");
+  const [refreshKey, setRefreshKey] = useState(0);
   const session = getSession();
   const jobKey = session.job_key || "VENDEDOR";
   const jobTitle = session.job_title || "Grupo Frío";
   const typo = getTypo(sw);
+
+  const handleRetry = () => setRefreshKey(k => k + 1);
 
   const navH       = sw < 340 ? 58 : 64;
   const navBot     = 10;
@@ -435,7 +438,7 @@ function KPIScreen({ sw = 390, sh = 844 }) {
 
         {/* METABASE EMBED FRAME */}
         <FadeIn delay={200}>
-          <MetabaseFrame period={period} sw={sw} sh={sh} embedHeight={embedHeight} jobKey={jobKey}/>
+          <MetabaseFrame period={period} sw={sw} sh={sh} embedHeight={embedHeight} jobKey={jobKey} refreshKey={refreshKey}/>
         </FadeIn>
 
         <div style={{ height:4 }}/>
