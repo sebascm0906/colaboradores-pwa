@@ -1,0 +1,17 @@
+
+> gf-pwa-colaboradores@1.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 44 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/registerSW.js                               0.13 kB
+dist/manifest.webmanifest                        0.40 kB
+dist/index.html                                  1.66 kB │ gzip:  0.68 kB
+dist/assets/index-CEzRVEB9.css                  24.63 kB │ gzip:  5.16 kB
+dist/assets/ScreenModuloPendiente-sFHpfDtV.js    3.49 kB │ gzip:  1.41 kB
+dist/assets/index-qn-iPPyQ.js                  124.42 kB │ gzip: 26.12 kB
+dist/assets/vendor-CS4VZcIF.js                 160.62 kB │ gzip: 52.48 kB
+✓ built in 1.38s

@@ -450,8 +450,12 @@ function LogoutDialog({ onConfirm, onCancel, sw }) {
   );
 }
 
-function EditPhotoSheet({ onClose, sw }) {
+function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
   const [visible, setVisible] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const cameraRef = useRef(null);
+  const galleryRef = useRef(null);
   const typo = getTypo(sw);
 
   useEffect(() => {
@@ -459,21 +463,77 @@ function EditPhotoSheet({ onClose, sw }) {
     return () => clearTimeout(t);
   }, []);
 
-  const handleClose = () => { setVisible(false); setTimeout(onClose, 220); };
+  const handleClose = () => { if (uploading) return; setVisible(false); setTimeout(onClose, 220); };
+
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await apiPost("/pwa-employee-photo", { image_128: base64 });
+      if (res.success) {
+        onPhotoUpdated(res.image_128 || `data:image/jpeg;base64,${base64}`);
+        handleClose();
+      } else {
+        setError(res.error || "No se pudo actualizar la foto");
+      }
+    } catch (err) {
+      setError(err.message || "Error al subir la foto");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleDelete = async () => {
+    setError(null);
+    setUploading(true);
+    try {
+      const res = await apiPost("/pwa-employee-photo", { image_128: false });
+      if (res.success) {
+        onPhotoUpdated(null);
+        handleClose();
+      } else {
+        setError(res.error || "No se pudo eliminar la foto");
+      }
+    } catch (err) {
+      setError(err.message || "Error al eliminar la foto");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const options = [
-    { icon:"📷", label:"Tomar foto",       sub:"Usa la cámara de tu teléfono" },
-    { icon:"🖼️", label:"Elegir de galería", sub:"Selecciona desde tus fotos" },
-    { icon:"🗑️", label:"Eliminar foto",     sub:"Usar iniciales", destructive:true },
+    { icon:"📷", label:"Tomar foto",       sub:"Usa la cámara de tu teléfono",  action: () => cameraRef.current?.click() },
+    { icon:"🖼️", label:"Elegir de galería", sub:"Selecciona desde tus fotos",   action: () => galleryRef.current?.click() },
+    { icon:"🗑️", label:"Eliminar foto",     sub:"Usar iniciales", destructive:true, action: handleDelete, hidden: !employee?.image_128 },
   ];
 
   return (
     <div onClick={handleClose} style={{ position:"absolute", inset:0, zIndex:20, background:`rgba(3,8,17,${visible ? 0.72 : 0})`, transition:"background 220ms ease", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display:"none" }} />
+      <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display:"none" }} />
       <div onClick={(e) => e.stopPropagation()} style={{ background:"linear-gradient(180deg, #07162b, #04101f)", borderRadius:"24px 24px 0 0", border:`1px solid ${TOKENS.colors.borderBlue}`, borderBottom:"none", padding:`22px ${sw < 340 ? 16 : 22}px 36px`, boxShadow:`0 -20px 60px rgba(0,0,0,0.6)`, transform:visible?"translateY(0)":"translateY(100%)", transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1)` }}>
         <div style={{ width:36, height:4, borderRadius:2, background:"rgba(255,255,255,0.14)", margin:"0 auto 18px" }} />
-        <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:16, textAlign:"center" }}>Editar foto de perfil</div>
-        {options.map((opt, i) => (
-          <div key={i} onClick={handleClose} style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 0", borderBottom: i < options.length - 1 ? `1px solid ${TOKENS.colors.border}` : "none", cursor:"pointer" }}>
+        <div style={{ ...typo.title, color:TOKENS.colors.text, marginBottom:16, textAlign:"center" }}>
+          {uploading ? "Subiendo foto..." : "Editar foto de perfil"}
+        </div>
+        {error && (
+          <div style={{ background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.25)`, borderRadius:TOKENS.radius.sm, padding:"10px 14px", marginBottom:12, fontSize:12, color:TOKENS.colors.error, textAlign:"center" }}>
+            {error}
+          </div>
+        )}
+        {options.filter(o => !o.hidden).map((opt, i, arr) => (
+          <div key={i} onClick={uploading ? undefined : opt.action} style={{ display:"flex", alignItems:"center", gap:14, padding:"13px 0", borderBottom: i < arr.length - 1 ? `1px solid ${TOKENS.colors.border}` : "none", cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.5 : 1 }}>
             <div style={{ fontSize:22, width:34, textAlign:"center" }}>{opt.icon}</div>
             <div>
               <div style={{ fontSize:14, fontWeight:700, color: opt.destructive ? TOKENS.colors.error : TOKENS.colors.text }}>{opt.label}</div>
@@ -775,7 +835,7 @@ function PerfilScreen({ sw = 390, sh = 844 }) {
 
       {/* DIALOGS — fuera del scroll container */}
       {showLogout && <LogoutDialog onConfirm={handleLogoutConfirm} onCancel={() => setShowLogout(false)} sw={sw} />}
-      {showEditPhoto && <EditPhotoSheet onClose={() => setShowEditPhoto(false)} sw={sw} />}
+      {showEditPhoto && <EditPhotoSheet onClose={() => setShowEditPhoto(false)} sw={sw} employee={employee} onPhotoUpdated={(img) => setEmployee(prev => ({ ...prev, image_128: img }))} />}
 
       {/* LOGOUT DONE — overlay absoluto correcto */}
       {logoutDone && (

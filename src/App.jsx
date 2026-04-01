@@ -1,13 +1,17 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 
-// ─── Pantallas ───────────────────────────────────────────────────────────────
+// ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
 import ScreenHome    from './screens/ScreenHome'
 import ScreenKPIs    from './screens/ScreenKPIs'
 import ScreenSurveys from './screens/ScreenSurveys'
 import ScreenBadges  from './screens/ScreenBadges'
 import ScreenProfile from './screens/ScreenProfile'
+
+// ─── Módulos operativos (lazy — solo descarga el código si el rol lo necesita) ─
+const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 export const SessionContext = createContext(null)
@@ -39,6 +43,27 @@ function PrivateRoute({ children }) {
   return children
 }
 
+// ─── Loader mínimo para Suspense ──────────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div style={{
+      minHeight: '100dvh',
+      background: '#030811',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <div style={{
+        width: 32, height: 32,
+        border: '2px solid rgba(255,255,255,0.12)',
+        borderTop: '2px solid #2B8FE0',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+    </div>
+  )
+}
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(getStoredSession)
@@ -57,28 +82,47 @@ export default function App() {
   return (
     <SessionContext.Provider value={{ session, login, logout }}>
       <BrowserRouter>
-        <Routes>
-          <Route
-            path="/login"
-            element={session ? <Navigate to="/" replace /> : <ScreenLogin />}
-          />
-          <Route path="/" element={
-            <PrivateRoute><ScreenHome /></PrivateRoute>
-          } />
-          <Route path="/kpis" element={
-            <PrivateRoute><ScreenKPIs /></PrivateRoute>
-          } />
-          <Route path="/surveys" element={
-            <PrivateRoute><ScreenSurveys /></PrivateRoute>
-          } />
-          <Route path="/badges" element={
-            <PrivateRoute><ScreenBadges /></PrivateRoute>
-          } />
-          <Route path="/profile" element={
-            <PrivateRoute><ScreenProfile /></PrivateRoute>
-          } />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Auth */}
+            <Route
+              path="/login"
+              element={session ? <Navigate to="/" replace /> : <ScreenLogin />}
+            />
+
+            {/* Generales — todos los roles */}
+            <Route path="/" element={
+              <PrivateRoute><ScreenHome /></PrivateRoute>
+            } />
+            <Route path="/kpis" element={
+              <PrivateRoute><ScreenKPIs /></PrivateRoute>
+            } />
+            <Route path="/surveys" element={
+              <PrivateRoute><ScreenSurveys /></PrivateRoute>
+            } />
+            <Route path="/badges" element={
+              <PrivateRoute><ScreenBadges /></PrivateRoute>
+            } />
+            <Route path="/profile" element={
+              <PrivateRoute><ScreenProfile /></PrivateRoute>
+            } />
+
+            {/* Módulos operativos — misma pantalla genérica hasta que se implementen */}
+            {[
+              '/produccion', '/supervision', '/almacen-pt',
+              '/ruta', '/entregas', '/equipo',
+              '/admin', '/torres',
+            ].map(path => (
+              <Route key={path} path={path} element={
+                <PrivateRoute>
+                  <ScreenModuloPendiente />
+                </PrivateRoute>
+              } />
+            ))}
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </SessionContext.Provider>
   )
