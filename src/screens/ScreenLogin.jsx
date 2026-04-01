@@ -6,7 +6,7 @@ import { useSession } from "../App";
 const WEBHOOK_URL = "/api-n8n";
 
 async function requestMagicLink(phone) {
-  const res = await fetch(`${WEBHOOK_URL}/pwa-auth-request`, {
+  const res = await fetch(`${WEBHOOK_URL}/pwa-auth`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
