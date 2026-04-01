@@ -232,10 +232,10 @@ export default function LoginScreen() {
     setStep("loading");
 
     try {
-      const result = await requestMagicLink(`+52${digits}`);
+      const result = await requestMagicLink(digits);
       if (result?.session_token) {
         // Respuesta inmediata con token (SSO / bypass dev)
-        let payload = { phone: `+52${digits}`, app: "pwa_colaboradores" };
+        let payload = { phone: digits, app: "pwa_colaboradores" };
         try {
           const parts = result.session_token.split(".");
           if (parts.length === 3) {
