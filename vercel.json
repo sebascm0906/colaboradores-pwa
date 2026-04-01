@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api-n8n/:path*", "destination": "https://car12los023.app.n8n.cloud/webhook/:path*" },
+    { "source": "/api-n8n/:path*", "destination": "https://n8n.grupofrio.mx/webhook/:path*" },
     { "source": "/((?!assets|icons|manifest).*)", "destination": "/index.html" }
   ],
   "headers": [
