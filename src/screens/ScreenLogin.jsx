@@ -162,19 +162,70 @@ function IceParticles() {
   );
 }
 
+// ── Bypass admin — perfiles disponibles ──────────────────────────────────
+const ADMIN_PROFILES = [
+  { role: 'operador_barra',       label: 'Operador Barra',         desc: 'Producción — Congelados' },
+  { role: 'operador_rolito',      label: 'Operador Rolito',        desc: 'Producción — Congelados' },
+  { role: 'auxiliar_produccion',   label: 'Auxiliar Producción',    desc: 'Producción — Congelados' },
+  { role: 'supervisor_produccion', label: 'Supervisor Producción',  desc: 'Supervisión — Planta' },
+  { role: 'almacenista_pt',       label: 'Almacenista PT',         desc: 'Almacén Producto Terminado' },
+  { role: 'jefe_ruta',            label: 'Jefe de Ruta',           desc: 'Logística — GLACIEM' },
+  { role: 'auxiliar_ruta',        label: 'Auxiliar de Ruta',       desc: 'Logística — GLACIEM' },
+  { role: 'almacenista_entregas', label: 'Almacenista Entregas',   desc: 'Logística — Entregas' },
+  { role: 'supervisor_ventas',    label: 'Supervisor Ventas',      desc: 'Ventas — Equipo' },
+  { role: 'auxiliar_admin',       label: 'Auxiliar Admin',         desc: 'Administración Sucursal' },
+  { role: 'gerente_sucursal',     label: 'Gerente Sucursal',       desc: 'Administración Sucursal' },
+  { role: 'operador_torres',      label: 'Operador Torres',        desc: 'Torres de Control — CSC' },
+];
+
+function buildMockSession(profile) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    role: profile.role,
+    name: `Admin (${profile.label})`,
+    employee_id: 0,
+    company_id: 0,
+    exp: now + 86400 * 7, // 7 días
+    iat: now,
+    _bypass: true,
+  };
+  // JWT-like token para que el parser no falle
+  const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
+  const body = btoa(JSON.stringify(payload));
+  const session_token = `${header}.${body}.bypass`;
+  return { ...payload, session_token };
+}
+
 // ── Componente principal ────────────────────────────────────────────────
 export default function LoginScreen() {
   const { login } = useSession();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [phone, setPhone] = useState("");
-  const [step, setStep] = useState("input"); // input | loading | verifying | sent
+  const [step, setStep] = useState("input"); // input | loading | verifying | sent | admin
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // ── Admin bypass: 5 taps en "COLABORADORES" ─────────────────────────
+  const handleAdminTap = () => {
+    const next = tapCount + 1;
+    setTapCount(next);
+    if (next >= 5) {
+      setStep("admin");
+      setTapCount(0);
+    }
+  };
+
+  const handleBypassLogin = (profile) => {
+    const session = buildMockSession(profile);
+    login(session);
+    navigate("/", { replace: true });
+  };
 
   // ── Auto-verificar token del magic link (?token=...&phone=...) ──────
   useEffect(() => {
@@ -386,7 +437,10 @@ export default function LoginScreen() {
             </div>
           </div>
 
-          <span className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/35">
+          <span
+            className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/35 cursor-default select-none"
+            onClick={handleAdminTap}
+          >
             COLABORADORES
           </span>
         </div>
@@ -399,7 +453,56 @@ export default function LoginScreen() {
         </div>
 
         {/* Formulario */}
-        {step === "verifying" ? (
+        {step === "admin" ? (
+          <div className={`w-full flex flex-col gap-3 ${mounted ? "fade-up-3" : "opacity-0"}`}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-white/60 text-xs font-semibold uppercase tracking-widest">
+                Modo Admin — Elegir perfil
+              </p>
+              <button
+                onClick={() => { setStep("input"); setTapCount(0); }}
+                className="text-white/30 text-xs underline hover:text-white/50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+            <div
+              className="w-full rounded-2xl border overflow-hidden"
+              style={{
+                borderColor: "rgba(255,255,255,0.08)",
+                background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
+                maxHeight: "52vh",
+                overflowY: "auto",
+              }}
+            >
+              {ADMIN_PROFILES.map((p) => (
+                <button
+                  key={p.role}
+                  onClick={() => handleBypassLogin(p)}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{
+                      background: "rgba(43,143,224,0.15)",
+                      color: "#61b2ff",
+                    }}
+                  >
+                    {p.label.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{p.label}</p>
+                    <p className="text-white/30 text-xs truncate">{p.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <p className="text-yellow-400/40 text-[10px] text-center mt-1">
+              Sesión de prueba — las llamadas a API no funcionarán sin JWT real
+            </p>
+          </div>
+        ) : step === "verifying" ? (
           <div className={`w-full flex flex-col items-center gap-5 text-center ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div
               className="w-16 h-16 border-3 border-white/20 border-t-blue-400 rounded-full"
