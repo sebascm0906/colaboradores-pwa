@@ -1,22 +1,5 @@
 // ─── API Admin Sucursal — POS, Gastos, Requisiciones ─────────────────────────
-
-const N8N_BASE = '/api-n8n'
-
-function getToken() {
-  try { return JSON.parse(localStorage.getItem('gf_session') || '{}').session_token || '' }
-  catch { return '' }
-}
-
-async function api(method, path, body) {
-  const token = getToken()
-  if (!token) { window.dispatchEvent(new Event('gf:session-expired')); throw new Error('no_session') }
-  const opts = { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
-  if (body) opts.body = JSON.stringify(body)
-  const res = await fetch(`${N8N_BASE}${path}`, opts)
-  if (!res.ok) { if (res.status === 401) { window.dispatchEvent(new Event('gf:session-expired')); throw new Error('no_session') } const err = await res.json().catch(() => ({})); throw new Error(err.message || `http_${res.status}`) }
-  const json = await res.json()
-  return json.data !== undefined ? json.data : json
-}
+import { api } from '../../lib/api'
 
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 

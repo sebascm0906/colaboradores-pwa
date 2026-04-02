@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
+import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -65,42 +66,9 @@ function getTypo(sw) {
 /* ============================================================================
    API CONFIG
 ============================================================================ */
-const N8N_BASE = "/api-n8n";
-function getSession() {
-  try { return JSON.parse(localStorage.getItem("gf_session") || "{}"); } catch { return {}; }
-}
-function clearSession() {
-  try { localStorage.removeItem("gf_session"); } catch {}
-}
-async function apiGet(path) {
-  const { session_token } = getSession();
-  if (!session_token) throw new Error("no_session");
-  const res = await fetch(`${N8N_BASE}${path}`, {
-    method: "GET", headers: { "Authorization": `Bearer ${session_token}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error(`http_${res.status}`);
-  return res.json();
-}
-async function apiPatch(path, body) {
-  const { session_token } = getSession();
-  if (!session_token) throw new Error("no_session");
-  const res = await fetch(`${N8N_BASE}${path}`, {
-    method: "PATCH", headers: { "Authorization": `Bearer ${session_token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`http_${res.status}`);
-  return res.json();
-}
-async function apiPost(path, body) {
-  const { session_token } = getSession();
-  if (!session_token) throw new Error("no_session");
-  const res = await fetch(`${N8N_BASE}${path}`, {
-    method: "POST", headers: { "Authorization": `Bearer ${session_token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`http_${res.status}`);
-  return res.json();
-}
+const apiGet = _apiGet;
+const apiPatch = _apiPatch;
+const apiPost = _apiPost;
 
 // Mapea response de /pwa-employee-profile al shape que usa la pantalla
 function mapOdooEmployee(d) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiGet as _apiGet } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS (mismo sistema que Pantalla 2)
@@ -49,19 +50,7 @@ const SHOW_DEV_SWITCHER = true;
 /* ============================================================================
    API CONFIG
 ============================================================================ */
-const N8N_BASE = "/api-n8n";
-function getSession() {
-  try { return JSON.parse(localStorage.getItem("gf_session") || "{}"); } catch { return {}; }
-}
-async function apiGet(path) {
-  const { session_token } = getSession();
-  if (!session_token) throw new Error("no_session");
-  const res = await fetch(`${N8N_BASE}${path}`, {
-    method: "GET", headers: { "Authorization": `Bearer ${session_token}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error(`http_${res.status}`);
-  return res.json();
-}
+const apiGet = _apiGet;
 
 function getTypo(sw) {
   const sm = sw < 340;
