@@ -162,34 +162,55 @@ function IceParticles() {
   );
 }
 
-// ── Bypass admin — perfiles disponibles ──────────────────────────────────
-const ADMIN_PROFILES = [
-  { role: 'operador_barra',       label: 'Operador Barra',         desc: 'Producción — Congelados' },
-  { role: 'operador_rolito',      label: 'Operador Rolito',        desc: 'Producción — Congelados' },
-  { role: 'auxiliar_produccion',   label: 'Auxiliar Producción',    desc: 'Producción — Congelados' },
-  { role: 'supervisor_produccion', label: 'Supervisor Producción',  desc: 'Supervisión — Planta' },
-  { role: 'almacenista_pt',       label: 'Almacenista PT',         desc: 'Almacén Producto Terminado' },
-  { role: 'jefe_ruta',            label: 'Jefe de Ruta',           desc: 'Logística — GLACIEM' },
-  { role: 'auxiliar_ruta',        label: 'Auxiliar de Ruta',       desc: 'Logística — GLACIEM' },
-  { role: 'almacenista_entregas', label: 'Almacenista Entregas',   desc: 'Logística — Entregas' },
-  { role: 'supervisor_ventas',    label: 'Supervisor Ventas',      desc: 'Ventas — Equipo' },
-  { role: 'auxiliar_admin',       label: 'Auxiliar Admin',         desc: 'Administración Sucursal' },
-  { role: 'gerente_sucursal',     label: 'Gerente Sucursal',       desc: 'Administración Sucursal' },
-  { role: 'operador_torres',      label: 'Operador Torres',        desc: 'Torres de Control — CSC' },
+// ── Bypass admin — empleados registrados en Odoo (x_job_key) ─────────────
+// Actualizado: 2026-04-02 desde hr.employee con x_job_key != false
+const ADMIN_EMPLOYEES = [
+  // ── Dirección / TI ─────────────────────────────────────────────────────
+  { id: 1,   name: 'Yamil Esteban Higareda',               role: 'direccion_general',     company: 'CSC GF',                             job: 'Dirección General' },
+  { id: 673, name: 'Sebastian Cervera Maltos',              role: 'director_ti',           company: 'CSC GF',                             job: 'Director de TI' },
+  { id: 706, name: 'Carlos Alexander Valencia Tapia',       role: 'auxiliar_ti',           company: 'CSC GF',                             job: 'Jefe de mantenimiento' },
+  { id: 693, name: 'Javier Alejandro Cedillo Villalpando',  role: 'jefe_legal',            company: 'CSC GF',                             job: 'Jefe de legal' },
+  // ── Producción — Fabricación de Congelados ─────────────────────────────
+  { id: 714, name: 'José Manuel Ávila',                     role: 'operador_barra',        company: 'Fabricación de Congelados',           job: 'Auxiliar de barra' },
+  { id: 691, name: 'Julio Raul de la Cruz González',        role: 'auxiliar_produccion',    company: 'Fabricación de Congelados',           job: 'Auxiliar de producción' },
+  { id: 690, name: 'Arturo Narciso',                        role: 'supervisor_produccion',  company: 'Fabricación de Congelados',           job: 'Jefe de líneas' },
+  // ── Administración ─────────────────────────────────────────────────────
+  { id: 692, name: 'Claudia Martinez Balcazar',             role: 'auxiliar_admin',         company: 'Soluciones en Producción GLACIEM',    job: 'Auxiliar Administrativa' },
+  { id: 699, name: 'Dirección Grupo Frío',                  role: 'gerente_sucursal',       company: 'Soluciones en Producción GLACIEM',    job: 'Gerente de Sucursal' },
+  // ── Logística / Ventas — Jefes de Ruta ─────────────────────────────────
+  { id: 698, name: 'Alfredo Isaac Reyes Pérez',             role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 710, name: 'Angel Danael Pérez Vera',               role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 679, name: 'Esteban Aleman Serrado',                role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 684, name: 'Estevan Valerio Guzmán',                role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 681, name: 'Jhony Irvin Marquina Rodríguez',        role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 686, name: 'Luis Molina Cholula',                   role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 682, name: 'Manuel Cruz Armenta',                   role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 683, name: 'Orlando Tlatempa Rodríguez',            role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
+  { id: 711, name: 'Sebastian Tadeo Amado Sánchez',         role: 'jefe_ruta',             company: 'Soluciones en Producción GLACIEM',    job: 'Jefe de ruta' },
 ];
 
-function buildMockSession(profile) {
+// Roles que aún no tienen empleados asignados en Odoo — se mantienen como genéricos
+const ADMIN_EXTRA_ROLES = [
+  { role: 'operador_rolito',      label: 'Operador Rolito',        desc: 'Producción — Congelados (sin empleado asignado)' },
+  { role: 'almacenista_pt',       label: 'Almacenista PT',         desc: 'Almacén PT (sin empleado asignado)' },
+  { role: 'auxiliar_ruta',        label: 'Auxiliar de Ruta',       desc: 'Logística (sin empleado asignado)' },
+  { role: 'almacenista_entregas', label: 'Almacenista Entregas',   desc: 'Logística (sin empleado asignado)' },
+  { role: 'supervisor_ventas',    label: 'Supervisor Ventas',      desc: 'Ventas (sin empleado asignado)' },
+  { role: 'operador_torres',      label: 'Operador Torres',        desc: 'Torres de Control (sin empleado asignado)' },
+];
+
+function buildMockSession(emp) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    role: profile.role,
-    name: `Admin (${profile.label})`,
-    employee_id: 0,
+    role: emp.role,
+    name: emp.name || emp.label || 'Admin',
+    employee_id: emp.id || 0,
+    company: emp.company || emp.desc || '',
     company_id: 0,
-    exp: now + 86400 * 7, // 7 días
+    exp: now + 86400 * 7,
     iat: now,
     _bypass: true,
   };
-  // JWT-like token para que el parser no falle
   const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
   const body = btoa(JSON.stringify(payload));
   const session_token = `${header}.${body}.bypass`;
@@ -457,7 +478,7 @@ export default function LoginScreen() {
           <div className={`w-full flex flex-col gap-3 ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div className="flex items-center justify-between mb-1">
               <p className="text-white/60 text-xs font-semibold uppercase tracking-widest">
-                Modo Admin — Elegir perfil
+                Bypass — Elegir empleado
               </p>
               <button
                 onClick={() => { setStep("input"); setTapCount(0); }}
@@ -475,25 +496,58 @@ export default function LoginScreen() {
                 overflowY: "auto",
               }}
             >
-              {ADMIN_PROFILES.map((p) => (
+              {/* Empleados reales de Odoo */}
+              {ADMIN_EMPLOYEES.map((emp) => (
                 <button
-                  key={p.role}
-                  onClick={() => handleBypassLogin(p)}
+                  key={`emp-${emp.id}`}
+                  onClick={() => handleBypassLogin(emp)}
                   className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors"
                   style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
                 >
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
                     style={{
                       background: "rgba(43,143,224,0.15)",
                       color: "#61b2ff",
                     }}
                   >
+                    {emp.name.split(' ').slice(0, 2).map(w => w[0]).join('')}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-white text-sm font-medium truncate">{emp.name}</p>
+                    <p className="text-white/30 text-[10px] truncate">
+                      <span className="text-blue-400/60">{emp.role}</span>
+                      {' · '}{emp.job} · {emp.company}
+                    </p>
+                  </div>
+                </button>
+              ))}
+
+              {/* Separador — roles sin empleado */}
+              <div className="px-4 py-2" style={{ background: "rgba(245,158,11,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <p className="text-yellow-400/50 text-[10px] font-semibold uppercase tracking-wider">
+                  Roles sin empleado asignado
+                </p>
+              </div>
+              {ADMIN_EXTRA_ROLES.map((p) => (
+                <button
+                  key={`role-${p.role}`}
+                  onClick={() => handleBypassLogin(p)}
+                  className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0"
+                    style={{
+                      background: "rgba(245,158,11,0.12)",
+                      color: "#f59e0b",
+                    }}
+                  >
                     {p.label.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{p.label}</p>
-                    <p className="text-white/30 text-xs truncate">{p.desc}</p>
+                    <p className="text-white/60 text-sm font-medium truncate">{p.label}</p>
+                    <p className="text-white/30 text-[10px] truncate">{p.desc}</p>
                   </div>
                 </button>
               ))}

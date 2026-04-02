@@ -235,10 +235,11 @@ function ModuleCard({ module, typo, onClick }) {
    SCREEN HOME
 ============================================================================ */
 export default function ScreenHome() {
-  const { session } = useSession()
+  const { session, logout } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const isBypass = session?._bypass === true
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -287,6 +288,62 @@ export default function ScreenHome() {
         background: 'radial-gradient(circle, rgba(0,100,255,0.10) 0%, transparent 70%)',
         filter: 'blur(40px)', pointerEvents: 'none',
       }} />
+
+      {/* ── Banner Admin Bypass ──────────────────────────────────────── */}
+      {isBypass && (
+        <div style={{
+          position: 'relative', zIndex: 50,
+          background: 'linear-gradient(90deg, rgba(245,158,11,0.18), rgba(245,158,11,0.08))',
+          borderBottom: '1px solid rgba(245,158,11,0.25)',
+          padding: '8px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 8,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 13 }}>🔑</span>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: '#f59e0b',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              Bypass: {session?.role}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={() => {
+                localStorage.removeItem('gf_session')
+                logout()
+                navigate('/login', { replace: true })
+              }}
+              style={{
+                fontSize: 11, fontWeight: 700, color: '#f59e0b',
+                background: 'rgba(245,158,11,0.15)',
+                border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: 8, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              Cambiar perfil
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem('gf_session')
+                logout()
+                navigate('/login', { replace: true })
+              }}
+              style={{
+                fontSize: 11, fontWeight: 700, color: '#ef4444',
+                background: 'rgba(239,68,68,0.12)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 8, padding: '4px 10px',
+                cursor: 'pointer',
+              }}
+            >
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
 

@@ -74,10 +74,8 @@ export const MODULES = [
     route:  '/ruta',
     tone:   'blue',
     roles:  ['jefe_ruta', 'auxiliar_ruta'],
-    status: 'pending',
+    status: 'live',
     icon:   'ruta',
-    pendingLabel: 'Cierre de Ruta',
-    pendingDesc:  'Carga, paradas, gastos y cierre de jornada. Disponible pronto.',
   },
   {
     id:     'almacen_entregas',
@@ -85,10 +83,8 @@ export const MODULES = [
     route:  '/entregas',
     tone:   'blueSoft',
     roles:  ['almacenista_entregas'],
-    status: 'pending',
+    status: 'live',
     icon:   'entregas',
-    pendingLabel: 'Panel de Entregas',
-    pendingDesc:  'Órdenes de entrega y recepción de almacén. Disponible pronto.',
   },
   {
     id:     'supervisor_ventas',
@@ -96,10 +92,8 @@ export const MODULES = [
     route:  '/equipo',
     tone:   'blueSoft',
     roles:  ['supervisor_ventas'],
-    status: 'pending',
+    status: 'live',
     icon:   'equipo',
-    pendingLabel: 'Panel de Supervisión Ventas',
-    pendingDesc:  'KPIs de equipo, rutas y cumplimiento. Disponible pronto.',
   },
 
   // ── Administración ───────────────────────────────────────────────────────
@@ -109,10 +103,8 @@ export const MODULES = [
     route:  '/admin',
     tone:   'blueDeep',
     roles:  ['auxiliar_admin', 'gerente_sucursal'],
-    status: 'pending',
+    status: 'live',
     icon:   'admin',
-    pendingLabel: 'Administración de Sucursal',
-    pendingDesc:  'Conciliación, gastos y cierre de caja. Disponible pronto.',
   },
 
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
@@ -126,6 +118,17 @@ export const MODULES = [
     icon:   'torres',
     pendingLabel: 'Torres de Control',
     pendingDesc:  'Monitoreo de operaciones en tiempo real. Disponible pronto.',
+  },
+
+  // ── Gerente de Sucursal ────────────────────────────────────────────────
+  {
+    id:     'gerente',
+    label:  'Gerente',
+    route:  '/gerente',
+    tone:   'blueDeep',
+    roles:  ['gerente_sucursal'],
+    status: 'live',
+    icon:   'admin',
   },
 ]
 

@@ -12,23 +12,57 @@ import ScreenProfile from './screens/ScreenProfile'
 
 // ─── Módulos operativos (lazy — solo descarga si el rol lo necesita) ─────────
 const ScreenModuloPendiente = lazy(() => import('./screens/ScreenModuloPendiente'))
+// Producción
 const ScreenMiTurno         = lazy(() => import('./modules/produccion/ScreenMiTurno'))
 const ScreenChecklist       = lazy(() => import('./modules/produccion/ScreenChecklist'))
 const ScreenCiclo           = lazy(() => import('./modules/produccion/ScreenCiclo'))
 const ScreenEmpaque         = lazy(() => import('./modules/produccion/ScreenEmpaque'))
 const ScreenCorte           = lazy(() => import('./modules/produccion/ScreenCorte'))
 const ScreenTransformacion  = lazy(() => import('./modules/produccion/ScreenTransformacion'))
+// Almacén PT
 const ScreenAlmacenPT       = lazy(() => import('./modules/almacen-pt/ScreenAlmacenPT'))
 const ScreenRecepcion       = lazy(() => import('./modules/almacen-pt/ScreenRecepcion'))
 const ScreenDespacho        = lazy(() => import('./modules/almacen-pt/ScreenDespacho'))
 const ScreenInventarioPT    = lazy(() => import('./modules/almacen-pt/ScreenInventarioPT'))
 const ScreenHistorialPT     = lazy(() => import('./modules/almacen-pt/ScreenHistorialPT'))
+// Supervisión
 const ScreenSupervision     = lazy(() => import('./modules/supervision/ScreenSupervision'))
 const ScreenParos           = lazy(() => import('./modules/supervision/ScreenParos'))
 const ScreenMerma           = lazy(() => import('./modules/supervision/ScreenMerma'))
 const ScreenEnergia         = lazy(() => import('./modules/supervision/ScreenEnergia'))
 const ScreenMantenimiento   = lazy(() => import('./modules/supervision/ScreenMantenimiento'))
 const ScreenControlTurno    = lazy(() => import('./modules/supervision/ScreenControlTurno'))
+// Admin Sucursal
+const ScreenAdminPanel      = lazy(() => import('./modules/admin/ScreenAdminPanel'))
+const ScreenPOS             = lazy(() => import('./modules/admin/ScreenPOS'))
+const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
+const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
+const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
+const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
+// Entregas
+const ScreenEntregas        = lazy(() => import('./modules/entregas/ScreenEntregas'))
+const ScreenValidarTicket   = lazy(() => import('./modules/entregas/ScreenValidarTicket'))
+const ScreenPreparaCarga    = lazy(() => import('./modules/entregas/ScreenPreparaCarga'))
+const ScreenInventarioCedis = lazy(() => import('./modules/entregas/ScreenInventarioCedis'))
+const ScreenDevoluciones    = lazy(() => import('./modules/entregas/ScreenDevoluciones'))
+// Ruta
+const ScreenMiRuta          = lazy(() => import('./modules/ruta/ScreenMiRuta'))
+const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
+const ScreenAceptarCarga    = lazy(() => import('./modules/ruta/ScreenAceptarCarga'))
+const ScreenIncidencias     = lazy(() => import('./modules/ruta/ScreenIncidencias'))
+const ScreenKPIsRuta        = lazy(() => import('./modules/ruta/ScreenKPIsRuta'))
+const ScreenConciliacion    = lazy(() => import('./modules/ruta/ScreenConciliacion'))
+// Supervisor Ventas
+const ScreenSupervisorVentas = lazy(() => import('./modules/supervisor-ventas/ScreenSupervisorVentas'))
+const ScreenDashboardVentas  = lazy(() => import('./modules/supervisor-ventas/ScreenDashboardVentas'))
+const ScreenPronostico       = lazy(() => import('./modules/supervisor-ventas/ScreenPronostico'))
+const ScreenVendedores       = lazy(() => import('./modules/supervisor-ventas/ScreenVendedores'))
+const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/ScreenMetasVendedores'))
+// Gerente
+const ScreenGerente          = lazy(() => import('./modules/gerente/ScreenGerente'))
+const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashboardGerente'))
+const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
+const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 export const SessionContext = createContext(null)
@@ -84,6 +118,13 @@ export default function App() {
     }
   }, [session])
 
+  // Global listener: any api.js that detects expired/missing token fires this
+  useEffect(() => {
+    function onSessionExpired() { setSession(null) }
+    window.addEventListener('gf:session-expired', onSessionExpired)
+    return () => window.removeEventListener('gf:session-expired', onSessionExpired)
+  }, [])
+
   function login(sessionData) { setSession(sessionData) }
   function logout()           { setSession(null) }
 
@@ -125,10 +166,45 @@ export default function App() {
             <Route path="/supervision/mantenimiento" element={<PrivateRoute><ScreenMantenimiento /></PrivateRoute>} />
             <Route path="/supervision/turno" element={<PrivateRoute><ScreenControlTurno /></PrivateRoute>} />
 
+            {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
+            <Route path="/admin" element={<PrivateRoute><ScreenAdminPanel /></PrivateRoute>} />
+            <Route path="/admin/pos" element={<PrivateRoute><ScreenPOS /></PrivateRoute>} />
+            <Route path="/admin/ticket/:orderId" element={<PrivateRoute><ScreenTicket /></PrivateRoute>} />
+            <Route path="/admin/gastos" element={<PrivateRoute><ScreenGastos /></PrivateRoute>} />
+            <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
+            <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
+
+            {/* ── Almacenista Entregas ─────────────────────────────────── */}
+            <Route path="/entregas" element={<PrivateRoute><ScreenEntregas /></PrivateRoute>} />
+            <Route path="/entregas/validar" element={<PrivateRoute><ScreenValidarTicket /></PrivateRoute>} />
+            <Route path="/entregas/carga" element={<PrivateRoute><ScreenPreparaCarga /></PrivateRoute>} />
+            <Route path="/entregas/inventario" element={<PrivateRoute><ScreenInventarioCedis /></PrivateRoute>} />
+            <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevoluciones /></PrivateRoute>} />
+
+            {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
+            <Route path="/ruta" element={<PrivateRoute><ScreenMiRuta /></PrivateRoute>} />
+            <Route path="/ruta/checklist" element={<PrivateRoute><ScreenChecklistUnidad /></PrivateRoute>} />
+            <Route path="/ruta/carga" element={<PrivateRoute><ScreenAceptarCarga /></PrivateRoute>} />
+            <Route path="/ruta/incidencias" element={<PrivateRoute><ScreenIncidencias /></PrivateRoute>} />
+            <Route path="/ruta/kpis" element={<PrivateRoute><ScreenKPIsRuta /></PrivateRoute>} />
+            <Route path="/ruta/conciliacion" element={<PrivateRoute><ScreenConciliacion /></PrivateRoute>} />
+
+            {/* ── Supervisor de Ventas ─────────────────────────────────── */}
+            <Route path="/equipo" element={<PrivateRoute><ScreenSupervisorVentas /></PrivateRoute>} />
+            <Route path="/equipo/dashboard" element={<PrivateRoute><ScreenDashboardVentas /></PrivateRoute>} />
+            <Route path="/equipo/pronostico" element={<PrivateRoute><ScreenPronostico /></PrivateRoute>} />
+            <Route path="/equipo/vendedores" element={<PrivateRoute><ScreenVendedores /></PrivateRoute>} />
+            <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
+
+            {/* ── Gerente de Sucursal ──────────────────────────────────── */}
+            <Route path="/gerente" element={<PrivateRoute><ScreenGerente /></PrivateRoute>} />
+            <Route path="/gerente/dashboard" element={<PrivateRoute><ScreenDashboardGerente /></PrivateRoute>} />
+            <Route path="/gerente/alertas" element={<PrivateRoute><ScreenAlertasGerente /></PrivateRoute>} />
+            <Route path="/gerente/forecast" element={<PrivateRoute><ScreenForecastUnlock /></PrivateRoute>} />
+
             {/* ── Módulos pendientes (placeholder genérico) ───────────────── */}
             {[
-              '/ruta', '/entregas', '/equipo',
-              '/admin', '/torres',
+              '/torres',
             ].map(path => (
               <Route key={path} path={path} element={
                 <PrivateRoute><ScreenModuloPendiente /></PrivateRoute>

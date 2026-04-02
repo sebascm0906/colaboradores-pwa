@@ -95,6 +95,26 @@ export const COMPANY_LABELS = {
   36: 'Vía Ágil',
 }
 
+// Empresas válidas por sucursal (para selector multi-company)
+export const SUCURSAL_COMPANIES = {
+  'Iguala':          [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 35, name: 'Fabricación (Producción)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[IGU] Iguala':    [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 35, name: 'Fabricación (Producción)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  'UB-IGU':          [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 35, name: 'Fabricación (Producción)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[CDMX] Ciudad de México': [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[GDL] Guadalajara':       [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 35, name: 'Fabricación (Producción)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[MAN] Manzanillo':        [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[MRL] Morelia':            [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[SLP] San Luis Potosí':   [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+  '[CSC] Centro Servicios Compartidos': [{ id: 1, name: 'CSC GF' }, { id: 34, name: 'GLACIEM' }, { id: 35, name: 'Fabricación' }, { id: 36, name: 'Vía Ágil' }],
+  'CEDIS Guadalajara':       [{ id: 34, name: 'GLACIEM (Ventas)' }, { id: 36, name: 'Vía Ágil (Logística)' }],
+}
+
+/** Obtener empresas válidas para una sucursal */
+export function getCompaniesForSucursal(sucursal) {
+  if (!sucursal) return [{ id: 34, name: 'GLACIEM' }, { id: 35, name: 'Fabricación' }, { id: 36, name: 'Vía Ágil' }]
+  return SUCURSAL_COMPANIES[sucursal] || [{ id: 34, name: 'GLACIEM' }, { id: 35, name: 'Fabricación' }, { id: 36, name: 'Vía Ágil' }]
+}
+
 // Etiqueta de turno
 export const TURNO_LABELS = {
   '1':    'Turno 1 — Día',
