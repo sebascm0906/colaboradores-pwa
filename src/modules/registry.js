@@ -45,10 +45,8 @@ export const MODULES = [
     route:  '/produccion',
     tone:   'blueDeep',
     roles:  ['operador_barra', 'operador_rolito', 'auxiliar_produccion'],
-    status: 'pending',
+    status: 'live',
     icon:   'produccion',
-    pendingLabel: 'Registro de Turno',
-    pendingDesc:  'Captura tu producción por turno. Disponible pronto.',
   },
   {
     id:     'supervision_produccion',
@@ -56,10 +54,8 @@ export const MODULES = [
     route:  '/supervision',
     tone:   'blue',
     roles:  ['supervisor_produccion'],
-    status: 'pending',
+    status: 'live',
     icon:   'supervision',
-    pendingLabel: 'Panel de Supervisión',
-    pendingDesc:  'Control de líneas, mantenimiento y métricas. Disponible pronto.',
   },
   {
     id:     'almacen_pt',
@@ -67,10 +63,8 @@ export const MODULES = [
     route:  '/almacen-pt',
     tone:   'steel',
     roles:  ['almacenista_pt'],
-    status: 'pending',
+    status: 'live',
     icon:   'almacen',
-    pendingLabel: 'Almacén Producto Terminado',
-    pendingDesc:  'Días de cobertura y traspasos. Disponible pronto.',
   },
 
   // ── Logística / Ventas — GLACIEM (34) y Vía Ágil (36) ──────────────────

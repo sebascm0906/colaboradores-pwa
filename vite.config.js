@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
           runtimeCaching: [
             {
               // Las llamadas a n8n NUNCA se cachean — siempre en vivo
-              urlPattern: /^https:\/\/car12los023\.app\.n8n\.cloud\//,
+              urlPattern: /^https:\/\/n8n\.grupofrio\.mx\//,
               handler: 'NetworkOnly'
             }
           ]
@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api-n8n': {
-          target: env.VITE_N8N_WEBHOOK_URL || 'https://car12los023.app.n8n.cloud/webhook',
+          target: env.VITE_N8N_WEBHOOK_URL || 'https://n8n.grupofrio.mx/webhook',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-n8n/, '')
         }
