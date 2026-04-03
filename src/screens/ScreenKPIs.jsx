@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet as _apiGet } from "../lib/api";
+import { apiGet as _apiGet, getSession } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS (mismo sistema que Pantalla 2)
@@ -297,11 +297,12 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
           setEmbedUrl(`${res.embed_url}&period=${period}`);
           setLoading(false);
         } else {
-          setHasError(true);
+          // No embed URL — fall back to mock dashboard
+          setEmbedUrl(null);
           setLoading(false);
         }
       })
-      .catch(() => { if (!cancelled) { setHasError(true); setLoading(false); } });
+      .catch(() => { if (!cancelled) { setEmbedUrl(null); setLoading(false); } });
     return () => { cancelled = true; };
   }, [retryKey, refreshKey, jobKey, period]);
 
@@ -367,7 +368,18 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
 /* ============================================================================
    KPI SCREEN PRINCIPAL
 ============================================================================ */
-function KPIScreen({ sw = 390, sh = 844 }) {
+function KPIScreen({ sw: propSw, sh: propSh }) {
+  const [winW, setWinW] = useState(window.innerWidth);
+  const [winH, setWinH] = useState(window.innerHeight);
+  useEffect(() => {
+    const handler = () => { setWinW(window.innerWidth); setWinH(window.innerHeight); };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  const sw = propSw || winW;
+  const sh = propSh || winH;
+  const isFullscreen = !propSw;
+
   const [period, setPeriod] = useState("hoy");
   const [refreshKey, setRefreshKey] = useState(0);
   const session = getSession();
@@ -388,7 +400,7 @@ function KPIScreen({ sw = 390, sh = 844 }) {
   const embedHeight = Math.max(320, sh - scrollBottom - topPad - 156);
 
   return (
-    <div style={{ position:"relative", width:sw, height:sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles/>
       <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }}/>
 

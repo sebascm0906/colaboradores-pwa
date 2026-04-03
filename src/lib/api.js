@@ -6,7 +6,7 @@
 
 const N8N_BASE = '/api-n8n'
 
-function getSession() {
+export function getSession() {
   try {
     return JSON.parse(localStorage.getItem('gf_session') || '{}')
   } catch {

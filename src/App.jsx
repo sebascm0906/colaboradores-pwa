@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 
@@ -106,6 +106,51 @@ function PageLoader() {
   )
 }
 
+// ─── Error Boundary — evita pantallas blancas por crash de módulos ────────
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100dvh', background: '#030811',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '24px', gap: 16, fontFamily: "'DM Sans', system-ui, sans-serif",
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 18,
+            background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+          }}>⚠️</div>
+          <p style={{ color: 'rgba(255,255,255,0.82)', fontSize: 16, fontWeight: 600, margin: 0 }}>
+            Algo salió mal
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 300 }}>
+            Ocurrió un error al cargar esta pantalla. Intenta de nuevo.
+          </p>
+          <button
+            onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/'; }}
+            style={{
+              border: 'none', cursor: 'pointer', padding: '12px 28px',
+              borderRadius: 999, background: 'linear-gradient(90deg,#15499B,#2B8FE0)',
+              color: 'white', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+            }}
+          >
+            Volver al inicio
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // ─── App principal ────────────────────────────────────────────────────────────
 export default function App() {
   const [session, setSession] = useState(getStoredSession)
@@ -131,6 +176,7 @@ export default function App() {
   return (
     <SessionContext.Provider value={{ session, login, logout }}>
       <BrowserRouter>
+        <ErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Auth */}
@@ -214,6 +260,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </BrowserRouter>
     </SessionContext.Provider>
   )

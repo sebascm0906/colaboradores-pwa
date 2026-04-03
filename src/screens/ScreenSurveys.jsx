@@ -618,7 +618,18 @@ function DoneState({ survey, onBack, sw }) {
 /* ============================================================================
    MAIN SCREEN
 ============================================================================ */
-function SurveysScreen({ sw = 390, sh = 844 }) {
+function SurveysScreen({ sw: propSw, sh: propSh }) {
+  const [winW, setWinW] = useState(window.innerWidth);
+  const [winH, setWinH] = useState(window.innerHeight);
+  useEffect(() => {
+    const handler = () => { setWinW(window.innerWidth); setWinH(window.innerHeight); };
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  const sw = propSw || winW;
+  const sh = propSh || winH;
+  const isFullscreen = !propSw;
+
   const [view, setView] = useState("list");
   const [activeSurvey, setActiveSurvey] = useState(null);
   const [surveys, setSurveys] = useState([]);
@@ -675,7 +686,7 @@ function SurveysScreen({ sw = 390, sh = 844 }) {
   };
 
   return (
-    <div style={{ position:"relative", width:sw, height:sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
+    <div style={{ position:"relative", width: isFullscreen ? '100%' : sw, height: isFullscreen ? '100dvh' : sh, overflow:"hidden", background:"radial-gradient(circle at 50% 0%, rgba(33,98,183,0.20) 0%, transparent 34%), linear-gradient(160deg, #04101f 0%, #07162b 45%, #04101d 100%)", fontFamily:"'DM Sans',system-ui,sans-serif", overscrollBehaviorY:"none", paddingTop:"env(safe-area-inset-top)", paddingBottom:"env(safe-area-inset-bottom)" }}>
       <IceParticles />
 
       <div style={{ position:"absolute", inset:0, opacity:0.032, backgroundImage:"linear-gradient(rgba(43,143,224,.45) 1px,transparent 1px),linear-gradient(90deg,rgba(43,143,224,.45) 1px,transparent 1px)", backgroundSize:"48px 48px" }} />
