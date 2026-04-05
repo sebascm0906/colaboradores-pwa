@@ -18,6 +18,16 @@ function getToken() {
   return getSession().session_token || ''
 }
 
+function getApiKey() {
+  const session = getSession()
+  return session.odoo_api_key || session.api_key || ''
+}
+
+function getEmployeeToken() {
+  const session = getSession()
+  return session.odoo_employee_token || session.gf_employee_token || ''
+}
+
 function isBypass() {
   return getSession()._bypass === true
 }
@@ -57,6 +67,14 @@ export async function api(method, path, body) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+  }
+  const apiKey = getApiKey()
+  if (apiKey) {
+    opts.headers['Api-Key'] = apiKey
+  }
+  const employeeToken = getEmployeeToken()
+  if (employeeToken) {
+    opts.headers['X-GF-Employee-Token'] = employeeToken
   }
   if (body) opts.body = JSON.stringify(body)
 
