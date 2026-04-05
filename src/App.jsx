@@ -37,6 +37,7 @@ const ScreenAdminPanel      = lazy(() => import('./modules/admin/ScreenAdminPane
 const ScreenPOS             = lazy(() => import('./modules/admin/ScreenPOS'))
 const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
 const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
+const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
 const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
 // Entregas
@@ -218,6 +219,7 @@ export default function App() {
             <Route path="/admin/pos" element={<PrivateRoute><ScreenPOS /></PrivateRoute>} />
             <Route path="/admin/ticket/:orderId" element={<PrivateRoute><ScreenTicket /></PrivateRoute>} />
             <Route path="/admin/gastos" element={<PrivateRoute><ScreenGastos /></PrivateRoute>} />
+            <Route path="/admin/gastos-historial" element={<PrivateRoute><ScreenGastosHistorial /></PrivateRoute>} />
             <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
             <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
 

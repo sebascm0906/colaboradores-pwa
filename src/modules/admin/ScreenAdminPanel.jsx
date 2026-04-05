@@ -21,20 +21,28 @@ export default function ScreenAdminPanel() {
 
   const warehouseId = session?.warehouse_id || 89 // default CEDIS Iguala
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    let alive = true
 
-  async function loadData() {
-    setLoading(true)
-    try {
-      const [sales, expenses] = await Promise.all([
-        getTodaySales(warehouseId).catch(() => []),
-        getTodayExpenses().catch(() => []),
-      ])
-      setSalesCount(Array.isArray(sales) ? sales.length : 0)
-      setExpensesCount(Array.isArray(expenses) ? expenses.length : 0)
-    } catch { /* silent */ }
-    finally { setLoading(false) }
-  }
+    async function loadData() {
+      setLoading(true)
+      try {
+        const [sales, expenses] = await Promise.all([
+          getTodaySales(warehouseId).catch(() => []),
+          getTodayExpenses().catch(() => []),
+        ])
+        if (!alive) return
+        setSalesCount(Array.isArray(sales) ? sales.length : 0)
+        setExpensesCount(Array.isArray(expenses) ? expenses.length : 0)
+      } catch { /* silent */ }
+      finally {
+        if (alive) setLoading(false)
+      }
+    }
+
+    loadData()
+    return () => { alive = false }
+  }, [warehouseId])
 
   const ACTIONS = [
     {
@@ -48,6 +56,11 @@ export default function ScreenAdminPanel() {
       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
       route: '/admin/gastos', color: TOKENS.colors.warning,
       badge: expensesCount || null,
+    },
+    {
+      id: 'historial_gastos', label: 'Historial de Gastos', desc: 'Consultar gastos por sucursal',
+      icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3z"/><path d="M7 7h10"/><path d="M7 11h10"/><path d="M7 15h6"/></svg>,
+      route: '/admin/gastos-historial', color: TOKENS.colors.blue3,
     },
     {
       id: 'requisiciones', label: 'Requisiciones', desc: 'Solicitudes de compra',

@@ -541,6 +541,7 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-admin/expenses-history' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const q = String(query.get('q') || '').trim()
+    const capturer = String(query.get('capturer') || '').trim()
     const state = String(query.get('state') || '').trim()
     const employeeId = Number(query.get('employee_id') || 0) || 0
     const companyIdParam = Number(query.get('company_id') || 0) || 0
@@ -557,6 +558,25 @@ async function directAdmin(method, path, body) {
     const effectiveCompanyId = companyIdParam || companyId || 0
     if (effectiveCompanyId) domain.push(['company_id', '=', effectiveCompanyId])
     if (employeeId) domain.push(['employee_id', '=', employeeId])
+    if (capturer) {
+      const employeeResult = await readModelSorted('hr.employee', {
+        fields: ['id', 'name', 'company_id'],
+        domain: [
+          ...(effectiveCompanyId ? [['company_id', '=', effectiveCompanyId]] : []),
+          ['name', 'ilike', capturer],
+        ],
+        sort_column: 'name',
+        sort_desc: false,
+        limit: 50,
+        sudo: 1,
+      })
+      const employeeIds = pickListResponse(employeeResult).map((row) => row.id).filter(Boolean)
+      if (employeeIds.length) {
+        domain.push(['employee_id', 'in', employeeIds])
+      } else {
+        domain.push(['id', '=', 0])
+      }
+    }
     if (state) domain.push(['state', '=', state])
 
     const result = await readModelSorted('hr.expense', {
@@ -564,7 +584,7 @@ async function directAdmin(method, path, body) {
       domain,
       sort_column: 'date',
       sort_desc: true,
-      limit: q ? 0 : 200,
+      limit: 0,
       sudo: 1,
     })
 
@@ -576,7 +596,9 @@ async function directAdmin(method, path, body) {
       date: row.date || null,
       state: row.state || 'draft',
       company_id: row.company_id?.[0] || 0,
+      company_name: row.company_id?.[1] || '',
       employee_id: row.employee_id?.[0] || 0,
+      employee_name: row.employee_id?.[1] || '',
       account_id: row.account_id?.[0] || 0,
     })).filter((row) => {
       if (!q) return true
@@ -594,6 +616,7 @@ async function directAdmin(method, path, body) {
       filters: {
         company_id: effectiveCompanyId || null,
         employee_id: employeeId || null,
+        capturer: capturer || '',
         state: state || null,
         q: q || '',
         date_from: dateFrom || null,
