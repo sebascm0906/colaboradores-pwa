@@ -10,11 +10,16 @@ async function requestEmployeeSession(pin, barcode) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      barcode,
-      pin,
-      app: "pwa_colaboradores",
-      app_ver: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "",
-      device_name: navigator.userAgent,
+      jsonrpc: "2.0",
+      method: "call",
+      params: {
+        barcode,
+        pin,
+        app: "pwa_colaboradores",
+        app_ver: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "",
+        device_name: navigator.userAgent,
+      },
+      id: Date.now(),
     }),
   });
 
