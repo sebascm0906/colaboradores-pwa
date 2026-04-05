@@ -2,19 +2,19 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 
-// ── Llamada real a n8n / auth de empleados ───────────────────────────────
-const WEBHOOK_URL = "/api-n8n";
+// ── Login directo a Odoo ──────────────────────────────────────────────────
+const ODOO_SIGN_IN_URL = "/api-odoo/employee-sign-in";
 
 async function requestEmployeeSession(pin, barcode) {
-  const res = await fetch(`${WEBHOOK_URL}/pwa-auth-login`, {
+  const res = await fetch(ODOO_SIGN_IN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      pin,
       barcode,
+      pin,
       app: "pwa_colaboradores",
-      auth_mode: "direct",
-      send_whatsapp: false,
+      app_ver: typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "",
+      device_name: navigator.userAgent,
     }),
   });
 
@@ -35,19 +35,21 @@ async function requestEmployeeSession(pin, barcode) {
   if (!text) throw new Error("Respuesta vacía del servidor");
 
   try {
-    return JSON.parse(text);
+    const json = JSON.parse(text);
+    return json?.result ?? json;
   } catch {
     throw new Error(text || "Respuesta inválida del servidor");
   }
 }
 
-function extractSessionToken(result) {
-  return (
-    result?.session_token ||
-    result?.data?.session_token ||
-    result?.data?.session?.session_token ||
-    ""
-  );
+function base64UrlEncode(input) {
+  return btoa(unescape(encodeURIComponent(input)));
+}
+
+function buildLocalSessionToken(payload) {
+  const header = base64UrlEncode(JSON.stringify({ alg: "none", typ: "JWT" }));
+  const body = base64UrlEncode(JSON.stringify(payload));
+  return `${header}.${body}.odoo`;
 }
 
 function decodeSessionToken(sessionToken, fallback = {}) {
@@ -65,6 +67,103 @@ function decodeSessionToken(sessionToken, fallback = {}) {
     // Si el JWT viene raro, usamos el payload mínimo sin bloquear el acceso.
   }
   return { ...payload, session_token: sessionToken };
+}
+
+function inferCompanyId(role) {
+  if (!role) return 0;
+  if (["operador_barra", "operador_rolito", "auxiliar_produccion", "supervisor_produccion", "almacenista_pt"].includes(role)) {
+    return 35;
+  }
+  if (["jefe_ruta", "auxiliar_ruta", "almacenista_entregas", "supervisor_ventas"].includes(role)) {
+    return 34;
+  }
+  if (["director_ti", "auxiliar_ti", "jefe_legal", "operador_torres"].includes(role)) {
+    return 1;
+  }
+  if (["auxiliar_admin", "gerente_sucursal"].includes(role)) {
+    return 34;
+  }
+  return 0;
+}
+
+function inferCompanyLabel(companyId, role) {
+  if (companyId === 1) return "CSC GF";
+  if (companyId === 35) return "Fabricación de Congelados";
+  if (companyId === 34) {
+    return ["jefe_ruta", "auxiliar_ruta", "almacenista_entregas", "supervisor_ventas"].includes(role)
+      ? "GLACIEM"
+      : "Soluciones en Producción GLACIEM";
+  }
+  if (companyId === 36) return "Vía Ágil";
+  return "";
+}
+
+function resolveRole(employee, jobTitle) {
+  const directRole = employee?.pwa_job_key || employee?.job_key || employee?.x_job_key || "";
+  if (directRole) return directRole;
+
+  const normalized = (jobTitle || "").toLowerCase();
+  const roleMap = [
+    ["dirección general", "direccion_general"],
+    ["director de ti", "director_ti"],
+    ["jefe de legal", "jefe_legal"],
+    ["jefe de mantenimiento", "auxiliar_ti"],
+    ["auxiliar de barra", "operador_barra"],
+    ["auxiliar de producción", "auxiliar_produccion"],
+    ["jefe de líneas", "supervisor_produccion"],
+    ["almacenista pt", "almacenista_pt"],
+    ["auxiliar de ruta", "auxiliar_ruta"],
+    ["almacenista entregas", "almacenista_entregas"],
+    ["supervisor ventas", "supervisor_ventas"],
+    ["auxiliar administrativa", "auxiliar_admin"],
+    ["gerente de sucursal", "gerente_sucursal"],
+    ["jefe de ruta", "jefe_ruta"],
+    ["operador torres", "operador_torres"],
+  ];
+
+  const match = roleMap.find(([needle]) => normalized.includes(needle));
+  return match?.[1] || "";
+}
+
+function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
+  const employee = result?.employee || {};
+  const jobTitle = employee?.job_title || employee?.job_id?.[1] || "";
+  const role = resolveRole(employee, jobTitle);
+  const userId = result?.user_id || employee?.user_id?.[0] || 0;
+  const employeeId = employee?.id || result?.employee_id || 0;
+  const companyId = employee?.company_id?.[0] || inferCompanyId(role);
+  const company = employee?.company_id?.[1] || inferCompanyLabel(companyId, role);
+  const now = Math.floor(Date.now() / 1000);
+
+  const fallbackPayload = {
+    source: "odoo",
+    role,
+    job_key: role,
+    job_title: jobTitle,
+    employee_id: employeeId,
+    name: employee?.name || result?.message?.replace(/^Bienvenido,\s*/, "") || "Empleado",
+    company_id: companyId,
+    company,
+    turno: employee?.turno || employee?.x_turno || result?.turno || "",
+    api_key: result?.api_key || "",
+    odoo_api_key: result?.api_key || "",
+    odoo_employee_token: result?.gf_employee_token || "",
+    odoo_employee_session_id: result?.gf_employee_session_id || null,
+    odoo_employee_session_expires_at: result?.gf_employee_session_expires_at || "",
+    employee_has_user: Boolean(result?.employee_has_user),
+    user_id: userId,
+    exp: now + 86400 * 7,
+    iat: now,
+  };
+
+  const sessionToken = result?.session_token || buildLocalSessionToken(fallbackPayload);
+  const decoded = decodeSessionToken(sessionToken, fallbackPayload);
+
+  return {
+    ...decoded,
+    ...fallbackPayload,
+    session_token: sessionToken,
+  };
 }
 
 /*
@@ -292,19 +391,16 @@ export default function LoginScreen() {
 
     try {
       const result = await requestEmployeeSession(cleanPin, cleanBarcode);
-      const sessionToken = extractSessionToken(result);
-
-      if (!sessionToken) {
-        throw new Error("No se recibió una sesión válida");
+      if (!result || result.status !== 200 || result.case !== 1) {
+        throw new Error(
+          result?.error ||
+          result?.message ||
+          "No se pudo validar el PIN y barcode"
+        );
       }
 
-      const fallbackPayload = {
-        pin: cleanPin,
-        barcode: cleanBarcode,
-        app: "pwa_colaboradores",
-      };
-      const payload = decodeSessionToken(sessionToken, fallbackPayload);
-      login(payload);
+      const session = buildSessionFromOdoo(result, cleanPin, cleanBarcode);
+      login(session);
       navigate("/", { replace: true });
     } catch (e) {
       setError(e.message || "Error iniciando sesión");

@@ -55,9 +55,9 @@ src/
 ## Auth flow
 
 ```
-PIN + barcode → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
+PIN + barcode → Odoo `/api/employee-sign-in` → sesión local con {employee_id, job_key, api_key, gf_employee_token} → localStorage
 ```
 
-El JWT tiene expiración de 7 días. `App.jsx` valida exp en cada carga.
+La sesión local conserva `role`, `job_key`, `company_id` y los campos que consume la UI. `App.jsx` valida `exp` en cada carga.
 
 > El flujo de WhatsApp OTP se conservó comentado en `ScreenLogin.jsx` como referencia para reactivarlo más adelante si hace falta.

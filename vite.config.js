@@ -55,6 +55,11 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_N8N_WEBHOOK_URL || 'https://n8n.grupofrio.mx/webhook',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-n8n/, '')
+        },
+        '/api-odoo': {
+          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api-odoo/, '/api')
         }
       }
     },
