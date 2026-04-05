@@ -60,6 +60,11 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api-odoo/, '/api')
+        },
+        '/odoo-api': {
+          target: env.VITE_ODOO_URL || 'https://grupofrio.odoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/odoo-api/, '')
         }
       }
     },

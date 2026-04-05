@@ -2,6 +2,7 @@
   "rewrites": [
     { "source": "/api-n8n/:path*", "destination": "https://n8n.grupofrio.mx/webhook/:path*" },
     { "source": "/api-odoo/:path*", "destination": "https://grupofrio.odoo.com/api/:path*" },
+    { "source": "/odoo-api/:path*", "destination": "https://grupofrio.odoo.com/:path*" },
     { "source": "/((?!assets|icons|manifest).*)", "destination": "/index.html" }
   ],
   "headers": [
