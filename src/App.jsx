@@ -63,6 +63,7 @@ const ScreenGerente          = lazy(() => import('./modules/gerente/ScreenGerent
 const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashboardGerente'))
 const ScreenAlertasGerente   = lazy(() => import('./modules/gerente/ScreenAlertasGerente'))
 const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForecastUnlock'))
+const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
 export const SessionContext = createContext(null)
@@ -246,6 +247,7 @@ export default function App() {
             <Route path="/gerente" element={<PrivateRoute><ScreenGerente /></PrivateRoute>} />
             <Route path="/gerente/dashboard" element={<PrivateRoute><ScreenDashboardGerente /></PrivateRoute>} />
             <Route path="/gerente/alertas" element={<PrivateRoute><ScreenAlertasGerente /></PrivateRoute>} />
+            <Route path="/gerente/gastos" element={<PrivateRoute><ScreenGastosGerente /></PrivateRoute>} />
             <Route path="/gerente/forecast" element={<PrivateRoute><ScreenForecastUnlock /></PrivateRoute>} />
 
             {/* ── Módulos pendientes (placeholder genérico) ───────────────── */}
