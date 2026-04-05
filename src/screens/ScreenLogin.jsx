@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 
-// ── Llamada real a n8n W15 Auth Magic Link ───────────────────────────────
+// ── Llamada real a n8n / auth de empleados ───────────────────────────────
 const WEBHOOK_URL = "/api-n8n";
 
-async function requestMagicLink(phone) {
+async function requestEmployeeSession(pin, barcode) {
   const res = await fetch(`${WEBHOOK_URL}/pwa-auth-request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
+    body: JSON.stringify({ pin, barcode, app: "pwa_colaboradores" }),
   });
 
   // Si la respuesta no es OK (4xx, 5xx)
@@ -25,19 +25,75 @@ async function requestMagicLink(phone) {
     throw new Error(message);
   }
 
-  // Leer como texto primero para evitar "Unexpected end of JSON input" si está vacío
+  const text = await res.text().catch(() => "");
+  if (!text) throw new Error("Respuesta vacía del servidor");
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text || "Respuesta inválida del servidor");
+  }
+}
+
+function extractSessionToken(result) {
+  return (
+    result?.session_token ||
+    result?.data?.session_token ||
+    result?.data?.session?.session_token ||
+    ""
+  );
+}
+
+function decodeSessionToken(sessionToken, fallback = {}) {
+  const payload = { ...fallback };
+  try {
+    const parts = sessionToken.split(".");
+    if (parts.length === 3) {
+      return {
+        ...payload,
+        ...JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))),
+        session_token: sessionToken,
+      };
+    }
+  } catch {
+    // Si el JWT viene raro, usamos el payload mínimo sin bloquear el acceso.
+  }
+  return { ...payload, session_token: sessionToken };
+}
+
+/*
+// ── Legacy WhatsApp OTP flow ───────────────────────────────────────────────
+// Conservado para reactivarlo después sin reconstruir la integración.
+
+async function requestMagicLink(phone) {
+  const res = await fetch(`${WEBHOOK_URL}/pwa-auth-request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, app: "pwa_colaboradores" }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    let message = `Error ${res.status}`;
+    try {
+      const err = JSON.parse(text);
+      message = err.message || message;
+    } catch {
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+
   const text = await res.text().catch(() => "");
   if (!text) return { status: "sent" };
 
   try {
     return JSON.parse(text);
   } catch {
-    // Si no es JSON pero es OK, asumimos que se envió
     return { status: "sent", message: text };
   }
 }
 
-// ── Verificar token del magic link ───────────────────────────────────────
 async function verifyMagicToken(token, phone) {
   const res = await fetch(`${WEBHOOK_URL}/pwa-auth-verify`, {
     method: "POST",
@@ -61,6 +117,7 @@ async function verifyMagicToken(token, phone) {
   if (!text) throw new Error("Respuesta vacía del servidor");
   return JSON.parse(text);
 }
+*/
 
 // ── Design tokens ────────────────────────────────────────────────────────
 const UI = {
@@ -92,39 +149,6 @@ const UI = {
     card: "0 14px 30px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.05)",
   },
 };
-
-// ── Logos — public/icons/ ────────────────────────────────────────────────
-function IconGF({ size = 68 }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.round(size * 0.22),
-        overflow: "hidden",
-        boxShadow: "0 8px 28px rgba(0,0,0,0.42), 0 2px 8px rgba(26,79,156,0.22)",
-        flexShrink: 0,
-        background: "white",
-      }}
-    >
-      <img
-        src="/icons/icon-grupo-frio.svg"
-        alt="Grupo Frío"
-        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-      />
-    </div>
-  );
-}
-
-function LogoGF({ width = 204 }) {
-  return (
-    <img
-      src="/icons/logo-grupo-frio.svg"
-      alt="Grupo Frío"
-      style={{ width, height: "auto", display: "block" }}
-    />
-  );
-}
 
 // ── Partículas ───────────────────────────────────────────────────────────
 function IceParticles() {
@@ -221,9 +245,9 @@ function buildMockSession(emp) {
 export default function LoginScreen() {
   const { login } = useSession();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [phone, setPhone] = useState("");
-  const [step, setStep] = useState("input"); // input | loading | verifying | sent | admin
+  const [pin, setPin] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [step, setStep] = useState("input"); // input | loading | admin
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
   const [tapCount, setTapCount] = useState(0);
@@ -248,55 +272,12 @@ export default function LoginScreen() {
     navigate("/", { replace: true });
   };
 
-  // ── Auto-verificar token del magic link (?token=...&phone=...) ──────
-  useEffect(() => {
-    const urlToken = searchParams.get("token");
-    const urlPhone = searchParams.get("phone");
-    if (!urlToken || !urlPhone) return;
-
-    setStep("verifying");
-
-    const phoneFormatted = urlPhone.startsWith("+") ? urlPhone : `+52${urlPhone.replace(/\D/g, "")}`;
-
-    verifyMagicToken(urlToken, phoneFormatted)
-      .then((result) => {
-        if (result?.session_token) {
-          let payload = { phone: phoneFormatted, app: "pwa_colaboradores" };
-          try {
-            const parts = result.session_token.split(".");
-            if (parts.length === 3) {
-              payload = {
-                ...JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))),
-                session_token: result.session_token,
-              };
-            }
-          } catch { /* JWT inválido — usar payload mínimo */ }
-          login(payload);
-          navigate("/", { replace: true });
-        } else {
-          setError("Token inválido o expirado. Solicita un nuevo enlace.");
-          setStep("input");
-        }
-      })
-      .catch((e) => {
-        setError(e.message || "Error verificando el código");
-        setStep("input");
-      });
-  }, [searchParams, login, navigate]);
-
-  const formatPhone = (val) => {
-    const digits = val.replace(/\D/g, "").slice(0, 10);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  };
-
-  const handlePhoneChange = (e) => setPhone(formatPhone(e.target.value));
-
   const handleSubmit = async () => {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
-      setError("Ingresa un número de 10 dígitos");
+    const cleanPin = pin.trim();
+    const cleanBarcode = barcode.trim();
+
+    if (!cleanPin || !cleanBarcode) {
+      setError("Ingresa tu PIN y tu barcode");
       return;
     }
 
@@ -304,36 +285,29 @@ export default function LoginScreen() {
     setStep("loading");
 
     try {
-      const result = await requestMagicLink(digits);
-      if (result?.session_token) {
-        // Respuesta inmediata con token (SSO / bypass dev)
-        let payload = { phone: digits, app: "pwa_colaboradores" };
-        try {
-          const parts = result.session_token.split(".");
-          if (parts.length === 3) {
-            payload = { ...JSON.parse(atob(parts[1].replace(/-/g,"+").replace(/_/g,"/"))), session_token: result.session_token };
-          }
-        } catch { /* JWT inválido — usar payload mínimo */ }
-        login(payload);
-        navigate("/", { replace: true });
-      } else {
-        // Flujo normal: link enviado a WhatsApp
-        setStep("sent");
+      const result = await requestEmployeeSession(cleanPin, cleanBarcode);
+      const sessionToken = extractSessionToken(result);
+
+      if (!sessionToken) {
+        throw new Error("No se recibió una sesión válida");
       }
+
+      const fallbackPayload = {
+        pin: cleanPin,
+        barcode: cleanBarcode,
+        app: "pwa_colaboradores",
+      };
+      const payload = decodeSessionToken(sessionToken, fallbackPayload);
+      login(payload);
+      navigate("/", { replace: true });
     } catch (e) {
-      setError(e.message || "Error enviando el código");
+      setError(e.message || "Error iniciando sesión");
       setStep("input");
     }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleSubmit();
-  };
-
-  const resetForm = () => {
-    setStep("input");
-    setPhone("");
-    setError("");
   };
 
   return (
@@ -556,49 +530,57 @@ export default function LoginScreen() {
               Sesión de prueba — las llamadas a API no funcionarán sin JWT real
             </p>
           </div>
-        ) : step === "verifying" ? (
-          <div className={`w-full flex flex-col items-center gap-5 text-center ${mounted ? "fade-up-3" : "opacity-0"}`}>
-            <div
-              className="w-16 h-16 border-3 border-white/20 border-t-blue-400 rounded-full"
-              style={{ animation: "spin 0.8s linear infinite" }}
-            />
-            <p className="text-white/60 text-sm">Verificando acceso...</p>
-          </div>
-        ) : step !== "sent" ? (
+        ) : (
           <div className={`w-full flex flex-col gap-4 ${mounted ? "fade-up-3" : "opacity-0"}`}>
             <div>
               <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
-                Número celular
+                PIN de empleado
               </label>
 
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm font-semibold">
-                  +52
-                </span>
-
-                <div
-                  className="absolute top-3 bottom-3 w-px"
-                  style={{ left: "68px", background: "rgba(255,255,255,0.10)" }}
-                />
-
                 <input
-                  type="tel"
-                  value={phone}
-                  onChange={handlePhoneChange}
+                  type="text"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="(33) 1234-5678"
+                  placeholder="Ingresa tu PIN"
                   disabled={step === "loading"}
                   className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
-                  style={{ paddingLeft: "88px" }}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={{ paddingLeft: "16px" }}
                 />
               </div>
-
-              {error && (
-                <p className="text-red-400 text-xs mt-2 flex items-center gap-1.5">
-                  <span>⚠</span> {error}
-                </p>
-              )}
             </div>
+
+            <div>
+              <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
+                Barcode
+              </label>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ingresa o escanea el barcode"
+                  disabled={step === "loading"}
+                  className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  style={{ paddingLeft: "16px" }}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <p className="text-red-400 text-xs mt-0 flex items-center gap-1.5">
+                <span>⚠</span> {error}
+              </p>
+            )}
 
             <button
               onClick={handleSubmit}
@@ -616,69 +598,16 @@ export default function LoginScreen() {
                     className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
                     style={{ animation: "spin 0.8s linear infinite" }}
                   />
-                  <span>Enviando...</span>
+                  <span>Validando...</span>
                 </>
               ) : (
-                <>
-                  <WhatsAppIcon />
-                  <span>Entrar con WhatsApp</span>
-                </>
+                <span>Entrar</span>
               )}
             </button>
 
             <p className="text-white/20 text-xs text-center leading-relaxed">
-              Te enviaremos un enlace de acceso seguro a tu WhatsApp.
-              <br />
-              No necesitas contraseña.
+              Ingresa tu PIN y barcode para obtener tu clave de PWA.
             </p>
-          </div>
-        ) : (
-          <div className={`w-full flex flex-col items-center gap-5 text-center ${mounted ? "fade-up-3" : "opacity-0"}`}>
-            <div
-              className="w-full rounded-3xl border px-5 py-6"
-              style={{
-                borderColor: "rgba(255,255,255,0.08)",
-                background: "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))",
-                boxShadow: UI.shadow.card,
-              }}
-            >
-              <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center text-3xl">
-                    📱
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-white font-semibold text-lg">¡Listo! Revisa tu WhatsApp</h3>
-                  <p className="text-white/40 text-sm mt-2 leading-relaxed">
-                    Enviamos un enlace de acceso a
-                    <br />
-                    <span className="text-blue-400 font-medium">+52 {phone}</span>
-                  </p>
-                </div>
-
-                <div className="w-full rounded-2xl border border-white/8 bg-white/3 px-4 py-3.5 flex items-start gap-3">
-                  <span className="text-yellow-400 text-lg shrink-0 mt-0.5">💡</span>
-                  <p className="text-white/40 text-xs leading-relaxed text-left">
-                    Toca el enlace en el mensaje de WhatsApp para acceder a la app.
-                    El enlace expira en <span className="text-white/60">10 minutos</span>.
-                  </p>
-                </div>
-
-                <button
-                  onClick={resetForm}
-                  className="text-white/30 text-sm underline underline-offset-4 hover:text-white/50 transition-colors"
-                >
-                  Usar otro número
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -696,13 +625,5 @@ export default function LoginScreen() {
         style={{ background: "linear-gradient(90deg, transparent, rgba(43,143,224,0.3), transparent)" }}
       />
     </div>
-  );
-}
-
-function WhatsAppIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
   );
 }

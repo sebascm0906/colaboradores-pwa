@@ -55,7 +55,9 @@ src/
 ## Auth flow
 
 ```
-WhatsApp OTP → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
+PIN + barcode → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
 ```
 
 El JWT tiene expiración de 7 días. `App.jsx` valida exp en cada carga.
+
+> El flujo de WhatsApp OTP se conservó comentado en `ScreenLogin.jsx` como referencia para reactivarlo más adelante si hace falta.
