@@ -528,6 +528,40 @@ async function directAdmin(method, path, body) {
     }))
   }
 
+  if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
+    const employeeId = getEmployeeId()
+    if (!employeeId) return { success: false, error: 'No employee session' }
+
+    const totalAmount = Number(body?.total_amount || body?.amount || 0)
+    const quantity = Number(body?.quantity || 1) || 1
+    const companyIdPayload = Number(body?.company_id || companyId || 0)
+    const rawDescription = String(body?.description || '').trim()
+    const contextParts = []
+    if (body?.sucursal) contextParts.push(`[Sucursal: ${String(body.sucursal).trim()}]`)
+    if (body?.capturista) contextParts.push(`[Capturó: ${String(body.capturista).trim()}]`)
+    const description = [rawDescription, contextParts.join(' ')].filter(Boolean).join('\n') || '\n'
+
+    const result = await createUpdate({
+      model: 'hr.expense',
+      method: 'create',
+      dict: {
+        name: String(body?.name || '').trim(),
+        date: body?.date || todayStart.slice(0, 10),
+        employee_id: employeeId,
+        company_id: companyIdPayload || undefined,
+        payment_mode: body?.payment_mode || 'company_account',
+        quantity,
+        total_amount: totalAmount,
+        description,
+        product_id: body?.product_id ? Number(body.product_id) : undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+
+    return { success: true, data: result }
+  }
+
   if (cleanPath === '/pwa-admin/cash-closing' && method === 'GET') {
     const sales = await directAdmin('GET', `/pwa-admin/today-sales?warehouse_id=${warehouseId || ''}`)
     const expenses = await directAdmin('GET', '/pwa-admin/today-expenses')
