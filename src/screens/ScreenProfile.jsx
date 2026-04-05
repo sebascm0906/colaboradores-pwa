@@ -407,7 +407,7 @@ function LogoutDialog({ onConfirm, onCancel, sw }) {
         <div style={{ fontSize:40, marginBottom:12 }}>👋</div>
         <div style={{ ...typo.h2, color:TOKENS.colors.text, marginBottom:8 }}>¿Cerrar sesión?</div>
         <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, lineHeight:1.55, marginBottom:22 }}>
-          Tendrás que volver a ingresar con tu número de celular y el enlace de WhatsApp.
+          Tendrás que volver a ingresar con tu PIN y barcode.
         </div>
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={handleCancel} style={{ flex:1, height:44, borderRadius:TOKENS.radius.md, background:"rgba(255,255,255,0.06)", border:`1px solid ${TOKENS.colors.border}`, color:TOKENS.colors.textMuted, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Cancelar</button>

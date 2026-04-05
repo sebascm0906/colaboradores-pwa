@@ -41,7 +41,7 @@ Las variables `WA_ACCESS_TOKEN_OPERACIONES` (sin prefijo `VITE_`) **no van en Ve
 ```
 src/
 ├── screens/
-│   ├── ScreenLogin.jsx     # P1 — Auth OTP WhatsApp
+│   ├── ScreenLogin.jsx     # P1 — Auth directa por PIN + barcode
 │   ├── ScreenHome.jsx      # P2 — Dashboard principal
 │   ├── ScreenKPIs.jsx      # P3 — Mis KPIs (iframe Metabase)
 │   ├── ScreenSurveys.jsx   # P4 — Encuestas activas
@@ -55,7 +55,7 @@ src/
 ## Auth flow
 
 ```
-PIN + barcode + phone/mobile → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
+PIN + barcode → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
 ```
 
 El JWT tiene expiración de 7 días. `App.jsx` valida exp en cada carga.
