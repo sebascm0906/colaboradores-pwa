@@ -417,11 +417,12 @@ async function directGerente(method, path) {
 }
 
 async function directAdmin(method, path, body) {
+  const cleanPath = path.split('?')[0]
   const warehouseId = getWarehouseId()
   const companyId = getCompanyId()
   const [todayStart, todayEnd] = todayRange()
 
-  if (path === '/pwa-admin/pos-products' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'list_price', 'lst_price', 'qty_available', 'barcode', 'sale_ok', 'available_in_pos', 'weight'],
       domain: [['sale_ok', '=', true]],
@@ -442,7 +443,7 @@ async function directAdmin(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-admin/customers' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const q = String(query.get('q') || '').trim()
     const domain = ['|', '|', ['name', 'ilike', q], ['email', 'ilike', q], ['mobile', 'ilike', q]]
@@ -465,7 +466,7 @@ async function directAdmin(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-admin/default-customer' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
     const result = await readModelSorted('res.partner', {
       fields: ['id', 'name', 'email', 'mobile', 'phone'],
       domain: ['|', ['name', 'ilike', 'PUBLIC'], ['name', 'ilike', 'PUBLICO']],
@@ -478,7 +479,7 @@ async function directAdmin(method, path, body) {
     return row ? { id: row.id, name: row.name, email: row.email || '', phone: row.phone || row.mobile || '' } : null
   }
 
-  if (path === '/pwa-admin/today-sales' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const domain = [['date_order', '>=', todayStart], ['date_order', '<=', todayEnd]]
@@ -504,7 +505,7 @@ async function directAdmin(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-admin/today-expenses' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
     const domain = [['date', '>=', todayStart], ['date', '<=', todayEnd]]
     if (companyId) domain.push(['company_id', '=', companyId])
     const result = await readModelSorted('hr.expense', {
@@ -527,7 +528,7 @@ async function directAdmin(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-admin/cash-closing' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/cash-closing' && method === 'GET') {
     const sales = await directAdmin('GET', `/pwa-admin/today-sales?warehouse_id=${warehouseId || ''}`)
     const expenses = await directAdmin('GET', '/pwa-admin/today-expenses')
     const totalSales = Array.isArray(sales) ? sales.reduce((sum, row) => sum + Number(row.total || 0), 0) : 0
@@ -544,7 +545,7 @@ async function directAdmin(method, path, body) {
     }
   }
 
-  if (path === '/pwa-admin/find-ticket' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/find-ticket' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const folio = String(query.get('folio') || '').trim()
     if (!folio) return null
@@ -564,7 +565,7 @@ async function directAdmin(method, path, body) {
     }) : null
   }
 
-  if (path === '/pwa-admin/sale-detail' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/sale-detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const orderId = Number(query.get('order_id') || 0)
     if (!orderId) return null
@@ -585,7 +586,7 @@ async function directAdmin(method, path, body) {
     })
   }
 
-  if (path === '/pwa-admin/pending-tickets' && method === 'GET') {
+  if (cleanPath === '/pwa-admin/pending-tickets' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const domain = [['state', 'in', ['sale', 'done']]]
@@ -609,7 +610,7 @@ async function directAdmin(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-admin/dispatch-ticket' && method === 'POST') {
+  if (cleanPath === '/pwa-admin/dispatch-ticket' && method === 'POST') {
     const result = await odooJson('/public_api/sale_order/validate_deliveries', {
       sale_order_id: Number(body?.order_id || 0),
     })
@@ -621,8 +622,9 @@ async function directAdmin(method, path, body) {
 
 async function directProduction(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
 
-  if (path === '/pwa-prod/my-shift' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/my-shift' && method === 'GET') {
     const current = await odooHttp('GET', '/api/production/shift/current', {
       warehouse_id: getWarehouseId() || undefined,
     })
@@ -676,14 +678,14 @@ async function directProduction(method, path, body) {
     }
   }
 
-  if (path === '/pwa-prod/shift-summary' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/shift-summary' && method === 'GET') {
     const result = await odooHttp('GET', '/api/production/dashboard', {
       shift_id: query.get('shift_id') || '',
     })
     return result?.data || result
   }
 
-  if (path === '/pwa-prod/checklist' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/checklist' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return null
     const result = await readModel('gf.haccp.checklist', {
@@ -701,7 +703,7 @@ async function directProduction(method, path, body) {
     }
   }
 
-  if (path === '/pwa-prod/checklist-check' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/checklist-check' && method === 'POST') {
     const result = await createUpdate({
       model: 'gf.haccp.check',
       method: 'update',
@@ -718,7 +720,7 @@ async function directProduction(method, path, body) {
     return result
   }
 
-  if (path === '/pwa-prod/checklist-complete' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/checklist-complete' && method === 'POST') {
     return createUpdate({
       model: 'gf.haccp.checklist',
       method: 'function',
@@ -729,7 +731,7 @@ async function directProduction(method, path, body) {
     })
   }
 
-  if (path === '/pwa-prod/cycles' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/cycles' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const result = await readModelSorted('gf.evaporator.cycle', {
@@ -743,7 +745,7 @@ async function directProduction(method, path, body) {
     return pickListResponse(result)
   }
 
-  if (path === '/pwa-prod/cycle-create' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/cycle-create' && method === 'POST') {
     const result = await odooHttp('POST', '/api/production/cycle/start', {}, {
       shift_id: Number(body?.shift_id || 0),
       machine_id: Number(body?.machine_id || 0),
@@ -751,7 +753,7 @@ async function directProduction(method, path, body) {
     return result?.data || result
   }
 
-  if (path === '/pwa-prod/cycle-update' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/cycle-update' && method === 'POST') {
     const cycleId = Number(body?.cycle_id || 0)
     const updates = { ...(body || {}) }
     delete updates.cycle_id
@@ -783,7 +785,7 @@ async function directProduction(method, path, body) {
     })
   }
 
-  if (path === '/pwa-prod/packing-products' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/packing-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'weight', 'qty_available', 'sale_ok', 'available_in_pos'],
       domain: [['sale_ok', '=', true]],
@@ -802,7 +804,7 @@ async function directProduction(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-prod/packing-create' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/packing-create' && method === 'POST') {
     const result = await odooHttp('POST', '/api/production/pack', {}, {
       shift_id: Number(body?.shift_id || 0),
       cycle_id: Number(body?.cycle_id || 0),
@@ -813,7 +815,7 @@ async function directProduction(method, path, body) {
     return result?.data || result
   }
 
-  if (path === '/pwa-prod/packing-entries' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/packing-entries' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const result = await readModelSorted('gf.packing.entry', {
@@ -827,7 +829,7 @@ async function directProduction(method, path, body) {
     return pickListResponse(result)
   }
 
-  if (path === '/pwa-prod/transformation-products' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/transformation-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'weight', 'qty_available', 'sale_ok'],
       domain: [['sale_ok', '=', true]],
@@ -844,7 +846,7 @@ async function directProduction(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-prod/transformation-create' && method === 'POST') {
+  if (cleanPath === '/pwa-prod/transformation-create' && method === 'POST') {
     const result = await createUpdate({
       model: 'gf.transformation.order',
       method: 'create',
@@ -869,7 +871,7 @@ async function directProduction(method, path, body) {
     return result
   }
 
-  if (path === '/pwa-prod/transformations' && method === 'GET') {
+  if (cleanPath === '/pwa-prod/transformations' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const result = await readModelSorted('gf.transformation.order', {
@@ -888,8 +890,9 @@ async function directProduction(method, path, body) {
 
 async function directRuta(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
 
-  if (path === '/pwa-ruta/my-plan' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/my-plan' && method === 'GET') {
     const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
     if (!empId) return null
     const result = await readModelSorted('gf.route.plan', {
@@ -920,7 +923,7 @@ async function directRuta(method, path, body) {
     return pickFirstResponse(result)
   }
 
-  if (path === '/pwa-ruta/my-target' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/my-target' && method === 'GET') {
     const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
     if (!empId) return null
     const [startMonth, endMonth] = monthRange()
@@ -945,7 +948,7 @@ async function directRuta(method, path, body) {
     }
   }
 
-  if (path === '/pwa-ruta/my-load' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/my-load' && method === 'GET') {
     const routePlanId = Number(query.get('route_plan_id') || 0)
     if (!routePlanId) return null
     const result = await readModelSorted('gf.route.plan', {
@@ -968,7 +971,7 @@ async function directRuta(method, path, body) {
     }
   }
 
-  if (path === '/pwa-ruta/load-lines' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/load-lines' && method === 'GET') {
     const pickingId = Number(query.get('picking_id') || 0)
     if (!pickingId) return []
     const result = await readModelSorted('stock.move', {
@@ -990,7 +993,7 @@ async function directRuta(method, path, body) {
     }))
   }
 
-  if (path === '/pwa-ruta/reconciliation' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/reconciliation' && method === 'GET') {
     const routePlanId = Number(query.get('route_plan_id') || 0)
     if (!routePlanId) return null
     const result = await readModel('gf.dispatch.reconciliation', {
@@ -1004,7 +1007,7 @@ async function directRuta(method, path, body) {
     return row || null
   }
 
-  if (path === '/pwa-ruta/incident-create' && method === 'POST') {
+  if (cleanPath === '/pwa-ruta/incident-create' && method === 'POST') {
     return createUpdate({
       model: 'gf.route.incident',
       method: 'create',
@@ -1022,7 +1025,7 @@ async function directRuta(method, path, body) {
     })
   }
 
-  if (path === '/pwa-ruta/my-incidents' && method === 'GET') {
+  if (cleanPath === '/pwa-ruta/my-incidents' && method === 'GET') {
     const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
     if (!empId) return []
     const result = await readModelSorted('gf.route.incident', {
