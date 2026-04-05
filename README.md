@@ -55,7 +55,7 @@ src/
 ## Auth flow
 
 ```
-PIN + barcode → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
+PIN + barcode + phone/mobile → W15 (n8n) → JWT con {employee_id, job_key, analytic_account_id, turno} → localStorage
 ```
 
 El JWT tiene expiración de 7 días. `App.jsx` valida exp en cada carga.

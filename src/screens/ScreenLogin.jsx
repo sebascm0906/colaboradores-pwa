@@ -5,11 +5,17 @@ import { useSession } from "../App";
 // ── Llamada real a n8n / auth de empleados ───────────────────────────────
 const WEBHOOK_URL = "/api-n8n";
 
-async function requestEmployeeSession(pin, barcode) {
+async function requestEmployeeSession(pin, barcode, phone) {
   const res = await fetch(`${WEBHOOK_URL}/pwa-auth-request`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin, barcode, app: "pwa_colaboradores" }),
+    body: JSON.stringify({
+      pin,
+      barcode,
+      phone,
+      mobile: phone,
+      app: "pwa_colaboradores",
+    }),
   });
 
   // Si la respuesta no es OK (4xx, 5xx)
@@ -247,6 +253,7 @@ export default function LoginScreen() {
   const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [phone, setPhone] = useState("");
   const [step, setStep] = useState("input"); // input | loading | admin
   const [error, setError] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -275,9 +282,10 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     const cleanPin = pin.trim();
     const cleanBarcode = barcode.trim();
+    const cleanPhone = phone.replace(/\D/g, "");
 
-    if (!cleanPin || !cleanBarcode) {
-      setError("Ingresa tu PIN y tu barcode");
+    if (!cleanPin || !cleanBarcode || cleanPhone.length < 10) {
+      setError("Ingresa PIN, barcode y celular de trabajo o teléfono");
       return;
     }
 
@@ -285,7 +293,7 @@ export default function LoginScreen() {
     setStep("loading");
 
     try {
-      const result = await requestEmployeeSession(cleanPin, cleanBarcode);
+      const result = await requestEmployeeSession(cleanPin, cleanBarcode, cleanPhone);
       const sessionToken = extractSessionToken(result);
 
       if (!sessionToken) {
@@ -295,6 +303,8 @@ export default function LoginScreen() {
       const fallbackPayload = {
         pin: cleanPin,
         barcode: cleanBarcode,
+        phone: cleanPhone,
+        mobile: cleanPhone,
         app: "pwa_colaboradores",
       };
       const payload = decodeSessionToken(sessionToken, fallbackPayload);
@@ -576,6 +586,29 @@ export default function LoginScreen() {
               </div>
             </div>
 
+            <div>
+              <label className="block text-white/40 text-xs font-medium tracking-widest uppercase mb-2.5">
+                Celular de trabajo / Teléfono
+              </label>
+
+              <div className="relative">
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="443693...."
+                  disabled={step === "loading"}
+                  className="input-gf w-full rounded-2xl py-4 pr-4 text-base font-medium"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  inputMode="numeric"
+                  style={{ paddingLeft: "16px" }}
+                />
+              </div>
+            </div>
+
             {error && (
               <p className="text-red-400 text-xs mt-0 flex items-center gap-1.5">
                 <span>⚠</span> {error}
@@ -606,7 +639,7 @@ export default function LoginScreen() {
             </button>
 
             <p className="text-white/20 text-xs text-center leading-relaxed">
-              Ingresa tu PIN y barcode para obtener tu clave de PWA.
+              Ingresa tu PIN, barcode y celular de trabajo o teléfono para obtener tu clave de PWA.
             </p>
           </div>
         )}
