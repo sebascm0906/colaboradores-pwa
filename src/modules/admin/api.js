@@ -62,6 +62,17 @@ export function getTodayExpenses() {
   return api('GET', '/pwa-admin/today-expenses')
 }
 
+/** Historial de gastos con filtros */
+export function getExpensesHistory(filters = {}) {
+  const query = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    query.set(key, String(value))
+  })
+  const qs = query.toString()
+  return api('GET', `/pwa-admin/expenses-history${qs ? `?${qs}` : ''}`)
+}
+
 // ── Requisiciones ────────────────────────────────────────────────────────────
 
 /** Crear requisición de compra */

@@ -538,6 +538,70 @@ async function directAdmin(method, path, body) {
     }))
   }
 
+  if (cleanPath === '/pwa-admin/expenses-history' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const q = String(query.get('q') || '').trim()
+    const state = String(query.get('state') || '').trim()
+    const employeeId = Number(query.get('employee_id') || 0) || 0
+    const companyIdParam = Number(query.get('company_id') || 0) || 0
+    const dateFrom = String(query.get('date_from') || '').trim()
+    const dateTo = String(query.get('date_to') || '').trim()
+
+    const domain = []
+    if (dateFrom || dateTo) {
+      if (dateFrom) domain.push(['date', '>=', dateFrom])
+      if (dateTo) domain.push(['date', '<=', dateTo])
+    } else {
+      domain.push(['date', '>=', todayStart], ['date', '<=', todayEnd])
+    }
+    const effectiveCompanyId = companyIdParam || companyId || 0
+    if (effectiveCompanyId) domain.push(['company_id', '=', effectiveCompanyId])
+    if (employeeId) domain.push(['employee_id', '=', employeeId])
+    if (state) domain.push(['state', '=', state])
+
+    const result = await readModelSorted('hr.expense', {
+      fields: ['id', 'name', 'date', 'state', 'total_amount', 'company_id', 'employee_id', 'description', 'account_id'],
+      domain,
+      sort_column: 'date',
+      sort_desc: true,
+      limit: q ? 0 : 200,
+      sudo: 1,
+    })
+
+    const items = pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || row.description || 'Gasto',
+      description: row.description || '',
+      total_amount: Number(row.total_amount || 0),
+      date: row.date || null,
+      state: row.state || 'draft',
+      company_id: row.company_id?.[0] || 0,
+      employee_id: row.employee_id?.[0] || 0,
+      account_id: row.account_id?.[0] || 0,
+    })).filter((row) => {
+      if (!q) return true
+      const haystack = `${row.name || ''} ${row.description || ''}`.toLowerCase()
+      return haystack.includes(q.toLowerCase())
+    })
+
+    const total = items.reduce((sum, row) => sum + Number(row.total_amount || 0), 0)
+    return {
+      items,
+      summary: {
+        count: items.length,
+        total_amount: total,
+      },
+      filters: {
+        company_id: effectiveCompanyId || null,
+        employee_id: employeeId || null,
+        state: state || null,
+        q: q || '',
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
+      },
+    }
+  }
+
   if (cleanPath === '/pwa-admin/expense-create' && method === 'POST') {
     const employeeId = getEmployeeId()
     if (!employeeId) return { success: false, error: 'No employee session' }
