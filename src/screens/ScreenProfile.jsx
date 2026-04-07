@@ -675,7 +675,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     apiPost("/pwa-logout", {})
       .catch(() => {}) // fire-and-forget, limpiar igual
       .finally(() => {
-        clearSession();   // limpia localStorage
+        localStorage.removeItem("gf_session"); // limpia localStorage
         logout();         // limpia SessionContext en memoria
         navigate("/login", { replace: true });
       });
