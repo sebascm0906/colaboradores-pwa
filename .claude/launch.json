@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "Vite Dev Server",
+      "name": "pwa-dev",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vite", "--host"],
       "port": 5173

@@ -273,7 +273,7 @@ async function directProfile(method, path, body) {
         'department_id',
         'parent_id',
         'coach_id',
-        'date_start',
+        'first_contract_date',
         'remaining_leaves',
         'mobile_phone',
         'image_128',
@@ -1175,6 +1175,751 @@ async function directRuta(method, path, body) {
   return NO_DIRECT
 }
 
+async function directSupervision(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  const warehouseId = getWarehouseId()
+  const companyId = getCompanyId()
+
+  if (!cleanPath.startsWith('/pwa-sup/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-sup/dashboard' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return null
+    const result = await readModel('gf.production.shift', {
+      fields: [
+        'id', 'name', 'date', 'shift_code', 'state',
+        'plant_warehouse_id', 'leader_employee_id',
+        'total_kg_produced', 'total_kg_packed', 'total_downtime_min',
+        'total_scrap_kg', 'energy_kwh', 'energy_kwh_per_kg',
+        'yield_pct', 'x_compliance_score', 'x_meta_kg',
+      ],
+      domain: [['id', '=', shiftId]],
+      limit: 1,
+      sudo: 1,
+    })
+    return pickFirstResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/operators' && method === 'GET') {
+    const domain = [['x_job_key', 'in', ['operador_produccion', 'operador_empaque', 'operador_corte']]]
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('hr.employee', {
+      fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+      file: 'url',
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      barcode: row.barcode || '',
+      job_id: row.job_id,
+      x_job_key: row.x_job_key || '',
+      warehouse_id: row.warehouse_id?.[0] || 0,
+      image_128: row.image_128 || false,
+    }))
+  }
+
+  if (cleanPath === '/pwa-sup/active-shift' && method === 'GET') {
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const domain = [['state', 'in', ['draft', 'in_progress']], ['date', '=', todayStr]]
+    if (warehouseId) domain.push(['plant_warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.production.shift', {
+      fields: [
+        'id', 'name', 'date', 'shift_code', 'state',
+        'plant_warehouse_id', 'leader_employee_id', 'operator_employee_ids',
+        'start_time', 'end_time',
+        'total_kg_produced', 'total_kg_packed', 'total_downtime_min',
+        'total_scrap_kg', 'energy_kwh', 'yield_pct',
+        'x_compliance_score', 'x_meta_kg',
+      ],
+      domain,
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 1,
+      sudo: 1,
+    })
+    return pickFirstResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/shift-create' && method === 'POST') {
+    const result = await createUpdate({
+      model: 'gf.production.shift',
+      method: 'create',
+      dict: {
+        date: body?.date || new Date().toISOString().slice(0, 10),
+        shift_code: String(body?.shift_code || '1'),
+        plant_warehouse_id: Number(body?.warehouse_id || warehouseId || 0) || undefined,
+        leader_employee_id: Number(body?.leader_id || getEmployeeId() || 0) || undefined,
+        operator_employee_ids: Array.isArray(body?.operator_ids)
+          ? body.operator_ids.map((id) => [4, Number(id)])
+          : [],
+        state: 'draft',
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/shift-close' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.production.shift',
+      method: 'update',
+      ids: [shiftId],
+      dict: {
+        state: 'closed',
+        end_time: body?.end_time || new Date().toISOString(),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/downtimes' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return []
+    const result = await readModelSorted('gf.production.downtime', {
+      fields: ['id', 'shift_id', 'category_id', 'machine_id', 'line_id', 'start_time', 'end_time', 'minutes', 'state', 'reason', 'operator_id'],
+      domain: [['shift_id', '=', shiftId]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/downtime-categories' && method === 'GET') {
+    const result = await readModelSorted('gf.production.downtime.category', {
+      fields: ['id', 'name', 'code', 'is_planned'],
+      domain: [],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/downtime-create' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.production.downtime',
+      method: 'create',
+      dict: {
+        shift_id: shiftId,
+        category_id: Number(body?.category_id || 0) || undefined,
+        machine_id: Number(body?.machine_id || 0) || undefined,
+        line_id: Number(body?.line_id || 0) || undefined,
+        start_time: body?.start_time || new Date().toISOString(),
+        reason: body?.reason || body?.notes || '',
+        operator_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+        state: 'open',
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/downtime-close' && method === 'POST') {
+    const downtimeId = Number(body?.downtime_id || 0)
+    if (!downtimeId) return { success: false, error: 'downtime_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.production.downtime',
+      method: 'update',
+      ids: [downtimeId],
+      dict: {
+        state: 'closed',
+        end_time: body?.end_time || new Date().toISOString(),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/scraps' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return []
+    const result = await readModelSorted('gf.production.scrap', {
+      fields: ['id', 'shift_id', 'product_id', 'kg', 'reason_id', 'notes', 'operator_id', 'line_id', 'machine_id', 'photo', 'timestamp', 'create_date'],
+      domain: [['shift_id', '=', shiftId]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/scrap-reasons' && method === 'GET') {
+    const result = await readModelSorted('gf.production.scrap.reason', {
+      fields: ['id', 'name', 'code'],
+      domain: [],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/scrap-create' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.production.scrap',
+      method: 'create',
+      dict: {
+        shift_id: shiftId,
+        product_id: Number(body?.product_id || 0) || undefined,
+        kg: Number(body?.kg || body?.qty_kg || 0),
+        reason_id: Number(body?.reason_id || 0) || undefined,
+        notes: body?.notes || '',
+        operator_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+        line_id: Number(body?.line_id || 0) || undefined,
+        photo: body?.photo_base64 || undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/energy' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return []
+    const result = await readModelSorted('gf.energy.reading', {
+      fields: ['id', 'shift_id', 'kwh_value', 'reading_type', 'timestamp', 'photo', 'employee_id'],
+      domain: [['shift_id', '=', shiftId]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/energy-create' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.energy.reading',
+      method: 'create',
+      dict: {
+        shift_id: shiftId,
+        kwh_value: Number(body?.kwh_value || body?.reading_kwh || 0),
+        reading_type: body?.reading_type || undefined,
+        timestamp: body?.timestamp || new Date().toISOString(),
+        employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
+        photo: body?.photo_base64 || undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/maintenance' && method === 'GET') {
+    const domain = []
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('maintenance.request', {
+      fields: ['id', 'name', 'request_date', 'stage_id', 'priority', 'equipment_id', 'maintenance_type', 'employee_id', 'description', 'schedule_date'],
+      domain,
+      sort_column: 'request_date',
+      sort_desc: true,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-sup/maintenance-create' && method === 'POST') {
+    const result = await createUpdate({
+      model: 'maintenance.request',
+      method: 'create',
+      dict: {
+        name: body?.name || body?.subject || 'Solicitud PWA',
+        request_date: body?.request_date || new Date().toISOString().slice(0, 10),
+        maintenance_type: body?.maintenance_type || body?.type || 'corrective',
+        priority: body?.priority || '1',
+        equipment_id: Number(body?.equipment_id || 0) || undefined,
+        employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
+        description: body?.description || '',
+        company_id: Number(body?.company_id || companyId || 0) || undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  return NO_DIRECT
+}
+
+async function directAlmacenPT(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  const warehouseId = Number(query.get('warehouse_id') || 0) || getWarehouseId()
+  const companyId = getCompanyId()
+
+  if (!cleanPath.startsWith('/pwa-pt/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-pt/pending-pallets' && method === 'GET') {
+    const domain = [['status', '=', 'available'], ['received_by_id', '=', false]]
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.pallet', {
+      fields: ['id', 'name', 'product_id', 'qty', 'qty_kg', 'kg_total', 'status', 'shift_id', 'warehouse_id', 'created_by_id', 'layers', 'bags_per_layer', 'create_date'],
+      domain,
+      sort_column: 'create_date',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      product: row.product_id?.[1] || '',
+      product_id: row.product_id?.[0] || 0,
+      qty: Number(row.qty || 0),
+      kg_total: Number(row.kg_total || row.qty_kg || 0),
+      shift: row.shift_id?.[1] || '',
+      status: row.status || '',
+      layers: Number(row.layers || 0),
+      bags_per_layer: Number(row.bags_per_layer || 0),
+      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
+      create_date: row.create_date || null,
+    }))
+  }
+
+  if (cleanPath === '/pwa-pt/accept-pallet' && method === 'POST') {
+    const palletId = Number(body?.pallet_id || 0)
+    if (!palletId) return { success: false, error: 'pallet_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.pallet',
+      method: 'update',
+      ids: [palletId],
+      dict: {
+        received_by_id: Number(body?.received_by_id || getEmployeeId() || 0) || undefined,
+        status: 'available',
+        received_at: new Date().toISOString(),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-pt/reject-pallet' && method === 'POST') {
+    const palletId = Number(body?.pallet_id || 0)
+    if (!palletId) return { success: false, error: 'pallet_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.pallet',
+      method: 'update',
+      ids: [palletId],
+      dict: {
+        status: 'hold',
+        reject_reason: body?.reason || '',
+        rejected_by_id: Number(body?.rejected_by_id || getEmployeeId() || 0) || undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-pt/inventory' && method === 'GET') {
+    const domain = []
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('stock.quant', {
+      fields: ['id', 'product_id', 'quantity', 'reserved_quantity', 'location_id', 'lot_id', 'warehouse_id'],
+      domain,
+      sort_column: 'product_id',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      product_id: row.product_id?.[0] || row.product_id,
+      product: row.product_id?.[1] || '',
+      product_name: row.product_id?.[1] || '',
+      quantity: Number(row.quantity || 0),
+      reserved: Number(row.reserved_quantity || 0),
+      available: Number(row.quantity || 0) - Number(row.reserved_quantity || 0),
+      location_id: row.location_id,
+      lot_id: row.lot_id,
+      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
+    }))
+  }
+
+  if (cleanPath === '/pwa-pt/ready-pallets' && method === 'GET') {
+    const domain = [['status', '=', 'available'], ['received_by_id', '!=', false]]
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.pallet', {
+      fields: ['id', 'name', 'product_id', 'qty', 'qty_kg', 'kg_total', 'status', 'shift_id', 'warehouse_id', 'received_by_id', 'layers', 'bags_per_layer', 'create_date'],
+      domain,
+      sort_column: 'create_date',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      product: row.product_id?.[1] || '',
+      product_id: row.product_id?.[0] || 0,
+      qty: Number(row.qty || 0),
+      kg_total: Number(row.kg_total || row.qty_kg || 0),
+      shift: row.shift_id?.[1] || '',
+      status: row.status || '',
+      layers: Number(row.layers || 0),
+      bags_per_layer: Number(row.bags_per_layer || 0),
+      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
+      create_date: row.create_date || null,
+    }))
+  }
+
+  if (cleanPath === '/pwa-pt/cedis-list' && method === 'GET') {
+    const result = await readModelSorted('stock.warehouse', {
+      fields: ['id', 'name', 'code', 'company_id'],
+      domain: [['name', 'ilike', 'CEDIS']],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      code: row.code || '',
+      company_id: row.company_id?.[0] || 0,
+    }))
+  }
+
+  if (cleanPath === '/pwa-pt/dispatch-create' && method === 'POST') {
+    const palletIds = Array.isArray(body?.pallet_ids) ? body.pallet_ids.map(Number).filter(Boolean) : []
+    if (!palletIds.length) return { success: false, error: 'pallet_ids requeridos' }
+    const destWarehouseId = Number(body?.destination_warehouse_id || body?.cedis_id || 0)
+    const promises = palletIds.map((id) =>
+      createUpdate({
+        model: 'gf.pallet',
+        method: 'update',
+        ids: [id],
+        dict: {
+          status: 'dispatched',
+          dispatched_by_id: Number(body?.dispatched_by_id || getEmployeeId() || 0) || undefined,
+          dispatched_at: new Date().toISOString(),
+          destination_warehouse_id: destWarehouseId || undefined,
+        },
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+    )
+    await Promise.all(promises)
+    return { success: true, dispatched: palletIds.length }
+  }
+
+  if (cleanPath === '/pwa-pt/dispatch-history' && method === 'GET') {
+    const domain = [['picking_type_code', '=', 'internal']]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('stock.picking', {
+      fields: ['id', 'name', 'origin', 'state', 'scheduled_date', 'date_done', 'picking_type_id', 'location_id', 'location_dest_id', 'company_id'],
+      domain,
+      sort_column: 'scheduled_date',
+      sort_desc: true,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      origin: row.location_id?.[1] || '',
+      destination: row.location_dest_id?.[1] || '',
+      state: row.state || '',
+      date: row.date_done || row.scheduled_date || null,
+      scheduled_date: row.scheduled_date || null,
+      date_done: row.date_done || null,
+    }))
+  }
+
+  return NO_DIRECT
+}
+
+async function directEntregas(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  const companyId = getCompanyId()
+  const warehouseId = Number(query.get('warehouse_id') || 0) || getWarehouseId()
+
+  if (!cleanPath.startsWith('/pwa-entregas/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-entregas/today-routes' && method === 'GET') {
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const domain = [['date', '=', todayStr]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.route.plan', {
+      fields: [
+        'id', 'name', 'date', 'route_id', 'state',
+        'driver_employee_id', 'salesperson_employee_id',
+        'stops_total', 'stops_done',
+        'load_picking_id', 'load_sealed',
+        'departure_time_target', 'departure_time_real',
+      ],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 100,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      date: row.date,
+      route_id: row.route_id,
+      state: row.state,
+      driver: row.driver_employee_id?.[1] || '',
+      salesperson: row.salesperson_employee_id?.[1] || '',
+      stops_total: Number(row.stops_total || 0),
+      stops_done: Number(row.stops_done || 0),
+      load_sealed: row.load_sealed === true,
+      departure_target: row.departure_time_target || null,
+      departure_real: row.departure_time_real || null,
+    }))
+  }
+
+  if (cleanPath === '/pwa-entregas/confirm-load' && method === 'POST') {
+    const routePlanId = Number(body?.route_plan_id || 0)
+    if (!routePlanId) return { success: false, error: 'route_plan_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.route.plan',
+      method: 'update',
+      ids: [routePlanId],
+      dict: {
+        load_sealed: true,
+        load_sealed_by_id: Number(body?.sealed_by_id || getEmployeeId() || 0) || undefined,
+        load_sealed_at: new Date().toISOString(),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
+    const routePlanId = Number(query.get('route_plan_id') || 0)
+    const domain = [['line_type', 'in', ['return', 'scrap']]]
+    if (routePlanId) domain.push(['route_plan_id', '=', routePlanId])
+    if (companyId) domain.push(['company_id', '=', companyId])
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.route.stop.line', {
+      fields: ['id', 'route_plan_id', 'stop_id', 'product_id', 'qty', 'line_type', 'reason', 'notes', 'create_date'],
+      domain,
+      sort_column: 'create_date',
+      sort_desc: true,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  return NO_DIRECT
+}
+
+async function directSupervisorVentas(method, path, body) {
+  const query = new URLSearchParams(path.split('?')[1] || '')
+  const cleanPath = path.split('?')[0]
+  const companyId = getCompanyId()
+
+  if (!cleanPath.startsWith('/pwa-supv/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-supv/team' && method === 'GET') {
+    const domain = [['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('hr.employee', {
+      fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128', 'work_phone', 'mobile_phone'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+      file: 'url',
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      barcode: row.barcode || '',
+      job_id: row.job_id,
+      x_job_key: row.x_job_key || '',
+      warehouse_id: row.warehouse_id?.[0] || 0,
+      image_128: row.image_128 || false,
+      phone: row.work_phone || row.mobile_phone || '',
+    }))
+  }
+
+  if (cleanPath === '/pwa-supv/team-routes' && method === 'GET') {
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const domain = [['date', '=', todayStr]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('gf.route.plan', {
+      fields: [
+        'id', 'name', 'date', 'route_id', 'state',
+        'driver_employee_id', 'salesperson_employee_id',
+        'stops_total', 'stops_done',
+        'load_sealed', 'departure_time_target', 'departure_time_real',
+        'bridge_key',
+      ],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => {
+      const stopsTotal = Number(row.stops_total || 0)
+      const stopsDone = Number(row.stops_done || 0)
+      return {
+        id: row.id,
+        name: row.name,
+        date: row.date,
+        route_id: row.route_id,
+        state: row.state,
+        driver_id: row.driver_employee_id?.[0] || 0,
+        driver: row.driver_employee_id?.[1] || '',
+        salesperson_id: row.salesperson_employee_id?.[0] || 0,
+        salesperson: row.salesperson_employee_id?.[1] || '',
+        stops_total: stopsTotal,
+        stops_done: stopsDone,
+        progress: stopsTotal > 0 ? Math.round((stopsDone / stopsTotal) * 100) : 0,
+        load_sealed: row.load_sealed === true,
+        departure_target: row.departure_time_target || null,
+        departure_real: row.departure_time_real || null,
+      }
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-products' && method === 'GET') {
+    const result = await readModelSorted('product.product', {
+      fields: ['id', 'name', 'list_price', 'weight', 'sale_ok', 'barcode'],
+      domain: [['sale_ok', '=', true], ['list_price', '>', 0]],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      price: Number(row.list_price || 0),
+      weight: Number(row.weight || 0),
+      barcode: row.barcode || '',
+    }))
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-create' && method === 'POST') {
+    const result = await createUpdate({
+      model: 'gf.saleops.forecast',
+      method: 'create',
+      dict: {
+        name: body?.name || `Pronóstico ${new Date().toISOString().slice(0, 10)}`,
+        date_target: body?.date_target || new Date().toISOString().slice(0, 10),
+        created_by_employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
+        company_id: Number(body?.company_id || companyId || 0) || undefined,
+        analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || 0) || undefined,
+        state: 'draft',
+        line_ids: Array.isArray(body?.lines)
+          ? body.lines
+              .filter((l) => l?.product_id && l?.qty)
+              .map((l) => [0, 0, {
+                product_id: Number(l.product_id),
+                qty: Number(l.qty || 0),
+                channel: l.channel || undefined,
+              }])
+          : [],
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-supv/forecasts' && method === 'GET') {
+    const domain = []
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('gf.saleops.forecast', {
+      fields: ['id', 'name', 'date_target', 'state', 'company_id', 'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at'],
+      domain,
+      sort_column: 'date_target',
+      sort_desc: true,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-supv/team-targets' && method === 'GET') {
+    const [startMonth, endMonth] = monthRange()
+    const domain = [['target_month', '>=', startMonth], ['target_month', '<', endMonth]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    const result = await readModelSorted('hr.employee.monthly.target', {
+      fields: ['id', 'employee_id', 'target_month', 'sales_target', 'collection_target', 'actual_sales', 'actual_collection'],
+      domain,
+      sort_column: 'employee_id',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      employee_id: row.employee_id,
+      employee_name: row.employee_id?.[1] || '',
+      target_month: row.target_month,
+      sales_target: Number(row.sales_target || 0),
+      collection_target: Number(row.collection_target || 0),
+      sales_actual: Number(row.actual_sales || 0),
+      collection_actual: Number(row.actual_collection || 0),
+    }))
+  }
+
+  if (cleanPath === '/pwa-supv/kpi-snapshots' && method === 'GET') {
+    const sucursalId = Number(query.get('sucursal_id') || 0)
+    const [startMonth, endMonth] = monthRange()
+    const domain = [['date_kpi', '>=', startMonth], ['date_kpi', '<', endMonth]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+    if (sucursalId) domain.push(['analytic_account_id', '=', sucursalId])
+    const result = await readModelSorted('gf.saleops.kpi.snapshot', {
+      fields: ['id', 'date_kpi', 'analytic_account_id', 'company_id', 'sales_qty', 'forecast_qty', 'pt_available_qty', 'en_available_qty', 'vans_available_qty'],
+      domain,
+      sort_column: 'date_kpi',
+      sort_desc: true,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  return NO_DIRECT
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
@@ -1184,6 +1929,10 @@ async function routeDirect(method, path, body) {
     directAdmin,
     directProduction,
     directRuta,
+    directSupervision,
+    directAlmacenPT,
+    directEntregas,
+    directSupervisorVentas,
   ]
 
   for (const handler of directHandlers) {

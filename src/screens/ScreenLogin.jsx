@@ -57,6 +57,8 @@ function buildLocalSessionToken(payload) {
   return `${header}.${body}.odoo`;
 }
 
+
+
 function decodeSessionToken(sessionToken, fallback = {}) {
   const payload = { ...fallback };
   try {
