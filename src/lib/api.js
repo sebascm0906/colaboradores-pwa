@@ -816,6 +816,508 @@ async function directAdmin(method, path, body) {
     }
   }
 
+  // ── Requisitions (purchase.order) ───────────────────────────────────────
+  // Lista de requisiciones recientes. El frontend acepta array plano o
+  // { data: { requisitions: [...] } }. Filtros: company_id, state, fechas.
+  if (cleanPath === '/pwa-admin/requisitions' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const state = query.get('state') || ''
+    const dateFrom = query.get('date_from') || ''
+    const dateTo = query.get('date_to') || ''
+    const limit = Number(query.get('limit') || 50)
+    const domain = []
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+    if (state) domain.push(['state', '=', state])
+    if (dateFrom) domain.push(['date_order', '>=', dateFrom])
+    if (dateTo) domain.push(['date_order', '<=', `${dateTo} 23:59:59`])
+    const result = await readModelSorted('purchase.order', {
+      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes'],
+      domain,
+      sort_column: 'date_order',
+      sort_desc: true,
+      limit,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      partner: row.partner_id?.[1] || '',
+      state: row.state || 'draft',
+      date: row.date_order || null,
+      amount_total: Number(row.amount_total || 0),
+      currency: row.currency_id?.[1] || 'MXN',
+      company_id: row.company_id?.[0] || 0,
+      origin: row.origin || '',
+      notes: row.notes || '',
+    }))
+  }
+
+  // ── Requisition detail (purchase.order + order_line) ────────────────────
+  if (cleanPath === '/pwa-admin/requisition-detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const id = Number(query.get('id') || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    const headerResult = await readModel('purchase.order', {
+      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line'],
+      domain: [['id', '=', id]],
+      limit: 1,
+      sudo: 1,
+    })
+    const header = pickFirstResponse(headerResult)
+    if (!header) return { ok: false, error: 'not_found' }
+    const lineIds = Array.isArray(header.order_line) ? header.order_line : []
+    let lines = []
+    if (lineIds.length) {
+      const linesResult = await readModel('purchase.order.line', {
+        fields: ['id', 'name', 'product_id', 'product_qty', 'price_unit', 'price_subtotal', 'product_uom', 'analytic_distribution'],
+        domain: [['id', 'in', lineIds]],
+        limit: 0,
+        sudo: 1,
+      })
+      lines = pickListResponse(linesResult).map((l) => ({
+        id: l.id,
+        name: l.name || '',
+        product_id: l.product_id?.[0] || 0,
+        product_name: l.product_id?.[1] || l.name || '',
+        qty: Number(l.product_qty || 0),
+        price_unit: Number(l.price_unit || 0),
+        subtotal: Number(l.price_subtotal || 0),
+        uom: l.product_uom?.[1] || '',
+        analytic_distribution: l.analytic_distribution || {},
+      }))
+    }
+    return {
+      ok: true,
+      data: {
+        id: header.id,
+        name: header.name || '',
+        partner: header.partner_id?.[1] || '',
+        partner_id: header.partner_id?.[0] || 0,
+        state: header.state || 'draft',
+        date: header.date_order || null,
+        amount_total: Number(header.amount_total || 0),
+        amount_untaxed: Number(header.amount_untaxed || 0),
+        currency: header.currency_id?.[1] || 'MXN',
+        company_id: header.company_id?.[0] || 0,
+        origin: header.origin || '',
+        notes: header.notes || '',
+        lines,
+      },
+    }
+  }
+
+  // ── Requisition cancel ──────────────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/requisition-cancel' && method === 'POST') {
+    const id = Number(body?.id || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    await createUpdate({
+      model: 'purchase.order',
+      method: 'update',
+      ids: [id],
+      dict: { state: 'cancel' },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, data: { id, state: 'cancel' } }
+  }
+
+  // ── Requisition create (purchase.order draft) ───────────────────────────
+  // Creación mínima: crea el PO draft y sus líneas.
+  if (cleanPath === '/pwa-admin/requisition-create' && method === 'POST') {
+    const lines = Array.isArray(body?.lines) ? body.lines : []
+    const created = await createUpdate({
+      model: 'purchase.order',
+      method: 'create',
+      dict: {
+        partner_id: Number(body?.partner_id || 0) || 1,
+        company_id: Number(body?.company_id || companyId || 0) || undefined,
+        origin: body?.name || body?.title || 'PWA Admin',
+        notes: body?.description || body?.notes || '',
+        state: 'draft',
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    const orderId = Number(pickFirstResponse(created)?.id || created?.id || 0)
+    if (orderId && lines.length) {
+      for (const line of lines) {
+        await createUpdate({
+          model: 'purchase.order.line',
+          method: 'create',
+          dict: {
+            order_id: orderId,
+            name: line.product_name || line.name || 'Item',
+            product_qty: Number(line.qty || line.product_qty || 1),
+            product_id: Number(line.product_id || 0) || undefined,
+            price_unit: Number(line.price_unit || 0),
+            analytic_distribution: line.analytic_distribution || undefined,
+          },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        })
+      }
+    }
+    return { ok: true, data: { id: orderId, state: 'draft' } }
+  }
+
+  // ── Sale cancel ─────────────────────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/sale-cancel' && method === 'POST') {
+    const id = Number(body?.order_id || 0)
+    if (!id) return { ok: false, error: 'order_id requerido' }
+    await createUpdate({
+      model: 'sale.order',
+      method: 'update',
+      ids: [id],
+      dict: {
+        state: 'cancel',
+        // Opcional: dejar razón en nota interna si el campo existe
+        note: body?.reason ? `Cancelado PWA: ${body.reason}` : undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, data: { id, state: 'cancel' } }
+  }
+
+  // ── Expense attachments (ir.attachment) ─────────────────────────────────
+  if (cleanPath === '/pwa-admin/expense-attachments' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const expenseId = Number(query.get('expense_id') || 0)
+    if (!expenseId) return { ok: true, data: { items: [] } }
+    const result = await readModelSorted('ir.attachment', {
+      fields: ['id', 'name', 'mimetype', 'file_size', 'create_date', 'create_uid'],
+      domain: [['res_model', '=', 'hr.expense'], ['res_id', '=', expenseId]],
+      sort_column: 'create_date',
+      sort_desc: true,
+      limit: 100,
+      sudo: 1,
+    })
+    const items = pickListResponse(result).map((a) => ({
+      id: a.id,
+      name: a.name || '',
+      mimetype: a.mimetype || '',
+      size: Number(a.file_size || 0),
+      created: a.create_date || null,
+      created_by: a.create_uid?.[1] || '',
+    }))
+    return { ok: true, data: { items, count: items.length } }
+  }
+
+  // ── Expense attach (POST ir.attachment) ─────────────────────────────────
+  if (cleanPath === '/pwa-admin/expense-attach' && method === 'POST') {
+    const expenseId = Number(body?.expense_id || 0)
+    if (!expenseId) return { ok: false, error: 'expense_id requerido' }
+    const result = await createUpdate({
+      model: 'ir.attachment',
+      method: 'create',
+      dict: {
+        name: body?.filename || 'attachment',
+        mimetype: body?.mime || 'application/octet-stream',
+        datas: body?.base64 || '',
+        res_model: 'hr.expense',
+        res_id: expenseId,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, data: pickFirstResponse(result) || {} }
+  }
+
+  // ── Cash closing history (gf.cash.closing) ──────────────────────────────
+  if (cleanPath === '/pwa-admin/cash-closing/history' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const dateFrom = query.get('date_from') || ''
+    const dateTo = query.get('date_to') || ''
+    const state = query.get('state') || ''
+    const limit = Number(query.get('limit') || 50)
+    const domain = []
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+    if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
+    if (dateFrom) domain.push(['date', '>=', dateFrom])
+    if (dateTo) domain.push(['date', '<=', dateTo])
+    if (state) domain.push(['state', '=', state])
+    try {
+      const result = await readModelSorted('gf.cash.closing', {
+        fields: ['id', 'name', 'date', 'state', 'sales_total', 'expenses_total', 'counted_total', 'difference', 'warehouse_id', 'company_id', 'closed_by_id'],
+        domain,
+        sort_column: 'date',
+        sort_desc: true,
+        limit,
+        sudo: 1,
+      })
+      const items = pickListResponse(result).map((r) => ({
+        id: r.id,
+        name: r.name || '',
+        date: r.date || null,
+        state: r.state || 'draft',
+        sales_total: Number(r.sales_total || 0),
+        expenses_total: Number(r.expenses_total || 0),
+        counted_total: Number(r.counted_total || 0),
+        difference: Number(r.difference || 0),
+        warehouse: r.warehouse_id?.[1] || '',
+        warehouse_id: r.warehouse_id?.[0] || 0,
+        closed_by: r.closed_by_id?.[1] || '',
+      }))
+      return { ok: true, data: { items, count: items.length } }
+    } catch {
+      return { ok: true, data: { items: [], count: 0 } }
+    }
+  }
+
+  // ── Cash closing detail ─────────────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/cash-closing/detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const id = Number(query.get('id') || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    try {
+      const result = await readModel('gf.cash.closing', {
+        fields: ['id', 'name', 'date', 'state', 'sales_total', 'expenses_total', 'opening_fund', 'counted_total', 'difference', 'denominations', 'other_income', 'other_expense', 'notes', 'warehouse_id', 'company_id', 'closed_by_id'],
+        domain: [['id', '=', id]],
+        limit: 1,
+        sudo: 1,
+      })
+      const row = pickFirstResponse(result)
+      if (!row) return { ok: false, error: 'not_found' }
+      return { ok: true, data: row }
+    } catch {
+      return { ok: false, error: 'cash_closing_not_available' }
+    }
+  }
+
+  // ── Liquidaciones — wrappers sobre gf_logistics_ops ─────────────────────
+  // Estos endpoints requieren lógica de negocio (build_liquidation_summary)
+  // que vive en gf_logistics_ops. Sin el webhook de n8n, devolvemos shapes
+  // vacías para que el UI degrade a "sin datos" en lugar de romperse.
+  // Cuando Sebastián exponga los controllers REST, reemplazar estos stubs.
+  if (cleanPath === '/pwa-admin/liquidaciones/pending' && method === 'GET') {
+    try {
+      const query = new URLSearchParams(path.split('?')[1] || '')
+      const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+      const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+      const domain = [['state', '=', 'done']]
+      if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+      if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
+      const result = await readModelSorted('gf.route.plan', {
+        fields: ['id', 'name', 'date', 'state', 'driver_employee_id', 'salesperson_employee_id', 'warehouse_id', 'company_id'],
+        domain,
+        sort_column: 'date',
+        sort_desc: true,
+        limit: 100,
+        sudo: 1,
+      })
+      const plans = pickListResponse(result).map((r) => ({
+        id: r.id,
+        name: r.name || '',
+        date: r.date || null,
+        state: r.state || '',
+        driver: r.driver_employee_id?.[1] || '',
+        salesperson: r.salesperson_employee_id?.[1] || '',
+        warehouse: r.warehouse_id?.[1] || '',
+      }))
+      return { ok: true, data: { plans, count: plans.length } }
+    } catch {
+      return { ok: true, data: { plans: [], count: 0 } }
+    }
+  }
+
+  if (cleanPath === '/pwa-admin/liquidaciones/detail' && method === 'GET') {
+    // build_liquidation_summary() es un método server-side. Devolvemos shape
+    // mínima para que el UI pueda renderizar "sin conciliación disponible"
+    // en lugar de error de webhook. El backend real debería exponer esto.
+    return { ok: true, data: { summary: null, reconciliation_lines: [], lines: [] } }
+  }
+
+  if (cleanPath === '/pwa-admin/liquidaciones/validate' && method === 'POST') {
+    return { ok: false, error: 'liquidaciones/validate requiere backend gf_logistics_ops expuesto' }
+  }
+
+  if (cleanPath === '/pwa-admin/liquidaciones/history' && method === 'GET') {
+    return { ok: true, data: { items: [], count: 0 } }
+  }
+
+  // ── Materia Prima — stock.quant filtrado por locaciones MP ──────────────
+  if (cleanPath === '/pwa-admin/materia-prima/stock' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const domain = [['quantity', '>', 0]]
+    // Filtramos por locaciones que contengan "MP" o "MATERIA PRIMA" en el nombre.
+    // Si el warehouse tiene configuración distinta, esto se ajusta en backend.
+    if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
+    const result = await readModelSorted('stock.quant', {
+      fields: ['id', 'product_id', 'location_id', 'quantity', 'reserved_quantity', 'lot_id', 'warehouse_id'],
+      domain,
+      sort_column: 'product_id',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    const rows = pickListResponse(result)
+      .filter((r) => {
+        const locName = String(r.location_id?.[1] || '').toUpperCase()
+        return locName.includes('MP') || locName.includes('MATERIA') || locName.includes('PRIMA')
+      })
+      .map((r) => ({
+        id: r.id,
+        product_id: r.product_id?.[0] || 0,
+        product_name: r.product_id?.[1] || '',
+        location: r.location_id?.[1] || '',
+        qty_available: Number(r.quantity || 0) - Number(r.reserved_quantity || 0),
+        quantity: Number(r.quantity || 0),
+        reserved: Number(r.reserved_quantity || 0),
+        lot_name: r.lot_id?.[1] || '',
+        warehouse_id: r.warehouse_id?.[0] || 0,
+      }))
+    return { ok: true, data: { items: rows, count: rows.length } }
+  }
+
+  // ── Materia Prima — recepciones del día (stock.picking incoming) ───────
+  if (cleanPath === '/pwa-admin/materia-prima/receipts' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const domain = [
+      ['picking_type_code', '=', 'incoming'],
+      ['scheduled_date', '>=', todayStart.slice(0, 10)],
+      ['scheduled_date', '<=', todayEnd.slice(0, 10) + ' 23:59:59'],
+    ]
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+    const result = await readModelSorted('stock.picking', {
+      fields: ['id', 'name', 'partner_id', 'state', 'scheduled_date', 'date_done', 'origin', 'location_dest_id'],
+      domain,
+      sort_column: 'scheduled_date',
+      sort_desc: true,
+      limit: 100,
+      sudo: 1,
+    })
+    const rows = pickListResponse(result).map((r) => ({
+      id: r.id,
+      name: r.name || '',
+      reference: r.name || '',
+      partner_name: r.partner_id?.[1] || '',
+      supplier: r.partner_id?.[1] || '',
+      state: r.state || '',
+      date: r.scheduled_date || null,
+      date_done: r.date_done || null,
+      origin: r.origin || '',
+      destination: r.location_dest_id?.[1] || '',
+    }))
+    return { ok: true, data: { items: rows, count: rows.length } }
+  }
+
+  // ── Materia Prima — consumos (gf.transformation.order) ─────────────────
+  if (cleanPath === '/pwa-admin/materia-prima/consumption' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const domain = [
+      ['create_date', '>=', todayStart.slice(0, 10)],
+      ['create_date', '<=', todayEnd.slice(0, 10) + ' 23:59:59'],
+    ]
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+    try {
+      const result = await readModelSorted('gf.transformation.order', {
+        fields: ['id', 'name', 'state', 'create_date', 'from_product_id', 'to_product_id', 'input_qty', 'output_qty'],
+        domain,
+        sort_column: 'create_date',
+        sort_desc: true,
+        limit: 100,
+        sudo: 1,
+      })
+      const rows = pickListResponse(result).map((r) => ({
+        id: r.id,
+        name: r.name || '',
+        reference: r.name || '',
+        state: r.state || '',
+        date: r.create_date || null,
+        input_product_name: r.from_product_id?.[1] || '',
+        output_product_name: r.to_product_id?.[1] || '',
+        input_qty: Number(r.input_qty || 0),
+        output_qty: Number(r.output_qty || 0),
+      }))
+      return { ok: true, data: { items: rows, count: rows.length } }
+    } catch {
+      return { ok: true, data: { items: [], count: 0 } }
+    }
+  }
+
+  // ── Materia Prima — kardex (stock.move done por producto) ──────────────
+  if (cleanPath === '/pwa-admin/materia-prima/moves' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const productId = Number(query.get('product_id') || 0)
+    const dateFrom = query.get('date_from') || ''
+    const dateTo = query.get('date_to') || ''
+    const limit = Number(query.get('limit') || 200)
+    if (!productId) return { ok: true, data: { moves: [] } }
+    const domain = [['product_id', '=', productId], ['state', '=', 'done']]
+    if (dateFrom) domain.push(['date', '>=', dateFrom])
+    if (dateTo) domain.push(['date', '<=', `${dateTo} 23:59:59`])
+    const result = await readModelSorted('stock.move', {
+      fields: ['id', 'name', 'date', 'product_id', 'product_uom_qty', 'quantity', 'location_id', 'location_dest_id', 'origin', 'reference'],
+      domain,
+      sort_column: 'date',
+      sort_desc: true,
+      limit,
+      sudo: 1,
+    })
+    const moves = pickListResponse(result).map((m) => {
+      const qty = Number(m.quantity ?? m.product_uom_qty ?? 0)
+      const srcName = String(m.location_id?.[1] || '').toUpperCase()
+      const dstName = String(m.location_dest_id?.[1] || '').toUpperCase()
+      const isIn = !srcName.includes('MP') && !srcName.includes('MATERIA') && (dstName.includes('MP') || dstName.includes('MATERIA'))
+      return {
+        id: m.id,
+        name: m.name || '',
+        date: m.date || null,
+        reference: m.reference || m.origin || '',
+        origin: m.origin || '',
+        qty_in: isIn ? qty : 0,
+        qty_out: isIn ? 0 : qty,
+        delta: isIn ? qty : -qty,
+        location_src: m.location_id?.[1] || '',
+        location_dst: m.location_dest_id?.[1] || '',
+      }
+    })
+    return { ok: true, data: { moves, count: moves.length } }
+  }
+
+  // ── Products search (product.product por nombre/SKU/barcode) ───────────
+  if (cleanPath === '/pwa-admin/products/search' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const q = String(query.get('q') || '').trim()
+    const scope = String(query.get('scope') || 'all')
+    const limit = Number(query.get('limit') || 30)
+    const categId = Number(query.get('categ_id') || 0)
+    const domain = [['sale_ok', '=', true]]
+    if (q) {
+      domain.push('|', '|', ['name', 'ilike', q], ['default_code', 'ilike', q], ['barcode', 'ilike', q])
+    }
+    if (categId) domain.push(['categ_id', '=', categId])
+    if (scope === 'available') domain.push(['qty_available', '>', 0])
+    const result = await readModelSorted('product.product', {
+      fields: ['id', 'name', 'default_code', 'barcode', 'list_price', 'lst_price', 'qty_available', 'uom_id', 'categ_id', 'weight'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit,
+      sudo: 1,
+    })
+    const items = pickListResponse(result).map((p) => ({
+      id: p.id,
+      name: p.name || '',
+      code: p.default_code || '',
+      default_code: p.default_code || '',
+      barcode: p.barcode || '',
+      list_price: Number(p.list_price || p.lst_price || 0),
+      qty_available: Number(p.qty_available || 0),
+      uom: p.uom_id?.[1] || '',
+      category: p.categ_id?.[1] || '',
+      weight: Number(p.weight || 0),
+    }))
+    return { ok: true, data: { items, count: items.length } }
+  }
+
   return NO_DIRECT
 }
 
