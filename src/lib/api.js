@@ -750,6 +750,72 @@ async function directAdmin(method, path, body) {
     return result
   }
 
+  // ── Analytic accounts (Odoo 18 — account.analytic.account) ──────────────
+  // Usado por AnalyticAccountPicker en gastos/requisiciones.
+  // Filtra por company_id. Respuesta compatible con el shape esperado:
+  // { ok: true, data: { company_id, count, accounts: [{id, name, code, plan_name}] } }
+  if (cleanPath === '/pwa-admin/analytic-accounts' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const domain = []
+    if (reqCompanyId) {
+      // account.analytic.account.company_id puede ser False (global); incluimos ambos
+      domain.push('|', ['company_id', '=', reqCompanyId], ['company_id', '=', false])
+    }
+    const result = await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code', 'plan_id', 'company_id', 'active'],
+      domain: domain.length ? domain : [['active', '=', true]],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    const rows = pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      code: row.code || '',
+      plan_name: row.plan_id?.[1] || '',
+      plan_id: row.plan_id?.[0] || 0,
+      company_id: row.company_id?.[0] || 0,
+    }))
+    return {
+      ok: true,
+      data: {
+        company_id: reqCompanyId || 0,
+        count: rows.length,
+        accounts: rows,
+      },
+    }
+  }
+
+  // ── Capabilities (feature flags leídos al boot) ─────────────────────────
+  // Con n8n fuera de línea, devolvemos el set canónico de flags habilitados
+  // para que bootCapabilities() no tenga que caer a defaults por error.
+  // Estos flags reflejan lo que Sebastián tiene instalado en producción
+  // (Sprint 3 + Sprint 4, audit 2026-04-10). Si algún flag cambia, ajustar aquí.
+  if (cleanPath === '/pwa-admin/capabilities' && method === 'GET') {
+    return {
+      ok: true,
+      data: {
+        expenseAnalytics: true,
+        requisitionAnalytics: true,
+        expenseStructuredMeta: true,
+        serverSideCompanyFilter: true,
+        cashClosingRead: true,
+        cashClosingWrite: true,
+        liquidaciones: true,
+        materiaPrima: true,
+        productSearch: true,
+        requisitionDetail: true,
+        cashClosingHistory: true,
+        expenseAttachments: true,
+        saleCancel: true,
+        liquidacionesHistory: true,
+        mpKardex: true,
+      },
+    }
+  }
+
   return NO_DIRECT
 }
 
