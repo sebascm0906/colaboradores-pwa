@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getForecastProducts, createForecast, getForecasts } from './api'
+import { getForecastProducts, createForecast, getForecasts, getTeam, confirmForecast, cancelForecast } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const CHANNELS = ['Van', 'Mostrador']
 
@@ -13,7 +14,9 @@ export default function ScreenPronostico() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [products, setProducts] = useState([])
   const [forecasts, setForecasts] = useState([])
+  const [team, setTeam] = useState([])
   const [lines, setLines] = useState([{ product_id: '', channel: 'Van', qty: '' }])
+  const [selectedVendor, setSelectedVendor] = useState('') // '' = global sucursal
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -24,18 +27,33 @@ export default function ScreenPronostico() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
+  // Ref para cancelar cualquier timeout pendiente al desmontar (evita setState
+  // sobre componente desmontado y memory leaks en Fast Refresh).
+  const msgTimerRef = useRef(null)
+  useEffect(() => () => {
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
+  }, [])
+
+  function flashMsg(text, ms = 3000) {
+    setMsg(text)
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
+    msgTimerRef.current = setTimeout(() => setMsg(null), ms)
+  }
+
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      const [p, f] = await Promise.all([
-        getForecastProducts().catch(() => []),
-        getForecasts().catch(() => []),
+      const [p, f, t] = await Promise.all([
+        getForecastProducts().catch((e) => { logScreenError('ScreenPronostico', 'getForecastProducts', e); return [] }),
+        getForecasts().catch((e) => { logScreenError('ScreenPronostico', 'getForecasts', e); return [] }),
+        getTeam().catch((e) => { logScreenError('ScreenPronostico', 'getTeam', e); return [] }),
       ])
       setProducts(p || [])
       setForecasts(f || [])
-    } catch { /* empty */ }
+      setTeam(t || [])
+    } catch (e) { logScreenError('ScreenPronostico', 'loadData', e) }
     finally { setLoading(false) }
   }
 
@@ -63,11 +81,14 @@ export default function ScreenPronostico() {
     setSubmitting(true)
     setMsg(null)
     try {
-      await createForecast({
+      const forecastData = {
         date_target: dateTarget,
         lines: validLines.map(l => ({ product_id: Number(l.product_id), channel: l.channel, qty: Number(l.qty) })),
         sucursal: session?.sucursal_id || session?.sucursal,
-      })
+      }
+      // Per-vendor forecast: si se seleccionó un vendedor, incluir employee_id
+      if (selectedVendor) forecastData.employee_id = Number(selectedVendor)
+      await createForecast(forecastData)
       setMsg('Pronostico guardado')
       setLines([{ product_id: '', channel: 'Van', qty: '' }])
       const f = await getForecasts().catch(() => [])
@@ -77,10 +98,43 @@ export default function ScreenPronostico() {
     } finally { setSubmitting(false) }
   }
 
+  const [actionLoading, setActionLoading] = useState(null) // forecast id being acted on
+
+  async function handleConfirm(forecastId) {
+    setActionLoading(forecastId)
+    try {
+      await confirmForecast(forecastId)
+      const f = await getForecasts().catch(() => [])
+      setForecasts(f || [])
+      flashMsg('Pronostico confirmado')
+    } catch (e) {
+      flashMsg(e.message || 'Error al confirmar', 5000)
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleCancel(forecastId) {
+    setActionLoading(forecastId)
+    try {
+      await cancelForecast(forecastId)
+      const f = await getForecasts().catch(() => [])
+      setForecasts(f || [])
+      flashMsg('Pronostico regresado a borrador')
+    } catch (e) {
+      flashMsg(e.message || 'Error al cancelar', 5000)
+    } finally { setActionLoading(null) }
+  }
+
   function statusColor(status) {
     if (status === 'confirmed' || status === 'done') return TOKENS.colors.success
     if (status === 'draft') return TOKENS.colors.warning
     return TOKENS.colors.textMuted
+  }
+
+  function statusLabel(status) {
+    if (status === 'confirmed') return 'Confirmado'
+    if (status === 'done') return 'Procesado'
+    if (status === 'draft') return 'Borrador'
+    return status || 'draft'
   }
 
   return (
@@ -122,6 +176,30 @@ export default function ScreenPronostico() {
               boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
             }}>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PRONOSTICO PARA MANANA</p>
+
+              {/* Vendor selector — per-vendor or global */}
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>Alcance del pronostico</p>
+                <select
+                  value={selectedVendor}
+                  onChange={e => setSelectedVendor(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
+                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+                  }}
+                >
+                  <option value="">Sucursal completa (global)</option>
+                  {team.map(v => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+                {selectedVendor && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '4px 0 0', fontSize: 10 }}>
+                    Pronostico individual para {team.find(v => v.id === Number(selectedVendor))?.name || 'vendedor'}
+                  </p>
+                )}
+              </div>
 
               {lines.map((line, idx) => (
                 <div key={idx} style={{
@@ -216,25 +294,58 @@ export default function ScreenPronostico() {
               <>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>PRONOSTICOS RECIENTES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {forecasts.map((f, i) => (
+                  {forecasts.map((f, i) => {
+                    const vendorName = f.created_by_employee_id?.[1] || ''
+                    const st = f.state || f.status || 'draft'
+                    const isActing = actionLoading === f.id
+                    return (
                     <div key={f.id || i} style={{
                       padding: '12px 16px', borderRadius: TOKENS.radius.lg,
                       background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     }}>
-                      <div>
-                        <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 14 }}>{f.date_target || f.date}</p>
-                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{f.line_count || f.lines?.length || 0} productos</p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 14 }}>{f.date_target || f.date}</p>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                            {f.line_count || f.lines?.length || 0} productos
+                            {vendorName ? ` — ${vendorName}` : ' — Sucursal'}
+                          </p>
+                        </div>
+                        <div style={{
+                          padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                          background: `${statusColor(st)}14`,
+                          border: `1px solid ${statusColor(st)}30`,
+                        }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(st) }}>{statusLabel(st)}</span>
+                        </div>
                       </div>
-                      <div style={{
-                        padding: '4px 10px', borderRadius: TOKENS.radius.pill,
-                        background: `${statusColor(f.state || f.status)}14`,
-                        border: `1px solid ${statusColor(f.state || f.status)}30`,
-                      }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(f.state || f.status) }}>{f.state || f.status || 'draft'}</span>
-                      </div>
+                      {/* Action buttons — only for draft or confirmed */}
+                      {(st === 'draft' || st === 'confirmed') && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                          {st === 'draft' && (
+                            <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
+                              flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
+                              background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
+                              border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
+                              fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
+                            }}>
+                              {isActing ? '...' : 'Confirmar'}
+                            </button>
+                          )}
+                          {st === 'confirmed' && (
+                            <button onClick={() => handleCancel(f.id)} disabled={isActing} style={{
+                              flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
+                              background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
+                              border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444',
+                              fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
+                            }}>
+                              {isActing ? '...' : 'Regresar a borrador'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )})}
                 </div>
               </>
             )}

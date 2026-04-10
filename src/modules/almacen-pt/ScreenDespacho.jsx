@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getReadyPallets, getCedisList, createDispatch } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenDespacho() {
   const { session } = useSession()
@@ -27,12 +28,12 @@ export default function ScreenDespacho() {
     setLoading(true)
     try {
       const [p, c] = await Promise.all([
-        getReadyPallets(warehouseId).catch(() => []),
-        getCedisList().catch(() => []),
+        getReadyPallets(warehouseId).catch((e) => { logScreenError('ScreenDespacho', 'getReadyPallets', e); return [] }),
+        getCedisList().catch((e) => { logScreenError('ScreenDespacho', 'getCedisList', e); return [] }),
       ])
       setPallets(p || [])
       setCedisList(c || [])
-    } catch { /* fallback empty */ }
+    } catch (e) { logScreenError('ScreenDespacho', 'loadData', e) }
     finally { setLoading(false) }
   }
 
@@ -67,7 +68,10 @@ export default function ScreenDespacho() {
       setSuccess(`Traspaso creado: ${selectedPallets.size} tarimas → ${cedisList.find(c => c.id === selectedCedis)?.name || 'CEDIS'}`)
       setSelectedPallets(new Set())
       setSelectedCedis(null)
-      const p = await getReadyPallets(warehouseId).catch(() => [])
+      const p = await getReadyPallets(warehouseId).catch((e) => {
+        logScreenError('ScreenDespacho', 'getReadyPallets(refresh)', e)
+        return []
+      })
       setPallets(p || [])
       setTimeout(() => setSuccess(''), 4000)
     } catch (e) {

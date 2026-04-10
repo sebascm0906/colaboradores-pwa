@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getChecklist, submitCheck, completeChecklist } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const CHECK_ICONS = {
   yes_no:  '✓',
@@ -39,6 +40,7 @@ export default function ScreenChecklist() {
         saved: c.passed != null,
       })))
     } catch (e) {
+      logScreenError('ScreenChecklist', 'loadChecklist', e)
       setError('No se pudo cargar el checklist')
     } finally {
       setLoading(false)
@@ -60,7 +62,8 @@ export default function ScreenChecklist() {
       await submitCheck(c.id, data)
       setChecks(prev => prev.map((ch, i) => i === idx ? { ...ch, saved: true } : ch))
     } catch (e) {
-      // silently fail — user can retry
+      logScreenError('ScreenChecklist', 'submitCheck', e)
+      // user can retry
     }
   }
 
@@ -77,7 +80,7 @@ export default function ScreenChecklist() {
       try {
         await submitCheck(photoCheckId, { result_photo: reader.result })
         setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
-      } catch { /* silent */ }
+      } catch (err) { logScreenError('ScreenChecklist', 'submitCheck(photo)', err) }
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -90,6 +93,7 @@ export default function ScreenChecklist() {
       await completeChecklist(checklist.id)
       navigate('/produccion')
     } catch (e) {
+      logScreenError('ScreenChecklist', 'completeChecklist', e)
       setError('No se pudo completar el checklist')
     } finally {
       setSubmitting(false)

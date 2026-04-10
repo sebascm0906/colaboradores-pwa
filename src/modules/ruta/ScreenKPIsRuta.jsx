@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyTarget, getMyRoutePlan } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 function pctColor(pct) {
   if (pct >= 80) return TOKENS.colors.success
@@ -39,12 +40,18 @@ export default function ScreenKPIsRuta() {
     async function load() {
       try {
         const [t, p] = await Promise.all([
-          getMyTarget(session?.employee_id).catch(() => null),
-          getMyRoutePlan(session?.employee_id).catch(() => null),
+          getMyTarget(session?.employee_id).catch((e) => {
+            logScreenError('ScreenKPIsRuta', 'getMyTarget', e)
+            return null
+          }),
+          getMyRoutePlan(session?.employee_id).catch((e) => {
+            logScreenError('ScreenKPIsRuta', 'getMyRoutePlan', e)
+            return null
+          }),
         ])
         setTarget(t)
         setPlan(p)
-      } catch { /* empty */ }
+      } catch (e) { logScreenError('ScreenKPIsRuta', 'load', e) }
       finally { setLoading(false) }
     }
     load()

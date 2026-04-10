@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { getActiveShift, getDowntimes, getScraps, getEnergyReadings } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenSupervision() {
   const { session } = useSession()
@@ -30,15 +31,15 @@ export default function ScreenSupervision() {
       setShift(s)
       if (s?.id) {
         const [d, sc, en] = await Promise.all([
-          getDowntimes(s.id).catch(() => []),
-          getScraps(s.id).catch(() => []),
-          getEnergyReadings(s.id).catch(() => []),
+          getDowntimes(s.id).catch((e) => { logScreenError('ScreenSupervision', 'getDowntimes', e); return [] }),
+          getScraps(s.id).catch((e) => { logScreenError('ScreenSupervision', 'getScraps', e); return [] }),
+          getEnergyReadings(s.id).catch((e) => { logScreenError('ScreenSupervision', 'getEnergyReadings', e); return [] }),
         ])
         setDowntimes(d || [])
         setScraps(sc || [])
         setEnergy(en || [])
       }
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenSupervision', 'loadData', e) }
     finally { setLoading(false) }
   }
 

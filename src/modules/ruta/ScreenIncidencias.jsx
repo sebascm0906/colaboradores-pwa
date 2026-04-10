@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { createIncident, getMyIncidents } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const INCIDENT_TYPES = [
   { key: 'operacion', label: 'Operación' },
@@ -45,9 +46,12 @@ export default function ScreenIncidencias() {
   async function loadIncidents() {
     setLoading(true)
     try {
-      const data = await getMyIncidents(session?.employee_id).catch(() => [])
+      const data = await getMyIncidents(session?.employee_id).catch((e) => {
+        logScreenError('ScreenIncidencias', 'getMyIncidents', e)
+        return []
+      })
       setIncidents(data || [])
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenIncidencias', 'loadIncidents', e) }
     finally { setLoading(false) }
   }
 
@@ -70,6 +74,7 @@ export default function ScreenIncidencias() {
       await loadIncidents()
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
+      logScreenError('ScreenIncidencias', 'createIncident', e)
       setError('No se pudo reportar la incidencia')
     } finally {
       setSubmitting(false)

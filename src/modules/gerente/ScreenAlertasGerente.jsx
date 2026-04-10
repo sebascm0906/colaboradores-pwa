@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getAlerts } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const TYPE_COLORS = {
   pt_compute:  TOKENS.colors.blue2,
@@ -26,6 +27,7 @@ export default function ScreenAlertasGerente() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -37,11 +39,17 @@ export default function ScreenAlertasGerente() {
 
   async function loadData() {
     setLoading(true)
+    setError('')
     try {
-      const a = await getAlerts().catch(() => [])
-      setAlerts(a || [])
-    } catch { /* empty */ }
-    finally { setLoading(false) }
+      const a = await getAlerts()
+      setAlerts(Array.isArray(a) ? a : [])
+    } catch (e) {
+      const msg = logScreenError('ScreenAlertasGerente', 'getAlerts', e)
+      setError(msg)
+      setAlerts([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const totalCount = alerts.length
@@ -79,6 +87,15 @@ export default function ScreenAlertasGerente() {
           </div>
         ) : (
           <>
+            {error && (
+              <div style={{
+                marginTop: 8, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+                fontSize: 12, fontWeight: 600, color: TOKENS.colors.error,
+              }}>
+                No se pudieron cargar las alertas: {error}
+              </div>
+            )}
             {/* Summary bar */}
             <div style={{
               marginTop: 8, padding: 14, borderRadius: TOKENS.radius.xl,

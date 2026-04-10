@@ -41,3 +41,32 @@ export function confirmLoad(routePlanId) {
 export function getReturns(warehouseId) {
   return api('GET', `/pwa-entregas/returns?warehouse_id=${warehouseId}`)
 }
+
+// ── Pallets desde Producto Terminado ────────────────────────────────────────
+
+/** Tarimas pendientes de aceptar en este CEDIS */
+export function getPendingPallets(warehouseId) {
+  return api('GET', `/pwa-pt/pending-pallets?warehouse_id=${warehouseId}`)
+}
+
+/** Aceptar tarima recibida */
+export function acceptPallet(palletId) {
+  return api('POST', '/pwa-pt/accept-pallet', { pallet_id: palletId })
+}
+
+/** Rechazar tarima con motivo */
+export function rejectPallet(palletId, reason) {
+  return api('POST', '/pwa-pt/reject-pallet', { pallet_id: palletId, reason })
+}
+
+/** Tarimas listas (ya aceptadas) en CEDIS */
+export function getReadyPallets(warehouseId) {
+  return api('GET', `/pwa-pt/ready-pallets?warehouse_id=${warehouseId}`)
+}
+
+// ── Detalle de carga ────────────────────────────────────────────────────────
+
+/** Líneas de carga de un picking específico */
+export function getLoadLines(pickingId) {
+  return api('GET', `/pwa-ruta/load-lines?picking_id=${pickingId}`)
+}

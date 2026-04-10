@@ -86,3 +86,28 @@ export function initVehicleChecklist(shiftId, employeeId) {
 export function getVehicleChecks(checklistId) {
   return api('GET', `/pwa-ruta/vehicle-checks?checklist_id=${checklistId}`)
 }
+
+// ── KM persistente (gf_logistics_ops) ───────────────────────────────────────
+
+/** Registrar KM (salida o llegada) en backend */
+export function updateKm(planId, type, km) {
+  return api('POST', '/pwa-ruta/km-update', { plan_id: planId, type, km })
+}
+
+// ── Liquidación real (gf_logistics_ops) ─────────────────────────────────────
+
+/** Obtener liquidacion agregada por buckets desde payments posteados */
+export function getLiquidation(planId) {
+  return api('POST', '/pwa-ruta/liquidation', { plan_id: planId })
+}
+
+// ── Cierre de ruta real (gf_logistics_ops) ──────────────────────────────────
+
+/** Cerrar ruta con validacion server-side */
+export function closeRoute(planId, departureKm, arrivalKm) {
+  return api('POST', '/pwa-ruta/close-route', {
+    plan_id: planId,
+    departure_km: departureKm,
+    arrival_km: arrivalKm,
+  })
+}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getScraps, getScrapReasons, createScrap } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const LINES = [
   { id: 1, name: 'Iguala - Barras' },
@@ -33,13 +34,13 @@ export default function ScreenMerma() {
       setShift(s)
       if (s?.id) {
         const [sc, rs] = await Promise.all([
-          getScraps(s.id).catch(() => []),
-          getScrapReasons().catch(() => []),
+          getScraps(s.id).catch((e) => { logScreenError('ScreenMerma', 'getScraps', e); return [] }),
+          getScrapReasons().catch((e) => { logScreenError('ScreenMerma', 'getScrapReasons', e); return [] }),
         ])
         setScraps(sc || [])
         setReasons(rs || [])
       }
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenMerma', 'loadData', e) }
     finally { setLoading(false) }
   }
 

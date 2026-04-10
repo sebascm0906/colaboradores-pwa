@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getTeamTargets } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenMetasVendedores() {
   const { session } = useSession()
@@ -23,9 +24,12 @@ export default function ScreenMetasVendedores() {
   async function loadData() {
     setLoading(true)
     try {
-      const t = await getTeamTargets().catch(() => [])
+      const t = await getTeamTargets().catch((e) => {
+        logScreenError('ScreenMetasVendedores', 'getTeamTargets', e)
+        return []
+      })
       setTargets(t || [])
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenMetasVendedores', 'loadData', e) }
     finally { setLoading(false) }
   }
 

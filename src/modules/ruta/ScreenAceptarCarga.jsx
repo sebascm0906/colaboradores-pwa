@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getMyLoad, acceptLoad, getLoadLines } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenAceptarCarga() {
   const { session } = useSession()
@@ -36,7 +37,7 @@ export default function ScreenAceptarCarga() {
             setLines(ll || [])
           }
         }
-      } catch { /* empty */ }
+      } catch (e) { logScreenError('ScreenAceptarCarga', 'fetchData', e) }
       finally { setLoading(false) }
     }
     fetchData()
@@ -49,6 +50,7 @@ export default function ScreenAceptarCarga() {
       await acceptLoad(plan.id)
       setLoad(prev => prev ? { ...prev, state: 'accepted' } : prev)
     } catch (e) {
+      logScreenError('ScreenAceptarCarga', 'acceptLoad', e)
       setError('No se pudo aceptar la carga')
     } finally {
       setSubmitting(false)

@@ -4,6 +4,9 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getPackingProducts, createPackingEntry, getPackingEntries } from './api'
 
+// V2: Rolito users get the new simplified packing flow
+import ScreenEmpaqueRolito from './ScreenEmpaqueRolito'
+
 const FALLBACK_ROLITO = [
   { id: 758, name: 'Rolito 15 KG', weight: 15 },
   { id: 761, name: 'Rolito 5.5 KG', weight: 5.5 },
@@ -20,6 +23,12 @@ const FALLBACK_BARRAS = [
 
 export default function ScreenEmpaque() {
   const { session } = useSession()
+
+  // V2: Rolito operators get the new simplified packing
+  if (session?.role === 'operador_rolito') {
+    return <ScreenEmpaqueRolito />
+  }
+
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])

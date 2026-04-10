@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getLockedForecasts, unlockForecast } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenForecastUnlock() {
   const { session } = useSession()
@@ -12,6 +13,7 @@ export default function ScreenForecastUnlock() {
   const [forecasts, setForecasts] = useState([])
   const [loading, setLoading] = useState(true)
   const [unlocking, setUnlocking] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -23,20 +25,31 @@ export default function ScreenForecastUnlock() {
 
   async function loadData() {
     setLoading(true)
+    setError('')
     try {
-      const f = await getLockedForecasts().catch(() => [])
-      setForecasts(f || [])
-    } catch { /* empty */ }
-    finally { setLoading(false) }
+      const f = await getLockedForecasts()
+      setForecasts(Array.isArray(f) ? f : [])
+    } catch (e) {
+      const msg = logScreenError('ScreenForecastUnlock', 'getLockedForecasts', e)
+      setError(msg)
+      setForecasts([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleUnlock(id) {
     setUnlocking(id)
+    setError('')
     try {
       await unlockForecast(id)
       await loadData()
-    } catch { /* empty */ }
-    finally { setUnlocking(null) }
+    } catch (e) {
+      const msg = logScreenError('ScreenForecastUnlock', 'unlockForecast', e)
+      setError(msg)
+    } finally {
+      setUnlocking(null)
+    }
   }
 
   return (
@@ -70,6 +83,15 @@ export default function ScreenForecastUnlock() {
           </div>
         ) : (
           <>
+            {error && (
+              <div style={{
+                marginTop: 8, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
+                fontSize: 12, fontWeight: 600, color: TOKENS.colors.error,
+              }}>
+                {error}
+              </div>
+            )}
             {forecasts.length === 0 ? (
               <div style={{
                 marginTop: 40, padding: 32, borderRadius: TOKENS.radius.xl,

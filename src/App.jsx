@@ -19,12 +19,18 @@ const ScreenCiclo           = lazy(() => import('./modules/produccion/ScreenCicl
 const ScreenEmpaque         = lazy(() => import('./modules/produccion/ScreenEmpaque'))
 const ScreenCorte           = lazy(() => import('./modules/produccion/ScreenCorte'))
 const ScreenTransformacion  = lazy(() => import('./modules/produccion/ScreenTransformacion'))
-// Almacén PT
+// Producción V2 — Rolito
+const ScreenIncidenciaRolito = lazy(() => import('./modules/produccion/ScreenIncidenciaRolito'))
+const ScreenCierreRolito     = lazy(() => import('./modules/produccion/ScreenCierreRolito'))
+// Almacén PT V2
 const ScreenAlmacenPT       = lazy(() => import('./modules/almacen-pt/ScreenAlmacenPT'))
 const ScreenRecepcion       = lazy(() => import('./modules/almacen-pt/ScreenRecepcion'))
-const ScreenDespacho        = lazy(() => import('./modules/almacen-pt/ScreenDespacho'))
 const ScreenInventarioPT    = lazy(() => import('./modules/almacen-pt/ScreenInventarioPT'))
+const ScreenTraspasoPT      = lazy(() => import('./modules/almacen-pt/ScreenTraspasoPT'))
+const ScreenDespacho        = lazy(() => import('./modules/almacen-pt/ScreenDespacho'))
 const ScreenHistorialPT     = lazy(() => import('./modules/almacen-pt/ScreenHistorialPT'))
+const ScreenHandoverPT      = lazy(() => import('./modules/almacen-pt/ScreenHandoverPT'))
+const ScreenMermaPT         = lazy(() => import('./modules/almacen-pt/ScreenMermaPT'))
 // Supervisión
 const ScreenSupervision     = lazy(() => import('./modules/supervision/ScreenSupervision'))
 const ScreenParos           = lazy(() => import('./modules/supervision/ScreenParos'))
@@ -39,26 +45,46 @@ const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
 const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
 const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
 const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
+const ScreenLiquidaciones   = lazy(() => import('./modules/admin/ScreenLiquidaciones'))
+const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPrima'))
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
-// Entregas
+// Entregas V1 (kept for reference, replaced by V2)
 const ScreenEntregas        = lazy(() => import('./modules/entregas/ScreenEntregas'))
 const ScreenValidarTicket   = lazy(() => import('./modules/entregas/ScreenValidarTicket'))
 const ScreenPreparaCarga    = lazy(() => import('./modules/entregas/ScreenPreparaCarga'))
 const ScreenInventarioCedis = lazy(() => import('./modules/entregas/ScreenInventarioCedis'))
 const ScreenDevoluciones    = lazy(() => import('./modules/entregas/ScreenDevoluciones'))
-// Ruta
-const ScreenMiRuta          = lazy(() => import('./modules/ruta/ScreenMiRuta'))
+// Entregas V2
+const ScreenHubDia          = lazy(() => import('./modules/entregas/ScreenHubDia'))
+const ScreenRecibirPT       = lazy(() => import('./modules/entregas/ScreenRecibirPT'))
+const ScreenCargaUnidades   = lazy(() => import('./modules/entregas/ScreenCargaUnidades'))
+const ScreenOperacionDia    = lazy(() => import('./modules/entregas/ScreenOperacionDia'))
+const ScreenDevolucionesV2  = lazy(() => import('./modules/entregas/ScreenDevolucionesV2'))
+const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'))
+const ScreenCierreTurno     = lazy(() => import('./modules/entregas/ScreenCierreTurno'))
+// Ruta V2
+const ScreenMiRuta          = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
 const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
 const ScreenAceptarCarga    = lazy(() => import('./modules/ruta/ScreenAceptarCarga'))
 const ScreenIncidencias     = lazy(() => import('./modules/ruta/ScreenIncidencias'))
 const ScreenKPIsRuta        = lazy(() => import('./modules/ruta/ScreenKPIsRuta'))
 const ScreenConciliacion    = lazy(() => import('./modules/ruta/ScreenConciliacion'))
+const ScreenControlRuta     = lazy(() => import('./modules/ruta/ScreenControlRuta'))
+const ScreenInventarioRuta  = lazy(() => import('./modules/ruta/ScreenInventarioRuta'))
+const ScreenCorteRuta       = lazy(() => import('./modules/ruta/ScreenCorteRuta'))
+const ScreenLiquidacion     = lazy(() => import('./modules/ruta/ScreenLiquidacion'))
+const ScreenCierreRuta      = lazy(() => import('./modules/ruta/ScreenCierreRuta'))
 // Supervisor Ventas
 const ScreenSupervisorVentas = lazy(() => import('./modules/supervisor-ventas/ScreenSupervisorVentas'))
 const ScreenDashboardVentas  = lazy(() => import('./modules/supervisor-ventas/ScreenDashboardVentas'))
 const ScreenPronostico       = lazy(() => import('./modules/supervisor-ventas/ScreenPronostico'))
 const ScreenVendedores       = lazy(() => import('./modules/supervisor-ventas/ScreenVendedores'))
 const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/ScreenMetasVendedores'))
+const ScreenControlComercial    = lazy(() => import('./modules/supervisor-ventas/ScreenControlComercial'))
+const ScreenDetalleVendedor    = lazy(() => import('./modules/supervisor-ventas/ScreenDetalleVendedor'))
+const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSinVisitar'))
+const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
+const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 // Gerente
 const ScreenGerente          = lazy(() => import('./modules/gerente/ScreenGerente'))
 const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashboardGerente'))
@@ -174,9 +200,12 @@ export default function App() {
 
   function login(sessionData) { setSession(sessionData) }
   function logout()           { setSession(null) }
+  function updateSession(patch) {
+    setSession(prev => (prev ? { ...prev, ...patch } : prev))
+  }
 
   return (
-    <SessionContext.Provider value={{ session, login, logout }}>
+    <SessionContext.Provider value={{ session, login, logout, updateSession }}>
       <BrowserRouter>
         <ErrorBoundary>
         <Suspense fallback={<PageLoader />}>
@@ -198,13 +227,18 @@ export default function App() {
             <Route path="/produccion/empaque" element={<PrivateRoute><ScreenEmpaque /></PrivateRoute>} />
             <Route path="/produccion/corte" element={<PrivateRoute><ScreenCorte /></PrivateRoute>} />
             <Route path="/produccion/transformacion" element={<PrivateRoute><ScreenTransformacion /></PrivateRoute>} />
+            <Route path="/produccion/incidencia" element={<PrivateRoute><ScreenIncidenciaRolito /></PrivateRoute>} />
+            <Route path="/produccion/cierre" element={<PrivateRoute><ScreenCierreRolito /></PrivateRoute>} />
 
-            {/* ── Almacén PT ──────────────────────────────────────────── */}
+            {/* ── Almacén PT V2 ────────────────────────────────────────── */}
             <Route path="/almacen-pt" element={<PrivateRoute><ScreenAlmacenPT /></PrivateRoute>} />
             <Route path="/almacen-pt/recepcion" element={<PrivateRoute><ScreenRecepcion /></PrivateRoute>} />
-            <Route path="/almacen-pt/despacho" element={<PrivateRoute><ScreenDespacho /></PrivateRoute>} />
             <Route path="/almacen-pt/inventario" element={<PrivateRoute><ScreenInventarioPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/traspaso" element={<PrivateRoute><ScreenTraspasoPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/despacho" element={<PrivateRoute><ScreenDespacho /></PrivateRoute>} />
             <Route path="/almacen-pt/historial" element={<PrivateRoute><ScreenHistorialPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/handover" element={<PrivateRoute><ScreenHandoverPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/merma" element={<PrivateRoute><ScreenMermaPT /></PrivateRoute>} />
 
             {/* ── Supervisión Producción ───────────────────────────────── */}
             <Route path="/supervision" element={<PrivateRoute><ScreenSupervision /></PrivateRoute>} />
@@ -221,14 +255,23 @@ export default function App() {
             <Route path="/admin/gastos" element={<PrivateRoute><ScreenGastos /></PrivateRoute>} />
             <Route path="/admin/gastos-historial" element={<PrivateRoute><ScreenGastosHistorial /></PrivateRoute>} />
             <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
+            <Route path="/admin/liquidaciones" element={<PrivateRoute><ScreenLiquidaciones /></PrivateRoute>} />
+            <Route path="/admin/materia-prima" element={<PrivateRoute><ScreenMateriaPrima /></PrivateRoute>} />
             <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
 
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
-            <Route path="/entregas" element={<PrivateRoute><ScreenEntregas /></PrivateRoute>} />
-            <Route path="/entregas/validar" element={<PrivateRoute><ScreenValidarTicket /></PrivateRoute>} />
-            <Route path="/entregas/carga" element={<PrivateRoute><ScreenPreparaCarga /></PrivateRoute>} />
-            <Route path="/entregas/inventario" element={<PrivateRoute><ScreenInventarioCedis /></PrivateRoute>} />
-            <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevoluciones /></PrivateRoute>} />
+            {/* Entregas V2 — flujo guiado */}
+            <Route path="/entregas" element={<PrivateRoute><ScreenHubDia /></PrivateRoute>} />
+            <Route path="/entregas/aceptar-turno" element={<PrivateRoute><ScreenCierreTurno /></PrivateRoute>} />
+            <Route path="/entregas/recibir-pt" element={<PrivateRoute><ScreenRecibirPT /></PrivateRoute>} />
+            <Route path="/entregas/carga" element={<PrivateRoute><ScreenCargaUnidades /></PrivateRoute>} />
+            <Route path="/entregas/operacion" element={<PrivateRoute><ScreenOperacionDia /></PrivateRoute>} />
+            <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevolucionesV2 /></PrivateRoute>} />
+            <Route path="/entregas/merma" element={<PrivateRoute><ScreenMermaEntregas /></PrivateRoute>} />
+            <Route path="/entregas/cierre-turno" element={<PrivateRoute><ScreenCierreTurno /></PrivateRoute>} />
+            {/* Entregas V1 — rutas legacy (redirect a V2) */}
+            <Route path="/entregas/validar" element={<Navigate to="/entregas/operacion" replace />} />
+            <Route path="/entregas/inventario" element={<Navigate to="/entregas/operacion" replace />} />
 
             {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
             <Route path="/ruta" element={<PrivateRoute><ScreenMiRuta /></PrivateRoute>} />
@@ -237,13 +280,25 @@ export default function App() {
             <Route path="/ruta/incidencias" element={<PrivateRoute><ScreenIncidencias /></PrivateRoute>} />
             <Route path="/ruta/kpis" element={<PrivateRoute><ScreenKPIsRuta /></PrivateRoute>} />
             <Route path="/ruta/conciliacion" element={<PrivateRoute><ScreenConciliacion /></PrivateRoute>} />
+            <Route path="/ruta/control" element={<PrivateRoute><ScreenControlRuta /></PrivateRoute>} />
+            <Route path="/ruta/inventario" element={<PrivateRoute><ScreenInventarioRuta /></PrivateRoute>} />
+            <Route path="/ruta/corte" element={<PrivateRoute><ScreenCorteRuta /></PrivateRoute>} />
+            <Route path="/ruta/liquidacion" element={<PrivateRoute><ScreenLiquidacion /></PrivateRoute>} />
+            <Route path="/ruta/cierre" element={<PrivateRoute><ScreenCierreRuta /></PrivateRoute>} />
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
-            <Route path="/equipo" element={<PrivateRoute><ScreenSupervisorVentas /></PrivateRoute>} />
+            {/* Supervisor Ventas V2 — Centro de Control Comercial */}
+            <Route path="/equipo" element={<PrivateRoute><ScreenControlComercial /></PrivateRoute>} />
+            <Route path="/equipo/vendedor/:vendedorId" element={<PrivateRoute><ScreenDetalleVendedor /></PrivateRoute>} />
+            <Route path="/equipo/sin-visitar" element={<PrivateRoute><ScreenClientesSinVisitar /></PrivateRoute>} />
+            <Route path="/equipo/score-semanal" element={<PrivateRoute><ScreenScoreSemanal /></PrivateRoute>} />
+            <Route path="/equipo/cierre" element={<PrivateRoute><ScreenCierreOperativo /></PrivateRoute>} />
             <Route path="/equipo/dashboard" element={<PrivateRoute><ScreenDashboardVentas /></PrivateRoute>} />
             <Route path="/equipo/pronostico" element={<PrivateRoute><ScreenPronostico /></PrivateRoute>} />
-            <Route path="/equipo/vendedores" element={<PrivateRoute><ScreenVendedores /></PrivateRoute>} />
             <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
+            {/* V1 legacy routes */}
+            <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
+            <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
 
             {/* ── Gerente de Sucursal ──────────────────────────────────── */}
             <Route path="/gerente" element={<PrivateRoute><ScreenGerente /></PrivateRoute>} />

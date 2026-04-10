@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getReconciliation } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenConciliacion() {
   const { session } = useSession()
@@ -22,7 +23,7 @@ export default function ScreenConciliacion() {
           const r = await getReconciliation(p.id)
           setRecon(r)
         }
-      } catch { /* empty */ }
+      } catch (e) { logScreenError('ScreenConciliacion', 'load', e) }
       finally { setLoading(false) }
     }
     load()

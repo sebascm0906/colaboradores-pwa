@@ -1,10 +1,37 @@
+// ─── ScreenRequisiciones — entrada responsive al módulo de requisiciones ───
+// En desktop (≥1024px) usa AdminShell + AdminRequisicionForm (V2 backend live).
+// En mobile se conserva la pantalla legacy como fallback.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
 import { createRequisition, getRequisitions } from './api'
+import { AdminProvider } from './AdminContext'
+import AdminShell from './components/AdminShell'
+import AdminRequisicionForm from './forms/AdminRequisicionForm'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenRequisiciones() {
+  const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
+
+  useEffect(() => {
+    const handler = () => setSw(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  if (sw < 1024) return <MobileRequisiciones />
+
+  return (
+    <AdminProvider>
+      <AdminShell activeBlock="requisiciones" title="Requisiciones">
+        <AdminRequisicionForm />
+      </AdminShell>
+    </AdminProvider>
+  )
+}
+
+function MobileRequisiciones() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
@@ -37,7 +64,7 @@ export default function ScreenRequisiciones() {
     try {
       const data = await getRequisitions()
       setRequisitions(Array.isArray(data) ? data : [])
-    } catch { /* silent */ }
+    } catch (e) { logScreenError('ScreenRequisiciones', 'getRequisitions', e) }
     finally { setLoading(false) }
   }
 

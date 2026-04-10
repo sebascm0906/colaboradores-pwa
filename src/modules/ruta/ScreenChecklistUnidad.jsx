@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getVehicleChecklist, submitVehicleCheck, completeVehicleChecklist, createVehicleChecklistShift, initVehicleChecklist, getVehicleChecks } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const CHECK_ICONS = {
   yes_no:  '\u2713',
@@ -55,6 +56,7 @@ export default function ScreenChecklistUnidad() {
         })))
       }
     } catch (e) {
+      logScreenError('ScreenChecklistUnidad', 'loadChecklist', e)
       setError('No se pudo cargar el checklist')
     } finally {
       setLoading(false)
@@ -75,7 +77,8 @@ export default function ScreenChecklistUnidad() {
       await submitVehicleCheck(c.id, data)
       setChecks(prev => prev.map((ch, i) => i === idx ? { ...ch, saved: true } : ch))
     } catch (e) {
-      // silently fail — user can retry
+      logScreenError('ScreenChecklistUnidad', 'submitVehicleCheck', e)
+      // user can retry
     }
   }
 
@@ -92,7 +95,7 @@ export default function ScreenChecklistUnidad() {
       try {
         await submitVehicleCheck(photoCheckId, { result_photo: reader.result })
         setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
-      } catch { /* silent */ }
+      } catch (err) { logScreenError('ScreenChecklistUnidad', 'submitVehicleCheck(photo)', err) }
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -105,6 +108,7 @@ export default function ScreenChecklistUnidad() {
       await completeVehicleChecklist(checklist.id)
       navigate('/ruta')
     } catch (e) {
+      logScreenError('ScreenChecklistUnidad', 'completeVehicleChecklist', e)
       setError('No se pudo completar la inspección')
     } finally {
       setSubmitting(false)

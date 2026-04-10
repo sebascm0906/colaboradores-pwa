@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { getMyShift, getCycles, getPackingEntries } from './api'
+import { getSaltLevel, MACHINE_ID_BARRA } from './barraService'
+
+// V2: Rolito users get redirected to the new guided hub
+import ScreenTurnoRolito from './ScreenTurnoRolito'
 
 const STATES = {
   draft:       { label: 'Pendiente',   color: TOKENS.colors.textMuted },
@@ -13,6 +17,12 @@ const STATES = {
 
 export default function ScreenMiTurno() {
   const { session } = useSession()
+
+  // V2: Rolito operators get the new guided hub
+  if (session?.role === 'operador_rolito') {
+    return <ScreenTurnoRolito />
+  }
+
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -21,6 +31,7 @@ export default function ScreenMiTurno() {
   const [packing, setPacking] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [saltData, setSaltData] = useState(null) // Barra: salt level from machine
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -32,6 +43,9 @@ export default function ScreenMiTurno() {
     loadData()
   }, [])
 
+  const role = session?.role || ''
+  const isBarras = role === 'operador_barra'
+
   async function loadData() {
     setLoading(true)
     setError('')
@@ -39,15 +53,15 @@ export default function ScreenMiTurno() {
       const s = await getMyShift()
       setShift(s)
       if (s?.id) {
-        const [c, p] = await Promise.all([
-          getCycles(s.id),
-          getPackingEntries(s.id),
-        ])
-        setCycles(c || [])
-        setPacking(p || [])
+        const promises = [getCycles(s.id), getPackingEntries(s.id)]
+        if (isBarras) promises.push(getSaltLevel(MACHINE_ID_BARRA).catch(() => null))
+        const results = await Promise.all(promises)
+        setCycles(results[0] || [])
+        setPacking(results[1] || [])
+        if (isBarras && results[2]) setSaltData(results[2])
       }
     } catch (e) {
-      setError(e.message === 'no_session' ? 'Sesión expirada' : 'No se pudo cargar el turno')
+      setError(e.message === 'no_session' ? 'Sesion expirada' : 'No se pudo cargar el turno')
     } finally {
       setLoading(false)
     }
@@ -56,10 +70,7 @@ export default function ScreenMiTurno() {
   const totalKgPacked = packing.reduce((sum, p) => sum + (p.total_kg || 0), 0)
   const stateInfo = STATES[shift?.state] || STATES.draft
 
-  const role = session?.role || ''
-  const isBarras = role === 'operador_barra'
-
-  // Acciones rápidas — adaptadas según línea (rolito vs barras)
+  // Acciones rapidas — adaptadas segun linea (rolito vs barras)
   const ACTIONS = [
     {
       id: 'checklist',
@@ -114,7 +125,7 @@ export default function ScreenMiTurno() {
     {
       id: 'corte',
       label: 'Corte',
-      desc: 'Resumen del día',
+      desc: 'Resumen del dia',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
@@ -122,6 +133,30 @@ export default function ScreenMiTurno() {
       ),
       route: '/produccion/corte',
       color: TOKENS.colors.blue3,
+    },
+    {
+      id: 'incidencia',
+      label: 'Incidencia',
+      desc: 'Reportar paro o merma',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      ),
+      route: '/produccion/incidencia',
+      color: TOKENS.colors.warning,
+    },
+    {
+      id: 'cierre',
+      label: 'Cierre',
+      desc: 'Cerrar turno',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+      ),
+      route: '/produccion/cierre',
+      color: TOKENS.colors.error,
     },
   ]
 
@@ -225,6 +260,28 @@ export default function ScreenMiTurno() {
                 <MiniStat label="Kg prod." value={shift.total_kg_produced?.toFixed(0) || '0'} accent={TOKENS.colors.blue2} typo={typo} />
                 <MiniStat label="Kg emp." value={totalKgPacked.toFixed(0)} accent={TOKENS.colors.success} typo={typo} />
               </div>
+
+              {/* Barra: Salt level + brine temp */}
+              {isBarras && saltData && (
+                <div style={{
+                  display: 'flex', gap: 8, marginTop: 10,
+                  padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(43,143,224,0.06)', border: '1px solid rgba(43,143,224,0.15)',
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Sal tanque</p>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: saltData.salt_level < 3 ? TOKENS.colors.warning : TOKENS.colors.blue2, margin: '2px 0 0' }}>
+                      {saltData.salt_level}%
+                    </p>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Temp salmuera</p>
+                    <p style={{ fontSize: 15, fontWeight: 700, color: TOKENS.colors.text, margin: '2px 0 0' }}>
+                      {saltData.brine_temp ? `${saltData.brine_temp}°C` : '--'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Acciones */}

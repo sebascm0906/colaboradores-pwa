@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { findTicket, dispatchTicket, getPendingTickets } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenValidarTicket() {
   const { session } = useSession()
@@ -27,9 +28,12 @@ export default function ScreenValidarTicket() {
 
   async function loadPending() {
     try {
-      const p = await getPendingTickets(warehouseId).catch(() => [])
+      const p = await getPendingTickets(warehouseId).catch((e) => {
+        logScreenError('ScreenValidarTicket', 'getPendingTickets', e)
+        return []
+      })
       setPending(p || [])
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenValidarTicket', 'loadPending', e) }
   }
 
   async function handleSearch() {

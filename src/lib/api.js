@@ -1018,6 +1018,153 @@ async function directProduction(method, path, body) {
     return pickListResponse(result)
   }
 
+  // ── Downtime categories (gf.production.downtime.category) ─────────────────
+  if (cleanPath === '/pwa-prod/downtime-categories' && method === 'GET') {
+    const result = await readModelSorted('gf.production.downtime.category', {
+      fields: ['id', 'name'],
+      domain: [],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  // ── Scrap reasons (gf.production.scrap.reason) ───────────────────────────
+  if (cleanPath === '/pwa-prod/scrap-reasons' && method === 'GET') {
+    const result = await readModelSorted('gf.production.scrap.reason', {
+      fields: ['id', 'name'],
+      domain: [],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  // ── Register downtime (gf.production.downtime) ───────────────────────────
+  if (cleanPath === '/pwa-prod/downtime-create' && method === 'POST') {
+    return createUpdate({
+      model: 'gf.production.downtime',
+      method: 'create',
+      dict: {
+        shift_id: Number(body?.shift_id || 0),
+        category_id: Number(body?.category_id || 0),
+        operator_id: getEmployeeId() || Number(body?.operator_id || 0),
+        reason: body?.reason || '',
+        start_time: body?.start_time || false,
+        end_time: body?.end_time || false,
+        minutes: Number(body?.minutes || 0),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+  }
+
+  // ── Register scrap (gf.production.scrap) ─────────────────────────────────
+  if (cleanPath === '/pwa-prod/scrap-create' && method === 'POST') {
+    return createUpdate({
+      model: 'gf.production.scrap',
+      method: 'create',
+      dict: {
+        shift_id: Number(body?.shift_id || 0),
+        reason_id: Number(body?.reason_id || 0),
+        operator_id: getEmployeeId() || Number(body?.operator_id || 0),
+        kg: Number(body?.kg || 0),
+        notes: body?.notes || '',
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+  }
+
+  // ── Bag reconciliation — update x_bags on shift ──────────────────────────
+  if (cleanPath === '/pwa-prod/bag-reconciliation' && method === 'POST') {
+    return createUpdate({
+      model: 'gf.production.shift',
+      method: 'update',
+      ids: [Number(body?.shift_id || 0)],
+      dict: {
+        x_bags_received: Number(body?.bags_received || 0),
+        x_bags_remaining: Number(body?.bags_remaining || 0),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+  }
+
+  // ── Close shift — try action_close, fallback to state write ──────────────
+  if (cleanPath === '/pwa-prod/shift-close' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    try {
+      return await createUpdate({
+        model: 'gf.production.shift',
+        method: 'function',
+        ids: [shiftId],
+        function: 'action_close',
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+    } catch (e) {
+      // Fallback: write state directly if action_close not available
+      if (e.message?.includes('action_close') || e.message?.includes('not found') || e.message?.includes('has no attribute')) {
+        return createUpdate({
+          model: 'gf.production.shift',
+          method: 'update',
+          ids: [shiftId],
+          dict: { state: 'done' },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        })
+      }
+      throw e
+    }
+  }
+
+  // ── Barra: Harvest slot — proxy to Sebastián's controller ────────────────
+  if (cleanPath === '/pwa-prod/harvest' && method === 'POST') {
+    return odooJson('/api/ice/slot/harvest', {
+      slot_id: Number(body?.slot_id || 0),
+      qty: Number(body?.qty || 0),
+      lot_name: body?.lot_name || '',
+      operator_id: getEmployeeId() || Number(body?.operator_id || 0),
+      temperature: Number(body?.temperature || 0),
+    })
+  }
+
+  // ── Barra: Tank incident — proxy to Sebastián's controller ───────────────
+  if (cleanPath === '/pwa-prod/tank-incident' && method === 'POST') {
+    return odooJson('/api/ice/tank/incident', {
+      machine_id: Number(body?.machine_id || 0),
+      incident_type: body?.incident_type || '',
+      description: body?.description || '',
+      operator_id: getEmployeeId() || Number(body?.operator_id || 0),
+    })
+  }
+
+  // ── Barra: Read machine salt level ───────────────────────────────────────
+  if (cleanPath === '/pwa-prod/machine-salt' && method === 'GET') {
+    const machineId = Number(query.get('machine_id') || 0)
+    if (!machineId) return null
+    const result = await readModel('gf.production.machine', {
+      fields: ['id', 'name', 'x_salt_level', 'x_salt_level_updated_at', 'x_brine_temp_current'],
+      domain: [['id', '=', machineId]],
+      limit: 1,
+      sudo: 1,
+    })
+    const machine = pickFirstResponse(result)
+    if (!machine) return null
+    return {
+      id: machine.id,
+      name: machine.name,
+      salt_level: Number(machine.x_salt_level || 0),
+      salt_level_updated_at: machine.x_salt_level_updated_at || null,
+      brine_temp: Number(machine.x_brine_temp_current || 0),
+    }
+  }
+
   return NO_DIRECT
 }
 
@@ -1046,6 +1193,11 @@ async function directRuta(method, path, body) {
         'load_sealed',
         'bridge_key',
         'reconciliation_id',
+        'departure_km',
+        'arrival_km',
+        'corte_validated',
+        'corte_validated_at',
+        'closure_time',
       ],
       domain: ['|', ['driver_employee_id', '=', empId], ['salesperson_employee_id', '=', empId]],
       sort_column: 'date',
@@ -1170,6 +1322,31 @@ async function directRuta(method, path, body) {
       sudo: 1,
     })
     return pickListResponse(result)
+  }
+
+  // ── KM update — proxy to gf_logistics_ops controller ─────────────────────
+  if (cleanPath === '/pwa-ruta/km-update' && method === 'POST') {
+    return odooJson('/pwa-ruta/km-update', {
+      plan_id: Number(body?.plan_id || 0),
+      type: body?.type || '',
+      km: Number(body?.km || 0),
+    })
+  }
+
+  // ── Liquidation — proxy to gf_logistics_ops controller ───────────────────
+  if (cleanPath === '/pwa-ruta/liquidation' && (method === 'GET' || method === 'POST')) {
+    const planId = Number(query.get('plan_id') || body?.plan_id || 0)
+    if (!planId) return null
+    return odooJson('/pwa-ruta/liquidation', { plan_id: planId })
+  }
+
+  // ── Close route — proxy to gf_logistics_ops controller ───────────────────
+  if (cleanPath === '/pwa-ruta/close-route' && method === 'POST') {
+    return odooJson('/pwa-ruta/close-route', {
+      plan_id: Number(body?.plan_id || 0),
+      departure_km: Number(body?.departure_km || 0),
+      arrival_km: Number(body?.arrival_km || 0),
+    })
   }
 
   return NO_DIRECT
@@ -1657,6 +1834,171 @@ async function directAlmacenPT(method, path, body) {
     }))
   }
 
+  // ── Dashboard summary (Sebastián commit fa20403) ──────────────────────────
+  if (cleanPath === '/pwa-pt/dashboard-summary' && method === 'GET') {
+    return odooJson('/api/pt/dashboard/summary', {
+      warehouse_id: warehouseId,
+      company_id: companyId || undefined,
+    })
+  }
+
+  // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
+  if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
+    return odooJson('/gf/salesops/pt/transfer/orchestrate', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      cedis_id: body?.cedis_id || 0,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      lines: body?.lines || [],
+      notes: body?.notes || '',
+    })
+  }
+
+  // ── Shift handover for PT (Sebastián commit a3f58c0) ─────────────────────
+  if (cleanPath === '/pwa-pt/shift-handover-create' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      lines: body?.lines || [],
+      notes: body?.notes || '',
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/shift-handover-pending' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/pending', {
+      warehouse_id: warehouseId,
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/shift-handover-accept' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/accept', {
+      handover_id: body?.handover_id || 0,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      lines: body?.lines || [],
+      notes: body?.notes || '',
+      action: body?.action || 'accept',
+    })
+  }
+
+  // ── Scrap for PT (reuses entregas warehouse_scrap endpoint) ──────────────
+  if (cleanPath === '/pwa-pt/scrap-create' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/warehouse_scrap/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      product_id: body?.product_id || 0,
+      scrap_qty: body?.scrap_qty || body?.qty || 0,
+      reason_tag: body?.reason_tag || '',
+      notes: body?.notes || '',
+      lot_id: body?.lot_id || null,
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/scrap-history' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/warehouse_scrap/history', {
+      warehouse_id: warehouseId,
+    })
+  }
+
+  // ── Scrap reasons PT (Sebastián commit 56c064e — production catalog) ─────
+  if (cleanPath === '/pwa-pt/scrap-reasons' && method === 'GET') {
+    const result = await readModelSorted('gf.production.scrap.reason', {
+      fields: ['id', 'name'],
+      domain: [],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result)
+  }
+
+  // ── Reception (Sebastián rollout 2026-04-10) ─────────────────────────────
+  // Backend: gf_production_ops/controllers/gf_production_api.py
+  //   Split buckets: pending_posting vs pending_receipt
+  //   Architectural: reception stays on gf.packing.entry, no duplicate
+  //   stock.move, inventory posting via gf.inventory.posting only.
+  if (cleanPath === '/pwa-pt/reception-pending' && method === 'GET') {
+    return odooJson('/api/pt/reception/pending', {
+      warehouse_id: warehouseId,
+      company_id: companyId || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/reception-create' && method === 'POST') {
+    return odooJson('/api/pt/reception/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      packing_entry_id: body?.packing_entry_id || undefined,
+      product_id: body?.product_id || undefined,
+      qty_reported: body?.qty_reported != null ? Number(body.qty_reported) : undefined,
+      qty_received: body?.qty_received != null ? Number(body.qty_received) : undefined,
+      difference: body?.difference != null ? Number(body.difference) : undefined,
+      difference_pct: body?.difference_pct != null ? Number(body.difference_pct) : undefined,
+      notes: body?.notes || '',
+      lines: body?.lines || undefined,
+    })
+  }
+
+  // ── Transformation (Sebastián rollout 2026-04-10) ────────────────────────
+  // Backend: uses existing gf.transformation.order model (no new model).
+  if (cleanPath === '/pwa-pt/transformation-pending' && method === 'GET') {
+    return odooJson('/api/pt/transformation/pending', {
+      warehouse_id: warehouseId,
+      company_id: companyId || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/transformation-create' && method === 'POST') {
+    return odooJson('/api/pt/transformation/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      from_product_id: body?.from_product_id || undefined,
+      to_product_id: body?.to_product_id || undefined,
+      qty: body?.qty != null ? Number(body.qty) : undefined,
+      notes: body?.notes || '',
+      lines: body?.lines || undefined,
+    })
+  }
+
+  // ── Forecast requests (Sebastián rollout 2026-04-10, gf_saleops) ─────────
+  // Backend: gf_saleops/controllers/pt.py
+  //   Warehouse → analytic resolution.
+  //   Scope precedence: employee > branch > global.
+  //   Uses existing gf.saleops.forecast, line aggregation.
+  if (cleanPath === '/pwa-pt/forecast-pending' && method === 'GET') {
+    return odooJson('/api/pt/forecast/pending', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      company_id: companyId || undefined,
+    })
+  }
+
+  // ── Day sales by employee (Sebastián audit 2026-04-10) ──────────────────
+  // Backend: gf_saleops/controllers/pt.py → GET /api/pt/day-sales
+  // Expone sales_qty_by_employee_for_day() como HTTP endpoint.
+  // Response: { ok, data: { date, warehouse_id, items: [{employee_id, employee_name, qty_total, ...}] } }
+  if (cleanPath === '/pwa-pt/day-sales' && method === 'GET') {
+    return odooJson('/api/pt/day-sales', {
+      warehouse_id: warehouseId,
+      date: query.get('date') || undefined,
+      company_id: companyId || undefined,
+    })
+  }
+
+  // ── Transfers history PT→CEDIS (Sebastián audit 2026-04-10) ─────────────
+  // Backend: gf_logistics_ops/controllers/pt.py → GET /api/pt/transfers/history
+  // Historial de stock.picking para transferencias PT→CEDIS.
+  // Response: { ok, data: { items: [{id, name, state, date, origin, destination, lines}], total } }
+  if (cleanPath === '/pwa-pt/transfers-history' && method === 'GET') {
+    return odooJson('/api/pt/transfers/history', {
+      warehouse_id: warehouseId,
+      date_from: query.get('date_from') || undefined,
+      date_to: query.get('date_to') || undefined,
+      limit: Number(query.get('limit') || 50),
+      offset: Number(query.get('offset') || 0),
+      company_id: companyId || undefined,
+    })
+  }
+
   return NO_DIRECT
 }
 
@@ -1730,14 +2072,95 @@ async function directEntregas(method, path, body) {
     if (companyId) domain.push(['company_id', '=', companyId])
     if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
     const result = await readModelSorted('gf.route.stop.line', {
-      fields: ['id', 'route_plan_id', 'stop_id', 'product_id', 'qty', 'line_type', 'reason', 'notes', 'create_date'],
+      fields: ['id', 'route_plan_id', 'stop_id', 'product_id', 'qty', 'line_type', 'reason', 'notes', 'create_date',
+        'received_by_id', 'received_at', 'received_qty', 'reception_state', 'reception_notes'],
       domain,
       sort_column: 'create_date',
       sort_desc: true,
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      route_plan_id: row.route_plan_id?.[0] || row.route_plan_id || null,
+      route: row.route_plan_id?.[1] || '',
+      stop_id: row.stop_id?.[0] || row.stop_id || null,
+      product_id: row.product_id?.[0] || row.product_id || null,
+      product: row.product_id?.[1] || '',
+      quantity: Number(row.qty || 0),
+      line_type: row.line_type || null,
+      reason: row.reason || '',
+      notes: row.notes || '',
+      create_date: row.create_date || '',
+      // Reception fields (from Sebastián's gf_logistics_ops extension)
+      received_by_id: row.received_by_id?.[0] || null,
+      received_by: row.received_by_id?.[1] || '',
+      received_at: row.received_at || null,
+      received_qty: row.received_qty != null ? Number(row.received_qty) : null,
+      reception_state: row.reception_state || 'pending',
+      reception_notes: row.reception_notes || '',
+      state: row.reception_state === 'received' || row.reception_state === 'received_with_diff' ? 'done' : 'pending',
+    }))
+  }
+
+  // ── Sebastián's gf_logistics_ops endpoints ────────────────────────────────
+
+  if (cleanPath === '/pwa-entregas/day-summary' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/entregas/day_summary', {
+      warehouse_id: warehouseId,
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/return-accept' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/route_return/accept', {
+      stop_line_ids: body?.stop_line_ids || [],
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      warehouse_id: body?.warehouse_id || warehouseId,
+      lines: body?.lines || [],
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/scrap-create' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/warehouse_scrap/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      product_id: body?.product_id || 0,
+      scrap_qty: body?.scrap_qty || body?.qty || 0,
+      reason_tag: body?.reason_tag || '',
+      notes: body?.notes || '',
+      lot_id: body?.lot_id || null,
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/scrap-history' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/warehouse_scrap/history', {
+      warehouse_id: warehouseId,
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/shift-handover-create' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      lines: body?.lines || [],
+      notes: body?.notes || '',
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/shift-handover-pending' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/pending', {
+      warehouse_id: warehouseId,
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/shift-handover-accept' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/shift_handover/accept', {
+      handover_id: body?.handover_id || 0,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      lines: body?.lines || [],
+      notes: body?.notes || '',
+      action: body?.action || 'accept',
+    })
   }
 
   return NO_DIRECT
@@ -1775,17 +2198,26 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team-routes' && method === 'GET') {
-    const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-    const domain = [['date', '=', todayStr]]
+    // Accept optional ?date=YYYY-MM-DD param, default to today
+    const dateParam = query.get('date')
+    let dateStr
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      dateStr = dateParam
+    } else {
+      const today = new Date()
+      dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    }
+    const domain = [['date', '=', dateStr]]
     if (companyId) domain.push(['company_id', '=', companyId])
     const result = await readModelSorted('gf.route.plan', {
       fields: [
         'id', 'name', 'date', 'route_id', 'state',
         'driver_employee_id', 'salesperson_employee_id',
         'stops_total', 'stops_done',
-        'load_sealed', 'departure_time_target', 'departure_time_real',
+        'load_sealed', 'departure_time_target', 'departure_time_real', 'departure_on_time',
+        'closure_time', 'reconciliation_id', 'force_close_reason',
+        'delivery_effectiveness_pct', 'progress_pct',
         'bridge_key',
       ],
       domain,
@@ -1810,9 +2242,15 @@ async function directSupervisorVentas(method, path, body) {
         stops_total: stopsTotal,
         stops_done: stopsDone,
         progress: stopsTotal > 0 ? Math.round((stopsDone / stopsTotal) * 100) : 0,
+        effectiveness: Number(row.delivery_effectiveness_pct || 0),
         load_sealed: row.load_sealed === true,
         departure_target: row.departure_time_target || null,
         departure_real: row.departure_time_real || null,
+        departure_on_time: row.departure_on_time === true,
+        closure_time: row.closure_time || null,
+        reconciliation_id: row.reconciliation_id?.[0] || null,
+        reconciliation_name: row.reconciliation_id?.[1] || '',
+        force_close_reason: row.force_close_reason || null,
       }
     })
   }
@@ -1836,26 +2274,33 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/forecast-create' && method === 'POST') {
+    // employee_id: si se pasa, el forecast es per-vendor.
+    // Si no, es global de sucursal (created_by queda como referencia).
+    const employeeId = Number(body?.employee_id || 0)
+    const dict = {
+      name: body?.name || `Pronóstico ${new Date().toISOString().slice(0, 10)}`,
+      date_target: body?.date_target || new Date().toISOString().slice(0, 10),
+      created_by_employee_id: Number(employeeId || getEmployeeId() || 0) || undefined,
+      company_id: Number(body?.company_id || companyId || 0) || undefined,
+      analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || 0) || undefined,
+      state: 'draft',
+      line_ids: Array.isArray(body?.lines)
+        ? body.lines
+            .filter((l) => l?.product_id && l?.qty)
+            .map((l) => [0, 0, {
+              product_id: Number(l.product_id),
+              qty: Number(l.qty || 0),
+              channel: l.channel || undefined,
+            }])
+        : [],
+    }
+    // SCOPE: Si employee_id tiene campo propio en el modelo (spec § 3.1),
+    // asignarlo. Si no existe en Odoo, Odoo lo ignora silenciosamente.
+    if (employeeId) dict.employee_id = employeeId
     const result = await createUpdate({
       model: 'gf.saleops.forecast',
       method: 'create',
-      dict: {
-        name: body?.name || `Pronóstico ${new Date().toISOString().slice(0, 10)}`,
-        date_target: body?.date_target || new Date().toISOString().slice(0, 10),
-        created_by_employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
-        company_id: Number(body?.company_id || companyId || 0) || undefined,
-        analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || 0) || undefined,
-        state: 'draft',
-        line_ids: Array.isArray(body?.lines)
-          ? body.lines
-              .filter((l) => l?.product_id && l?.qty)
-              .map((l) => [0, 0, {
-                product_id: Number(l.product_id),
-                qty: Number(l.qty || 0),
-                channel: l.channel || undefined,
-              }])
-          : [],
-      },
+      dict,
       sudo: 1,
       app: 'pwa_colaboradores',
     })
@@ -1874,6 +2319,22 @@ async function directSupervisorVentas(method, path, body) {
       sudo: 1,
     })
     return pickListResponse(result)
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    return odooJson('/gf/salesops/supervisor/v2/forecast/confirm', {
+      forecast_id: forecastId,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-cancel' && method === 'POST') {
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    return odooJson('/gf/salesops/supervisor/v2/forecast/cancel', {
+      forecast_id: forecastId,
+    })
   }
 
   if (cleanPath === '/pwa-supv/team-targets' && method === 'GET') {
@@ -1915,6 +2376,85 @@ async function directSupervisorVentas(method, path, body) {
       sudo: 1,
     })
     return pickListResponse(result)
+  }
+
+  // ── Route Stops (detalle de paradas de una ruta) ──
+  if (cleanPath === '/pwa-supv/route-stops' && method === 'GET') {
+    const routePlanId = Number(query.get('route_plan_id') || 0)
+    if (!routePlanId) return []
+    const result = await readModelSorted('gf.route.stop', {
+      fields: [
+        'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
+        'not_visited_reason_id', 'actual_start_time', 'actual_end_time',
+        'visit_duration_min', 'sale_order_ids', 'sale_order_count',
+        'comments', 'route_sequence', 'checkin_latitude', 'checkin_longitude',
+      ],
+      domain: [['route_plan_id', '=', routePlanId]],
+      sort_column: 'route_sequence',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      route_plan_id: row.route_plan_id?.[0] || routePlanId,
+      customer_id: row.customer_id?.[0] || 0,
+      customer: row.customer_id?.[1] || '',
+      state: row.state || '',
+      result_status: row.result_status || '',
+      not_visited_reason: row.not_visited_reason_id?.[1] || '',
+      start_time: row.actual_start_time || null,
+      end_time: row.actual_end_time || null,
+      duration_min: Number(row.visit_duration_min || 0),
+      sales_count: Number(row.sale_order_count || 0),
+      comments: row.comments || '',
+      sequence: Number(row.route_sequence || 0),
+      has_checkin: !!(row.checkin_latitude || row.checkin_longitude),
+    }))
+  }
+
+  // ── Week Routes (rutas lunes a domingo para score semanal) ──
+  if (cleanPath === '/pwa-supv/week-routes' && method === 'GET') {
+    const today = new Date()
+    const dayOfWeek = today.getDay()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    const pad = (n) => String(n).padStart(2, '0')
+    const monStr = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`
+    const sunStr = `${sunday.getFullYear()}-${pad(sunday.getMonth() + 1)}-${pad(sunday.getDate())}`
+
+    const domain = [['date', '>=', monStr], ['date', '<=', sunStr]]
+    if (companyId) domain.push(['company_id', '=', companyId])
+
+    const result = await readModelSorted('gf.route.plan', {
+      fields: [
+        'id', 'name', 'date', 'route_id', 'state',
+        'driver_employee_id', 'salesperson_employee_id',
+        'stops_total', 'stops_done', 'progress_pct',
+        'delivery_effectiveness_pct',
+      ],
+      domain,
+      sort_column: 'date',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name,
+      date: row.date,
+      state: row.state,
+      driver_id: row.driver_employee_id?.[0] || 0,
+      driver: row.driver_employee_id?.[1] || '',
+      salesperson_id: row.salesperson_employee_id?.[0] || 0,
+      salesperson: row.salesperson_employee_id?.[1] || '',
+      stops_total: Number(row.stops_total || 0),
+      stops_done: Number(row.stops_done || 0),
+      progress: Number(row.progress_pct || 0),
+      effectiveness: Number(row.delivery_effectiveness_pct || 0),
+    }))
   }
 
   return NO_DIRECT

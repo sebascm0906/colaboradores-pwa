@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getEnergyReadings, createEnergyReading } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenEnergia() {
   const { session } = useSession()
@@ -25,10 +26,13 @@ export default function ScreenEnergia() {
       const s = await getActiveShift()
       setShift(s)
       if (s?.id) {
-        const r = await getEnergyReadings(s.id).catch(() => [])
+        const r = await getEnergyReadings(s.id).catch((e) => {
+          logScreenError('ScreenEnergia', 'getEnergyReadings', e)
+          return []
+        })
         setReadings(r || [])
       }
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenEnergia', 'loadData', e) }
     finally { setLoading(false) }
   }
 

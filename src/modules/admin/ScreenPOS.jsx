@@ -1,10 +1,37 @@
+// ─── ScreenPOS — entrada responsive al POS mostrador ────────────────────────
+// En desktop (≥1024px) usa AdminShell + AdminPosForm (V2 backend live).
+// En mobile se conserva la pantalla legacy como fallback.
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getPosProducts, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
+import { AdminProvider } from './AdminContext'
+import AdminShell from './components/AdminShell'
+import AdminPosForm from './forms/AdminPosForm'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenPOS() {
+  const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
+
+  useEffect(() => {
+    const handler = () => setSw(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  if (sw < 1024) return <MobilePOS />
+
+  return (
+    <AdminProvider>
+      <AdminShell activeBlock="pos" title="Venta mostrador">
+        <AdminPosForm />
+      </AdminShell>
+    </AdminProvider>
+  )
+}
+
+function MobilePOS() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
@@ -46,7 +73,7 @@ export default function ScreenPOS() {
     try {
       const data = await getPosProducts(warehouseId)
       setProducts(Array.isArray(data) ? data : [])
-    } catch { setError('Error cargando productos') }
+    } catch (e) { logScreenError('ScreenPOS', 'getPosProducts', e); setError('Error cargando productos') }
     finally { setLoading(false) }
   }
 
@@ -54,7 +81,7 @@ export default function ScreenPOS() {
     try {
       const c = await getDefaultCustomer()
       if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
-    } catch { /* use default */ }
+    } catch (e) { logScreenError('ScreenPOS', 'getDefaultCustomer', e) }
   }
 
   // Filtered products

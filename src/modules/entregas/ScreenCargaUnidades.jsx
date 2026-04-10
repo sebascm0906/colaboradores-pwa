@@ -1,0 +1,370 @@
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useSession } from '../../App'
+import { TOKENS, getTypo } from '../../tokens'
+import { getTodayRoutes, getLoadDetail, confirmLoad } from './entregasService'
+import { ScreenShell, ConfirmDialog, EmptyState, StatusBadge } from './components'
+
+/** Extract numeric ID from a Many2one field (could be false, number, or [id, name] tuple). */
+function extractPickingId(field) {
+  if (!field) return null
+  if (typeof field === 'number') return field
+  if (Array.isArray(field) && field.length >= 1 && typeof field[0] === 'number') return field[0]
+  return null
+}
+
+const stateColors = {
+  draft: TOKENS.colors.textMuted,
+  published: TOKENS.colors.blue2,
+  in_progress: TOKENS.colors.warning,
+  closed: TOKENS.colors.success,
+}
+
+const stateLabels = {
+  draft: 'Borrador',
+  published: 'Publicada',
+  in_progress: 'En Progreso',
+  closed: 'Cerrada',
+}
+
+export default function ScreenCargaUnidades() {
+  const { session } = useSession()
+  const [sw, setSw] = useState(window.innerWidth)
+  const typo = useMemo(() => getTypo(sw), [sw])
+
+  const [routes, setRoutes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  // Expanded route for detail view
+  const [expandedId, setExpandedId] = useState(null)
+  const [loadLines, setLoadLines] = useState({}) // { [routeId]: { lines:[], loading:bool, error:string } }
+
+  // Confirm dialog
+  const [confirmRoute, setConfirmRoute] = useState(null)
+  const [confirming, setConfirming] = useState(null) // routePlanId being confirmed
+
+  // Toast
+  const [toast, setToast] = useState(null)
+
+  const warehouseId = session?.warehouse_id || 89
+
+  useEffect(() => {
+    const h = () => setSw(window.innerWidth)
+    window.addEventListener('resize', h)
+    return () => window.removeEventListener('resize', h)
+  }, [])
+
+  const loadRoutes = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const r = await getTodayRoutes(warehouseId)
+      setRoutes(Array.isArray(r) ? r : [])
+    } catch (e) {
+      if (e.message !== 'no_session') setError('Error al cargar rutas')
+      setRoutes([])
+    } finally {
+      setLoading(false)
+    }
+  }, [warehouseId])
+
+  useEffect(() => { loadRoutes() }, [loadRoutes])
+
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 2800)
+  }
+
+  const sealed = routes.filter((r) => r.load_sealed).length
+  const total = routes.length
+
+  async function handleToggleExpand(route) {
+    const routeId = route.id
+    if (expandedId === routeId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(routeId)
+
+    // Load detail if not already fetched
+    if (loadLines[routeId]) return
+
+    const pickingId = extractPickingId(route.load_picking_id)
+    if (!pickingId) {
+      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Detalle no disponible' } }))
+      return
+    }
+
+    setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: true, error: '' } }))
+    try {
+      const lines = await getLoadDetail(pickingId)
+      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(lines) ? lines : [], loading: false, error: '' } }))
+    } catch (e) {
+      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al cargar detalle' } }))
+    }
+  }
+
+  async function handleConfirmLoad() {
+    if (!confirmRoute) return
+    const routePlanId = confirmRoute.id
+    setConfirmRoute(null)
+    setConfirming(routePlanId)
+    try {
+      await confirmLoad(routePlanId)
+      showToast('Carga confirmada')
+      // Clear cached detail for this route
+      setLoadLines((prev) => { const n = { ...prev }; delete n[routePlanId]; return n })
+      setExpandedId(null)
+      await loadRoutes()
+    } catch (e) {
+      if (e.message !== 'no_session') showToast('Error al confirmar carga', 'error')
+    } finally {
+      setConfirming(null)
+    }
+  }
+
+  function stateBadge(state) {
+    const color = stateColors[state] || TOKENS.colors.textMuted
+    const label = stateLabels[state] || state || '\u2014'
+    return (
+      <span style={{
+        padding: '3px 8px', borderRadius: TOKENS.radius.pill,
+        background: `${color}15`, border: `1px solid ${color}30`,
+        fontSize: 11, fontWeight: 700, color,
+      }}>{label}</span>
+    )
+  }
+
+  return (
+    <ScreenShell title="Cargar Unidades" backTo="/entregas">
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes toast-in { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes slide-down { from { max-height: 0; opacity: 0; } to { max-height: 600px; opacity: 1; } }
+      `}</style>
+
+      {/* Progress summary */}
+      {!loading && routes.length > 0 && (
+        <div style={{
+          padding: '12px 16px', borderRadius: TOKENS.radius.lg, marginBottom: 16,
+          background: 'linear-gradient(180deg, rgba(21,73,155,0.18), rgba(21,73,155,0.06))',
+          border: `1px solid rgba(97,178,255,0.16)`,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ ...typo.title, color: TOKENS.colors.text }}>Progreso de carga</span>
+            <span style={{ ...typo.h2, color: sealed === total ? TOKENS.colors.success : TOKENS.colors.blue3 }}>
+              {sealed}/{total}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
+            <div style={{
+              width: total > 0 ? `${Math.round((sealed / total) * 100)}%` : '0%',
+              height: '100%', borderRadius: 3,
+              background: sealed === total
+                ? `linear-gradient(90deg, ${TOKENS.colors.success}, ${TOKENS.colors.success})`
+                : `linear-gradient(90deg, ${TOKENS.colors.blue2}, ${TOKENS.colors.blue3})`,
+              transition: 'width 0.3s',
+            }} />
+          </div>
+          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+            {sealed === total ? 'Todas las rutas cargadas' : `${total - sealed} rutas pendientes de carga`}
+          </p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{
+          margin: '0 0 12px', padding: 12, borderRadius: TOKENS.radius.sm,
+          background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.2)',
+        }}>
+          <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+          <div style={{
+            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
+            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+        </div>
+      ) : routes.length === 0 ? (
+        <EmptyState icon="\u{1F6E3}\uFE0F" message="Sin rutas programadas para hoy" />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {routes.map((route) => {
+            const progress = route.stops_total > 0 ? Math.round((route.stops_done / route.stops_total) * 100) : 0
+            const canConfirm = !route.load_sealed && route.state !== 'draft'
+            const isExpanded = expandedId === route.id
+            const detail = loadLines[route.id]
+            const isConfirming = confirming === route.id
+
+            return (
+              <div key={route.id} style={{
+                borderRadius: TOKENS.radius.xl,
+                background: TOKENS.glass.panel,
+                border: `1px solid ${route.load_sealed ? 'rgba(34,197,94,0.20)' : TOKENS.colors.border}`,
+                boxShadow: TOKENS.shadow.soft,
+                overflow: 'hidden',
+              }}>
+                {/* Route header - tappable */}
+                <button
+                  onClick={() => handleToggleExpand(route)}
+                  style={{
+                    width: '100%', padding: 16, textAlign: 'left',
+                    background: 'transparent', cursor: 'pointer',
+                    display: 'block',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ ...typo.h2, color: TOKENS.colors.text, margin: 0, fontSize: 16 }}>
+                        {route.name || '\u2014'}
+                      </p>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                        {route.driver || 'Sin chofer'}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                      {route.load_sealed && (
+                        <span style={{
+                          padding: '3px 8px', borderRadius: TOKENS.radius.pill,
+                          background: TOKENS.colors.successSoft, border: `1px solid rgba(34,197,94,0.25)`,
+                          fontSize: 11, fontWeight: 700, color: TOKENS.colors.success,
+                        }}>Cargada</span>
+                      )}
+                      {stateBadge(route.state)}
+                      <svg
+                        width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform ${TOKENS.motion.fast}` }}
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Stops + Progress */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+                        Paradas: {route.stops_done || 0} / {route.stops_total || 0}
+                      </span>
+                      <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{progress}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)' }}>
+                      <div style={{
+                        width: `${progress}%`, height: '100%', borderRadius: 3,
+                        background: `linear-gradient(90deg, ${TOKENS.colors.blue2}, ${TOKENS.colors.success})`,
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div style={{
+                    padding: '0 16px 16px',
+                    borderTop: `1px solid ${TOKENS.colors.border}`,
+                    animation: 'slide-down 0.25s ease',
+                    overflow: 'hidden',
+                  }}>
+                    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '12px 0 8px' }}>
+                      DETALLE DE CARGA
+                    </p>
+
+                    {detail?.loading ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
+                        <div style={{
+                          width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)',
+                          borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+                          animation: 'spin 0.8s linear infinite',
+                        }} />
+                      </div>
+                    ) : detail?.error ? (
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
+                        {detail.error}
+                      </p>
+                    ) : detail?.lines?.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {detail.lines.map((line, idx) => (
+                          <div key={line.id || idx} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                          }}>
+                            <span style={{ ...typo.body, color: TOKENS.colors.textSoft, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {line.product_name || (Array.isArray(line.product_id) ? line.product_id[1] : `Producto ${line.product_id || idx + 1}`)}
+                            </span>
+                            <span style={{ ...typo.title, color: TOKENS.colors.text, marginLeft: 12, flexShrink: 0 }}>
+                              {line.product_uom_qty ?? line.qty ?? line.quantity ?? '\u2014'} {line.uom || ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
+                        Sin lineas de carga
+                      </p>
+                    )}
+
+                    {/* Confirm button */}
+                    {canConfirm && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmRoute(route) }}
+                        disabled={isConfirming}
+                        style={{
+                          width: '100%', padding: 12, marginTop: 14, borderRadius: TOKENS.radius.lg,
+                          background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
+                          fontSize: 14, fontWeight: 600,
+                          opacity: isConfirming ? 0.5 : 1,
+                          cursor: isConfirming ? 'default' : 'pointer',
+                          boxShadow: '0 8px 20px rgba(43,143,224,0.25)',
+                          transition: `opacity ${TOKENS.motion.fast}`,
+                        }}
+                      >
+                        {isConfirming ? 'Confirmando...' : 'Confirmar Carga'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div style={{ height: 32 }} />
+
+      {/* Confirm dialog */}
+      {confirmRoute && (
+        <ConfirmDialog
+          title="Confirmar carga"
+          message={`Confirmar que la carga de la ruta "${confirmRoute.name || confirmRoute.id}" fue despachada?`}
+          confirmLabel="Confirmar"
+          confirmColor={TOKENS.colors.blue2}
+          onConfirm={handleConfirmLoad}
+          onCancel={() => setConfirmRoute(null)}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 1100, padding: '10px 20px', borderRadius: TOKENS.radius.pill,
+          background: toast.type === 'error' ? 'rgba(239,68,68,0.92)' : 'rgba(34,197,94,0.92)',
+          color: '#fff', fontSize: 13, fontWeight: 600,
+          boxShadow: TOKENS.shadow.md, animation: 'toast-in 0.25s ease',
+          whiteSpace: 'nowrap',
+        }}>
+          {toast.msg}
+        </div>
+      )}
+    </ScreenShell>
+  )
+}

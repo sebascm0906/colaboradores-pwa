@@ -4,8 +4,17 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, createCycle, updateCycle, getCycles } from './api'
 
+// V2: Rolito users get the new guided cycle flow
+import ScreenCicloRolito from './ScreenCicloRolito'
+
 export default function ScreenCiclo() {
   const { session } = useSession()
+
+  // V2: Rolito operators get the new guided cycle
+  if (session?.role === 'operador_rolito') {
+    return <ScreenCicloRolito />
+  }
+
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])

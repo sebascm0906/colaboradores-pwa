@@ -1,10 +1,36 @@
+// ─── ScreenCierreCaja — entrada responsive al cierre del día ────────────────
+// Desktop (≥1024px): AdminShell + AdminCierreForm (arqueo formal V2).
+// Mobile (<1024px): vista legacy (read-only summary).
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getTodaySales, getTodayExpenses, getCashClosing } from './api'
+import { AdminProvider } from './AdminContext'
+import AdminShell from './components/AdminShell'
+import AdminCierreForm from './forms/AdminCierreForm'
 
 export default function ScreenCierreCaja() {
+  const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
+
+  useEffect(() => {
+    const handler = () => setSw(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  if (sw < 1024) return <MobileCierreCaja />
+
+  return (
+    <AdminProvider>
+      <AdminShell activeBlock="cierre" title="Cierre del día">
+        <AdminCierreForm />
+      </AdminShell>
+    </AdminProvider>
+  )
+}
+
+function MobileCierreCaja() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)

@@ -1,8 +1,34 @@
+// ─── ScreenGastosHistorial — entrada responsive al historial de gastos ────
+// Desktop (≥1024px) usa AdminShell + AdminHistorialGastosView (V2).
+// Mobile conserva la pantalla legacy como fallback.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { COMPANY_LABELS, TOKENS, getCompaniesForSucursal, getTypo } from '../../tokens'
 import { getExpensesHistory } from './api'
+import { AdminProvider } from './AdminContext'
+import AdminShell from './components/AdminShell'
+import AdminHistorialGastosView from './views/AdminHistorialGastosView'
+
+export default function ScreenGastosHistorial() {
+  const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
+
+  useEffect(() => {
+    const handler = () => setSw(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  if (sw < 1024) return <MobileHistorialGastos />
+
+  return (
+    <AdminProvider>
+      <AdminShell activeBlock="gastos-hist" title="Historial de gastos">
+        <AdminHistorialGastosView />
+      </AdminShell>
+    </AdminProvider>
+  )
+}
 
 const STATE_MAP = {
   draft: { label: 'Borrador', color: TOKENS.colors.textMuted },
@@ -40,7 +66,7 @@ function formatHistoryDate(value) {
   })
 }
 
-export default function ScreenGastosHistorial() {
+function MobileHistorialGastos() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)

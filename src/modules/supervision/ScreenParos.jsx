@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getDowntimes, getDowntimeCategories, createDowntime, closeDowntime } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 const LINES = [
   { id: 1, name: 'Iguala - Barras' },
@@ -33,13 +34,13 @@ export default function ScreenParos() {
       setShift(s)
       if (s?.id) {
         const [d, cats] = await Promise.all([
-          getDowntimes(s.id).catch(() => []),
-          getDowntimeCategories().catch(() => []),
+          getDowntimes(s.id).catch((e) => { logScreenError('ScreenParos', 'getDowntimes', e); return [] }),
+          getDowntimeCategories().catch((e) => { logScreenError('ScreenParos', 'getDowntimeCategories', e); return [] }),
         ])
         setDowntimes(d || [])
         setCategories(cats || [])
       }
-    } catch { /* empty */ }
+    } catch (e) { logScreenError('ScreenParos', 'loadData', e) }
     finally { setLoading(false) }
   }
 

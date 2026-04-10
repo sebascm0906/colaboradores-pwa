@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getAlerts, getKpiSummary } from './api'
+import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenGerente() {
   const { session } = useSession()
@@ -24,14 +25,22 @@ export default function ScreenGerente() {
   async function loadData() {
     setLoading(true)
     try {
-      const [a, k] = await Promise.all([
-        getAlerts().catch(() => []),
-        getKpiSummary().catch(() => null),
-      ])
-      setAlerts(a || [])
-      setKpi(k || null)
-    } catch { /* empty */ }
-    finally { setLoading(false) }
+      const [a, k] = await Promise.allSettled([getAlerts(), getKpiSummary()])
+      if (a.status === 'fulfilled') {
+        setAlerts(Array.isArray(a.value) ? a.value : [])
+      } else {
+        logScreenError('ScreenGerente', 'getAlerts', a.reason)
+        setAlerts([])
+      }
+      if (k.status === 'fulfilled') {
+        setKpi(k.value || null)
+      } else {
+        logScreenError('ScreenGerente', 'getKpiSummary', k.reason)
+        setKpi(null)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const alertCount = alerts.length

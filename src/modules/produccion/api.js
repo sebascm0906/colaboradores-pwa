@@ -80,3 +80,54 @@ export function createTransformation(data) {
 export function getTransformations(shiftId) {
   return api('GET', `/pwa-prod/transformations?shift_id=${shiftId}`)
 }
+
+// ── Incidencias (Downtime + Scrap) ──────────────────────────────────────────
+
+/** Obtener categorías de paro (gf.production.downtime.category) */
+export function getDowntimeCategories() {
+  return api('GET', '/pwa-prod/downtime-categories')
+}
+
+/** Obtener razones de merma (gf.production.scrap.reason) */
+export function getScrapReasons() {
+  return api('GET', '/pwa-prod/scrap-reasons')
+}
+
+/** Registrar paro (gf.production.downtime) */
+export function createDowntime(data) {
+  return api('POST', '/pwa-prod/downtime-create', data)
+}
+
+/** Registrar merma (gf.production.scrap) */
+export function createScrap(data) {
+  return api('POST', '/pwa-prod/scrap-create', data)
+}
+
+// ── Cierre de turno ─────────────────────────────────────────────────────────
+
+/** Guardar cuadratura de bolsas en turno */
+export function saveBagReconciliation(data) {
+  return api('POST', '/pwa-prod/bag-reconciliation', data)
+}
+
+/** Cerrar turno (action_close o fallback a state=done) */
+export function closeShift(data) {
+  return api('POST', '/pwa-prod/shift-close', data)
+}
+
+// ── Barra: Harvest + Incidentes + Salt ──────────────────────────────────────
+
+/** Cosecha de slot de salmuera — POST /api/ice/slot/harvest */
+export function harvestSlot(data) {
+  return api('POST', '/pwa-prod/harvest', data)
+}
+
+/** Incidente de tanque — POST /api/ice/tank/incident */
+export function createTankIncident(data) {
+  return api('POST', '/pwa-prod/tank-incident', data)
+}
+
+/** Leer nivel de sal de máquina */
+export function getMachineSalt(machineId) {
+  return api('GET', `/pwa-prod/machine-salt?machine_id=${machineId}`)
+}
