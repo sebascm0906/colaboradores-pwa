@@ -1087,55 +1087,40 @@ async function directAdmin(method, path, body) {
     }
   }
 
-  // ── Liquidaciones — wrappers sobre gf_logistics_ops ─────────────────────
-  // Estos endpoints requieren lógica de negocio (build_liquidation_summary)
-  // que vive en gf_logistics_ops. Sin el webhook de n8n, devolvemos shapes
-  // vacías para que el UI degrade a "sin datos" en lugar de romperse.
-  // Cuando Sebastián exponga los controllers REST, reemplazar estos stubs.
+  // ── Liquidaciones — proxy a pwa_admin_api controllers (gf_logistics_ops) ──
+  // Sebastián arregló _route_plan_summary() y expuso los 4 controllers con
+  // shapes correctos. Los stubs fueron removidos — ahora ruteamos directo.
   if (cleanPath === '/pwa-admin/liquidaciones/pending' && method === 'GET') {
-    try {
-      const query = new URLSearchParams(path.split('?')[1] || '')
-      const reqCompanyId = Number(query.get('company_id') || companyId || 0)
-      const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-      const domain = [['state', '=', 'done']]
-      if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
-      if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
-      const result = await readModelSorted('gf.route.plan', {
-        fields: ['id', 'name', 'date', 'state', 'driver_employee_id', 'salesperson_employee_id', 'warehouse_id', 'company_id'],
-        domain,
-        sort_column: 'date',
-        sort_desc: true,
-        limit: 100,
-        sudo: 1,
-      })
-      const plans = pickListResponse(result).map((r) => ({
-        id: r.id,
-        name: r.name || '',
-        date: r.date || null,
-        state: r.state || '',
-        driver: r.driver_employee_id?.[1] || '',
-        salesperson: r.salesperson_employee_id?.[1] || '',
-        warehouse: r.warehouse_id?.[1] || '',
-      }))
-      return { ok: true, data: { plans, count: plans.length } }
-    } catch {
-      return { ok: true, data: { plans: [], count: 0 } }
-    }
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooJson('/pwa-admin/liquidaciones/pending', {
+      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
+      warehouse_id: Number(query.get('warehouse_id') || warehouseId || 0) || undefined,
+    })
   }
 
   if (cleanPath === '/pwa-admin/liquidaciones/detail' && method === 'GET') {
-    // build_liquidation_summary() es un método server-side. Devolvemos shape
-    // mínima para que el UI pueda renderizar "sin conciliación disponible"
-    // en lugar de error de webhook. El backend real debería exponer esto.
-    return { ok: true, data: { summary: null, reconciliation_lines: [], lines: [] } }
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooJson('/pwa-admin/liquidaciones/detail', {
+      plan_id: Number(query.get('plan_id') || 0),
+    })
   }
 
   if (cleanPath === '/pwa-admin/liquidaciones/validate' && method === 'POST') {
-    return { ok: false, error: 'liquidaciones/validate requiere backend gf_logistics_ops expuesto' }
+    return odooJson('/pwa-admin/liquidaciones/validate', {
+      plan_id: Number(body?.plan_id || 0),
+    })
   }
 
   if (cleanPath === '/pwa-admin/liquidaciones/history' && method === 'GET') {
-    return { ok: true, data: { items: [], count: 0 } }
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooJson('/pwa-admin/liquidaciones/history', {
+      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
+      warehouse_id: Number(query.get('warehouse_id') || warehouseId || 0) || undefined,
+      date_from: query.get('date_from') || undefined,
+      date_to: query.get('date_to') || undefined,
+      limit: Number(query.get('limit') || 50),
+      offset: Number(query.get('offset') || 0),
+    })
   }
 
   // ── Materia Prima — stock.quant filtrado por locaciones MP ──────────────
