@@ -1382,7 +1382,7 @@ async function directProduction(method, path, body) {
       sudo: 1,
     })
     const checklist = pickFirstResponse(result)
-    if (!checklist) return null
+    if (!checklist) return { state: 'none', checks: [] }
     return {
       ...checklist,
       checks: checklist.check_ids || [],
@@ -1905,6 +1905,81 @@ async function directRuta(method, path, body) {
   return NO_DIRECT
 }
 
+// ── Helper: evalúa readiness de cierre de turno ──────────────────────
+async function evaluateShiftCloseReadiness(shiftId) {
+  const blockers = []
+
+  // 1. Ciclos abiertos (freezing / defrosting)
+  const cyclesRes = await readModel('gf.evaporator.cycle', {
+    fields: ['id', 'state'],
+    domain: [['shift_id', '=', shiftId], ['state', 'in', ['freezing', 'defrosting']]],
+    limit: 1,
+    sudo: 1,
+  })
+  const openCycles = pickListResponse(cyclesRes)
+  if (openCycles?.length) blockers.push('Hay ciclos abiertos (freezing/defrosting)')
+
+  // 2. Paros abiertos
+  const downtimesRes = await readModel('gf.production.downtime', {
+    fields: ['id'],
+    domain: [['shift_id', '=', shiftId], ['state', '=', 'open']],
+    limit: 1,
+    sudo: 1,
+  })
+  const openDowntimes = pickListResponse(downtimesRes)
+  if (openDowntimes?.length) blockers.push('Hay paros abiertos sin cerrar')
+
+  // 3. Lecturas de energía inicio/fin
+  const energyRes = await readModel('gf.energy.reading', {
+    fields: ['id', 'reading_type', 'kwh_value'],
+    domain: [['shift_id', '=', shiftId]],
+    limit: 10,
+    sudo: 1,
+  })
+  const readings = pickListResponse(energyRes) || []
+  const hasStart = readings.some(r => r.reading_type === 'start' && r.kwh_value > 0)
+  const hasEnd = readings.some(r => r.reading_type === 'end' && r.kwh_value > 0)
+  if (!hasStart) blockers.push('Falta lectura de energía de inicio')
+  if (!hasEnd) blockers.push('Falta lectura de energía de fin')
+  if (hasStart && hasEnd) {
+    const startR = readings.find(r => r.reading_type === 'start')
+    const endR = readings.find(r => r.reading_type === 'end')
+    if (endR.kwh_value <= startR.kwh_value) blockers.push('Lectura de energía fin debe ser mayor que inicio')
+  }
+
+  // 4. Checklist HACCP
+  const checklistRes = await readModel('gf.haccp.checklist', {
+    fields: ['id', 'state'],
+    domain: [['shift_id', '=', shiftId]],
+    limit: 1,
+    sudo: 1,
+  })
+  const checklist = pickFirstResponse(checklistRes)
+  if (!checklist || checklist.state !== 'completed') blockers.push('Checklist HACCP incompleto')
+
+  // 5. Balance producción vs empaque + merma
+  const shiftRes = await readModel('gf.production.shift', {
+    fields: ['total_kg_produced', 'total_kg_packed', 'total_scrap_kg'],
+    domain: [['id', '=', shiftId]],
+    limit: 1,
+    sudo: 1,
+  })
+  const shift = pickFirstResponse(shiftRes)
+  if (shift) {
+    const produced = Number(shift.total_kg_produced || 0)
+    const packed = Number(shift.total_kg_packed || 0)
+    const scrap = Number(shift.total_scrap_kg || 0)
+    if (produced > 0) {
+      const accounted = packed + scrap
+      const diff = Math.abs(produced - accounted)
+      const pct = (diff / produced) * 100
+      if (pct > 5) blockers.push(`Desbalance producción vs empaque+merma: ${pct.toFixed(1)}% (${diff.toFixed(1)} kg)`)
+    }
+  }
+
+  return { canClose: blockers.length === 0, blockers }
+}
+
 async function directSupervision(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
@@ -1999,9 +2074,24 @@ async function directSupervision(method, path, body) {
     return { success: true, data: result }
   }
 
+  // ── Shift close readiness check ──────────────────────────────────────
+  if (cleanPath === '/pwa-sup/shift-close-check' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return { canClose: false, blockers: ['shift_id requerido'] }
+    return evaluateShiftCloseReadiness(shiftId)
+  }
+
+  // ── Shift close (validación híbrida: check local + update) ──────────
+  // TODO: migrar a action_close cuando exista el método en Odoo
   if (cleanPath === '/pwa-sup/shift-close' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
+
+    const readiness = await evaluateShiftCloseReadiness(shiftId)
+    if (!readiness.canClose) {
+      return { success: false, error: 'No se puede cerrar el turno', blockers: readiness.blockers }
+    }
+
     const result = await createUpdate({
       model: 'gf.production.shift',
       method: 'update',
@@ -2067,13 +2157,28 @@ async function directSupervision(method, path, body) {
   if (cleanPath === '/pwa-sup/downtime-close' && method === 'POST') {
     const downtimeId = Number(body?.downtime_id || 0)
     if (!downtimeId) return { success: false, error: 'downtime_id requerido' }
+    const endTime = body?.end_time || new Date().toISOString()
+    // Fetch start_time to compute minutes
+    let minutes
+    const dtRes = await readModel('gf.production.downtime', {
+      fields: ['start_time'],
+      domain: [['id', '=', downtimeId]],
+      limit: 1,
+      sudo: 1,
+    })
+    const dt = pickFirstResponse(dtRes)
+    if (dt?.start_time) {
+      const diffMs = new Date(endTime).getTime() - new Date(dt.start_time).getTime()
+      minutes = Math.max(0, Math.round(diffMs / 60000))
+    }
     const result = await createUpdate({
       model: 'gf.production.downtime',
       method: 'update',
       ids: [downtimeId],
       dict: {
         state: 'closed',
-        end_time: body?.end_time || new Date().toISOString(),
+        end_time: endTime,
+        ...(minutes !== undefined ? { minutes } : {}),
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -2146,12 +2251,14 @@ async function directSupervision(method, path, body) {
   if (cleanPath === '/pwa-sup/energy-create' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const kwhValue = Number(body?.kwh_value || body?.reading_kwh || 0)
+    if (!kwhValue || kwhValue <= 0) return { success: false, error: 'kwh_value debe ser mayor a 0 — lectura real requerida' }
     const result = await createUpdate({
       model: 'gf.energy.reading',
       method: 'create',
       dict: {
         shift_id: shiftId,
-        kwh_value: Number(body?.kwh_value || body?.reading_kwh || 0),
+        kwh_value: kwhValue,
         reading_type: body?.reading_type || undefined,
         timestamp: body?.timestamp || new Date().toISOString(),
         employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,

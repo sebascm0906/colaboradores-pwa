@@ -1,0 +1,71 @@
+
+> gf-pwa-colaboradores@1.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 99 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/registerSW.js                                0.13 kB
+dist/manifest.webmanifest                         0.40 kB
+dist/index.html                                   1.66 kB │ gzip:  0.68 kB
+dist/assets/index-BTEo7Zlw.css                   23.75 kB │ gzip:  5.07 kB
+dist/assets/ScreenGastos-vQD7Q2nB.js              0.26 kB │ gzip:  0.22 kB
+dist/assets/ScreenGastos-DMex0C2A.js              0.27 kB │ gzip:  0.23 kB
+dist/assets/api-JLlGdPXv.js                       0.32 kB │ gzip:  0.19 kB
+dist/assets/api-dZ2Kg_f4.js                       0.42 kB │ gzip:  0.20 kB
+dist/assets/api-C4JIE08T.js                       0.63 kB │ gzip:  0.29 kB
+dist/assets/api-CNAKPrdI.js                       0.65 kB │ gzip:  0.28 kB
+dist/assets/api-CL1ojgvl.js                       0.85 kB │ gzip:  0.32 kB
+dist/assets/api-DKj_5wnW.js                       0.97 kB │ gzip:  0.43 kB
+dist/assets/api-CEpRzvN-.js                       0.99 kB │ gzip:  0.33 kB
+dist/assets/api-DX9pHMDV.js                       1.20 kB │ gzip:  0.39 kB
+dist/assets/ScreenDashboardVentas-BjUo8Kck.js     2.45 kB │ gzip:  1.17 kB
+dist/assets/ScreenDashboardGerente-3byK6WJm.js    2.46 kB │ gzip:  1.17 kB
+dist/assets/ScreenModuloPendiente-CdoTF6e8.js     3.49 kB │ gzip:  1.41 kB
+dist/assets/ScreenHistorialPT-_OVKifDb.js         3.70 kB │ gzip:  1.60 kB
+dist/assets/ScreenDevoluciones-Dlj78l3m.js        4.50 kB │ gzip:  1.80 kB
+dist/assets/ScreenAceptarCarga-CXP691Bp.js        4.70 kB │ gzip:  1.93 kB
+dist/assets/ScreenConciliacion-11__r1hR.js        4.86 kB │ gzip:  1.89 kB
+dist/assets/ScreenInventarioPT-DzITXRXJ.js        4.86 kB │ gzip:  1.85 kB
+dist/assets/ScreenInventarioCedis-B0bKlSxR.js     4.90 kB │ gzip:  1.86 kB
+dist/assets/ScreenPreparaCarga-By_58Z_5.js        5.34 kB │ gzip:  2.09 kB
+dist/assets/ScreenAlertasGerente-CKhhlpTi.js      5.57 kB │ gzip:  2.04 kB
+dist/assets/ScreenEntregas-wyInbF9u.js            5.75 kB │ gzip:  2.13 kB
+dist/assets/ScreenVendedores-CTm_bFyC.js          5.76 kB │ gzip:  2.10 kB
+dist/assets/ScreenForecastUnlock-BboD3eYE.js      6.12 kB │ gzip:  2.08 kB
+dist/assets/ScreenCiclo-JRiDH12f.js               6.12 kB │ gzip:  2.47 kB
+dist/assets/ScreenCorte-BOmkPiMm.js               6.50 kB │ gzip:  2.40 kB
+dist/assets/ScreenAdminPanel-CrCKG_Dv.js          6.50 kB │ gzip:  2.22 kB
+dist/assets/ScreenRecepcion-BukldrKx.js           6.50 kB │ gzip:  2.11 kB
+dist/assets/ScreenKPIsRuta-BJoFl3Ws.js            6.54 kB │ gzip:  1.93 kB
+dist/assets/ScreenIncidencias-B3gO_fiT.js         6.70 kB │ gzip:  2.36 kB
+dist/assets/ScreenCierreCaja-D7oJi5yX.js          6.74 kB │ gzip:  2.04 kB
+dist/assets/ScreenSupervisorVentas-BhsYfEOH.js    6.94 kB │ gzip:  2.32 kB
+dist/assets/ScreenAlmacenPT-cS8ldHyI.js           6.96 kB │ gzip:  2.42 kB
+dist/assets/ScreenDespacho-DxcJ2B_g.js            7.09 kB │ gzip:  2.60 kB
+dist/assets/ScreenValidarTicket-BspLGXaJ.js       7.20 kB │ gzip:  2.49 kB
+dist/assets/ScreenMetasVendedores-BDB8qPi9.js     7.25 kB │ gzip:  2.10 kB
+dist/assets/ScreenEmpaque-DfpVgAKv.js             7.32 kB │ gzip:  2.74 kB
+dist/assets/ScreenPronostico-CqSjk29e.js          7.55 kB │ gzip:  2.63 kB
+dist/assets/ScreenTicket-DulDJzYr.js              7.59 kB │ gzip:  2.54 kB
+dist/assets/ScreenMiRuta-CJi5fteJ.js              7.86 kB │ gzip:  2.56 kB
+dist/assets/ScreenGerente-D5_RPJFj.js             8.08 kB │ gzip:  2.57 kB
+dist/assets/ScreenControlTurno-DzZgnQHF.js        8.19 kB │ gzip:  2.53 kB
+dist/assets/ScreenChecklistUnidad-DU8uAt_E.js     8.41 kB │ gzip:  3.16 kB
+dist/assets/ScreenRequisiciones-O72HTYzU.js       8.57 kB │ gzip:  2.81 kB
+dist/assets/ScreenMantenimiento-5MvbOVCf.js       8.65 kB │ gzip:  2.59 kB
+dist/assets/GastosScreenBase-CYmsLPW5.js          8.68 kB │ gzip:  2.72 kB
+dist/assets/ScreenChecklist-BzNZbyFj.js           8.74 kB │ gzip:  3.18 kB
+dist/assets/ScreenSupervision-wEI9Lqbc.js         8.86 kB │ gzip:  2.96 kB
+dist/assets/ScreenMerma-BXtZKnxC.js               9.19 kB │ gzip:  2.83 kB
+dist/assets/ScreenEnergia-Dbxs275j.js             9.32 kB │ gzip:  2.62 kB
+dist/assets/ScreenTransformacion-B6xj0p0K.js      9.58 kB │ gzip:  3.38 kB
+dist/assets/ScreenParos-CfKVpk_E.js               9.85 kB │ gzip:  2.79 kB
+dist/assets/ScreenGastosHistorial-Cx3J1Qh1.js     9.99 kB │ gzip:  3.18 kB
+dist/assets/ScreenMiTurno-DxhE5nui.js            10.53 kB │ gzip:  3.41 kB
+dist/assets/ScreenPOS-BY49hsum.js                12.50 kB │ gzip:  3.49 kB
+dist/assets/vendor-hz6tvZh_.js                  160.11 kB │ gzip: 52.29 kB
+dist/assets/index-CbXunxgK.js                   188.18 kB │ gzip: 41.52 kB
+✓ built in 616ms
