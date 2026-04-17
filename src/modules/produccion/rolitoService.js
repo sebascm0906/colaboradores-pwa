@@ -252,25 +252,60 @@ export function getCycleDiagnostics(cycle) {
 // ── LIVE: KPI Computation ────────────────────────────────────────────────────
 
 function computeKPIs(shift, cycles, packing) {
+  // Backend-first estricto: las metricas oficiales del turno vienen de
+  // gf.production.shift (total_kg_produced, total_kg_packed, total_scrap_kg,
+  // yield_pct). Si el backend no las ha agregado todavia, se EXPONEN como
+  // null con flag `backendMissing` para que la UI pinte "—" explicito y
+  // marque la metrica como no-oficial. El frontend NO sustituye silenciosamente.
   const completedCycles = cycles.filter(c => c.state === 'dumped')
-  const totalKgProduced = shift.total_kg_produced || completedCycles.reduce((s, c) => s + (c.kg_dumped || 0), 0)
-  const totalKgPacked = packing.reduce((s, p) => s + (p.total_kg || 0), 0)
-  const mermaKg = Math.max(0, totalKgProduced - totalKgPacked)
-  const mermaPct = totalKgProduced > 0 ? ((mermaKg / totalKgProduced) * 100).toFixed(1) : '0'
 
-  // Expected cycles based on shift duration (rough estimate: 12h / 30min = 24)
-  const expectedCycles = shift.x_cycles_expected || 24
+  const hasBackendProduced = shift?.total_kg_produced !== undefined && shift?.total_kg_produced !== null
+  const hasBackendPacked = shift?.total_kg_packed !== undefined && shift?.total_kg_packed !== null
+  const hasBackendScrap = shift?.total_scrap_kg !== undefined && shift?.total_scrap_kg !== null
+  const hasBackendYield = shift?.yield_pct !== undefined && shift?.yield_pct !== null
+
+  const totalKgProduced = hasBackendProduced ? Number(shift.total_kg_produced) : null
+  const totalKgPacked = hasBackendPacked ? Number(shift.total_kg_packed) : null
+  const mermaKg = hasBackendScrap ? Number(shift.total_scrap_kg) : null
+  const yieldPct = hasBackendYield ? Number(shift.yield_pct) : null
+
+  // mermaPct derivada de backend (no recalculada en frontend).
+  // Si falta merma o produccion, se marca null.
+  let mermaPct = null
+  if (mermaKg !== null && totalKgProduced !== null && totalKgProduced > 0) {
+    mermaPct = parseFloat(((mermaKg / totalKgProduced) * 100).toFixed(1))
+  }
+
+  // mermaExceeded: derivado de yield_pct (autoridad backend).
+  const mermaExceeded = yieldPct !== null && yieldPct > 0 && yieldPct < 99
+
+  // Expected cycles: solo si backend lo sabe. Nunca inferimos.
+  const expectedCycles = Number(shift?.x_cycles_expected) || null
+
+  // Estimado visual separado (prefijado como NO oficial):
+  // util cuando los totales backend aun no se agregan — NO sustituye metricas.
+  const estimated = {
+    producedKg: completedCycles.reduce((s, c) => s + (c.kg_dumped || 0), 0),
+    packedKg: packing.reduce((s, p) => s + (p.total_kg || 0), 0),
+    totalBags: packing.reduce((s, p) => s + (p.qty_bags || 0), 0),
+  }
 
   return {
     completedCycles: completedCycles.length,
     activeCycles: cycles.filter(c => c.state === 'freezing' || c.state === 'defrosting').length,
     expectedCycles,
-    totalKgProduced: Math.round(totalKgProduced),
-    totalKgPacked: Math.round(totalKgPacked),
-    mermaKg: Math.round(mermaKg),
-    mermaPct: parseFloat(mermaPct),
-    totalBags: packing.reduce((s, p) => s + (p.qty_bags || 0), 0),
-    yieldPct: shift.yield_pct || 0,
+    // Oficiales (solo backend):
+    totalKgProduced: totalKgProduced !== null ? Math.round(totalKgProduced) : null,
+    totalKgPacked: totalKgPacked !== null ? Math.round(totalKgPacked) : null,
+    mermaKg: mermaKg !== null ? Math.round(mermaKg) : null,
+    mermaPct,
+    mermaExceeded,
+    yieldPct,
+    // Flags de procedencia:
+    backendMissing: !hasBackendProduced || !hasBackendPacked || !hasBackendScrap || !hasBackendYield,
+    // Estimado visual (NO oficial, prefijo ~ en UI):
+    estimated,
+    totalBags: estimated.totalBags,
   }
 }
 
@@ -301,12 +336,19 @@ export async function markDefrost(cycleId) {
 /**
  * Marks end of defrost + dump with kg produced.
  * Transitions cycle to 'dumped'.
+ * @param {number} cycleId
+ * @param {number} kgDumped
+ * @param {object} [extra] — campos adicionales (supervisor_override, override_reason, etc.)
  */
-export async function markDump(cycleId, kgDumped) {
-  return updateCycle(cycleId, {
+export async function markDump(cycleId, kgDumped, extra) {
+  const payload = {
     defrost_end: nowDatetime(),
     kg_dumped: parseFloat(kgDumped),
-  })
+  }
+  if (extra && typeof extra === 'object') {
+    Object.assign(payload, extra)
+  }
+  return updateCycle(cycleId, payload)
 }
 
 /**
@@ -363,11 +405,12 @@ export { getScrapReasons }
  * @param {string} reason — free text description
  * @param {number} [minutes] — duration in minutes (0 if open-ended)
  */
-export async function registerDowntime(shiftId, categoryId, reason, minutes = 0) {
+export async function registerDowntime(shiftId, categoryId, reason, minutes = 0, lineId = 0) {
   const now = nowDatetime()
   return createDowntime({
     shift_id: shiftId,
     category_id: categoryId,
+    line_id: lineId || undefined,
     reason: reason || '',
     start_time: now,
     end_time: minutes > 0 ? now : false,
@@ -382,20 +425,22 @@ export async function registerDowntime(shiftId, categoryId, reason, minutes = 0)
  * @param {number} kg — kilograms lost
  * @param {string} [notes] — optional description
  */
-export async function registerScrap(shiftId, reasonId, kg, notes = '') {
+export async function registerScrap(shiftId, reasonId, kg, notes = '', lineId = 0) {
   return createScrap({
     shift_id: shiftId,
     reason_id: reasonId,
+    line_id: lineId || undefined,
     kg: parseFloat(kg) || 0,
     notes: notes || '',
   })
 }
 
 // ── LIVE: Cierre de Turno ───────────────────────────────────────────────────
-// Fields confirmed in Odoo production:
-//   x_bags_received (integer) — EXISTS on gf.production.shift
-//   x_bags_remaining (integer) — EXISTS on gf.production.shift
-//   action_close — try function call, fallback to state='done'
+// Bag reconciliation usa contrato canonico:
+//   POST /api/production/shift/bag-reconciliation
+//   Request:  { shift_id, bags_received, bags_remaining }
+//   Response: { data: { bag_reconciliation: {...} } }
+//   Campos internos x_bags_* son responsabilidad de Odoo, no del frontend.
 
 /**
  * Save bag reconciliation on the shift.

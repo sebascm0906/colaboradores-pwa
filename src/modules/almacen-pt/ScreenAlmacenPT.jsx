@@ -88,6 +88,34 @@ export default function ScreenAlmacenPT() {
       color: TOKENS.colors.warning,
       icon: 'alert',
     },
+    {
+      id: 'reconciliacion', label: 'Verificar inventario',
+      desc: 'Cuadre de produccion vs almacen',
+      route: '/produccion/reconciliacion',
+      color: TOKENS.colors.blue2,
+      icon: 'check',
+    },
+    {
+      id: 'materiales-crear', label: 'Entregar material',
+      desc: 'Bodeguero entrega insumo al turno',
+      route: '/almacen-pt/materiales/crear',
+      color: TOKENS.colors.warning,
+      icon: 'inbox',
+    },
+    {
+      id: 'materiales', label: 'Materiales del turno',
+      desc: 'Bolsas, empaques e insumos entregados',
+      route: '/almacen-pt/materiales',
+      color: TOKENS.colors.blue3,
+      icon: 'box',
+    },
+    {
+      id: 'materiales-reconcile', label: 'Reconciliar materiales',
+      desc: 'Cuadre de consumo vs sobrante',
+      route: '/almacen-pt/materiales/reconciliar',
+      color: TOKENS.colors.blue2,
+      icon: 'check',
+    },
   ]
 
   return (
@@ -184,15 +212,16 @@ export default function ScreenAlmacenPT() {
               <KpiBox label="Kg total" value={fmtKg(summary?.inventory?.total_kg || 0).replace(' kg', '')} accent={TOKENS.colors.success} typo={typo} sub="kg" />
             </div>
 
-            {/* Inventory by line */}
-            {summary?.inventory?.by_line && Object.keys(summary.inventory.by_line).length > 0 && (
+            {/* Inventario por familia operativa (ROLITO / BARRA — estructural,
+                no por ubicación física donde está el stock) */}
+            {summary?.inventory?.by_family && Object.keys(summary.inventory.by_family).length > 0 && (
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                {Object.entries(summary.inventory.by_line).map(([line, data]) => (
-                  <div key={line} style={{
+                {Object.entries(summary.inventory.by_family).map(([family, data]) => (
+                  <div key={family} style={{
                     flex: 1, padding: '10px 12px', borderRadius: TOKENS.radius.md,
                     background: TOKENS.glass.panelSoft, border: `1px solid ${TOKENS.colors.border}`,
                   }}>
-                    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>{line}</p>
+                    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>{family}</p>
                     <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0, marginTop: 4, fontWeight: 700 }}>{fmtNum(data.qty)} uds</p>
                     <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{fmtKg(data.kg)}</p>
                   </div>
@@ -280,6 +309,7 @@ function ActionCard({ action, typo, onClick }) {
     truck: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
     clock: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
     alert: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+    check: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
   }
 
   return (

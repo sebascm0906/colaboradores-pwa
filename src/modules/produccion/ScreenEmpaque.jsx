@@ -14,11 +14,11 @@ const FALLBACK_ROLITO = [
 ]
 
 const FALLBACK_BARRAS = [
-  { id: 724, name: 'Barra Grande (75KG)', weight: 75 },
-  { id: 725, name: 'Barra Chica (50KG)', weight: 50 },
-  { id: 727, name: '1/2 Barra Grande (30KG)', weight: 35 },
-  { id: 728, name: '1/2 Barra Chica (20KG)', weight: 25 },
-  { id: 726, name: '1/4 Barra Grande (12KG)', weight: 15 },
+  { id: 724, name: 'Barra Grande (75 kg)', weight: 75 },
+  { id: 725, name: 'Barra Chica (50 kg)', weight: 50 },
+  { id: 727, name: '1/2 Barra Grande (35 kg)', weight: 35 },
+  { id: 728, name: '1/2 Barra Chica (25 kg)', weight: 25 },
+  { id: 726, name: '1/4 Barra Grande (15 kg)', weight: 15 },
 ]
 
 export default function ScreenEmpaque() {
@@ -45,6 +45,7 @@ export default function ScreenEmpaque() {
   // Formulario
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [qtyBags, setQtyBags] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => { loadData() }, [])
 
@@ -74,8 +75,12 @@ export default function ScreenEmpaque() {
 
   const totalPackedKg = entries.reduce((s, e) => s + (e.total_kg || 0), 0)
 
+  // Requiere cantidad > 0 para evitar registros fantasma
+  const qtyParsed = qtyBags === '' ? 0 : parseInt(qtyBags)
+  const canSubmit = !!selectedProduct && qtyParsed > 0 && !saving
+
   async function handleSubmit() {
-    if (!selectedProduct || !qtyBags || !shift?.id) return
+    if (!selectedProduct || !qtyParsed || qtyParsed <= 0 || !shift?.id) return
     setError('')
     setSaving(true)
     try {
@@ -85,7 +90,7 @@ export default function ScreenEmpaque() {
         qty_bags: parseInt(qtyBags),
         timestamp: (() => { const d = new Date(); const p = (n) => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; })(),
       })
-      setSuccess(`${qtyBags} bolsas registradas (${totalKg} kg)`)
+      setSuccess(`${qtyBags} ${isBarras ? 'piezas' : 'bolsas'} registradas (${totalKg} kg)`)
       setQtyBags('')
       // Recargar entradas
       const ents = await getPackingEntries(shift.id).catch(() => [])
@@ -151,9 +156,30 @@ export default function ScreenEmpaque() {
 
             {/* Selección de producto */}
             <div>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>TIPO DE BOLSA</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {products.map(p => (
+              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>{isBarras ? 'TIPO DE PRODUCTO' : 'TIPO DE BOLSA'}</p>
+              {/* Buscador — visible cuando hay muchos productos */}
+              {products.length > 8 && (
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Buscar producto..."
+                  style={{
+                    width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                    color: 'white', fontSize: 14, fontWeight: 500, outline: 'none',
+                    marginBottom: 10,
+                  }}
+                />
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: products.length > 8 ? 340 : 'none', overflowY: products.length > 8 ? 'auto' : 'visible' }}>
+                {products.filter(p => {
+                  if (!searchTerm.trim()) return true
+                  // Búsqueda por palabras: todas las palabras deben coincidir
+                  const words = searchTerm.toLowerCase().split(/\s+/).filter(Boolean)
+                  const haystack = ((p.name || '') + ' ' + String(p.weight || p.kg_per_bag || '')).toLowerCase()
+                  return words.every(w => haystack.includes(w))
+                }).map(p => (
                   <button
                     key={p.id}
                     onClick={() => setSelectedProduct(p)}
@@ -180,7 +206,7 @@ export default function ScreenEmpaque() {
             {/* Cantidad de bolsas */}
             <div>
               <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
-                Cantidad de bolsas
+                {isBarras ? 'Cantidad de piezas' : 'Cantidad de bolsas'}
               </label>
               <input
                 type="number"
@@ -202,6 +228,30 @@ export default function ScreenEmpaque() {
               )}
             </div>
 
+            {/* Último registro */}
+            {success && entries.length > 0 && (() => {
+              const last = entries[entries.length - 1]
+              return (
+                <div style={{
+                  padding: '12px 16px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, fontWeight: 700 }}>
+                    {success}
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+                      {last.product_name || last.product_id?.[1] || 'Producto'}
+                    </span>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, fontWeight: 600 }}>
+                      {last.qty_bags} {isBarras ? 'pzas' : 'bolsas'} &middot; {(last.total_kg || 0).toFixed(1)} kg
+                    </span>
+                  </div>
+                  {/* Placeholder: botón deshacer se puede agregar aquí */}
+                </div>
+              )
+            })()}
+
             {/* Mensajes */}
             {error && (
               <div style={{
@@ -210,7 +260,7 @@ export default function ScreenEmpaque() {
                 color: TOKENS.colors.error, ...typo.caption, textAlign: 'center',
               }}>{error}</div>
             )}
-            {success && (
+            {success && !entries.length && (
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md,
                 background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
@@ -221,15 +271,15 @@ export default function ScreenEmpaque() {
             {/* Botón registrar */}
             <button
               onClick={handleSubmit}
-              disabled={!selectedProduct || !qtyBags || saving}
+              disabled={!canSubmit}
               style={{
                 width: '100%', padding: '14px',
                 borderRadius: TOKENS.radius.lg,
-                background: selectedProduct && qtyBags ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: selectedProduct && qtyBags ? 'white' : TOKENS.colors.textLow,
+                background: canSubmit ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+                color: canSubmit ? 'white' : TOKENS.colors.textLow,
                 fontSize: 15, fontWeight: 600,
                 opacity: saving ? 0.6 : 1,
-                boxShadow: selectedProduct && qtyBags ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
+                boxShadow: canSubmit ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
               }}
             >
               {saving ? 'Guardando...' : 'Registrar Empaque'}
@@ -251,7 +301,7 @@ export default function ScreenEmpaque() {
                           {e.product_name || e.product_id?.[1] || 'Bolsa'}
                         </p>
                         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                          {e.qty_bags} bolsas
+                          {e.qty_bags} {isBarras ? 'pzas' : 'bolsas'}
                         </p>
                       </div>
                       <span style={{ ...typo.body, color: TOKENS.colors.success, fontWeight: 700 }}>

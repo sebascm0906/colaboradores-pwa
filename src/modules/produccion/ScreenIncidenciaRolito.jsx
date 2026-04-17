@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
+import { api } from '../../lib/api'
 import { getMyShift } from './api'
 import {
   registerDowntime,
@@ -44,6 +45,10 @@ export default function ScreenIncidenciaRolito() {
   const [downtimeCategories, setDowntimeCategories] = useState([])
   const [scrapReasons, setScrapReasons] = useState([])
 
+  // Lines for line_id (required by backend for scrap/downtime)
+  const [lines, setLines] = useState([])
+  const [lineId, setLineId] = useState('')
+
   // Form — mode: 'paro' or 'merma'
   const [mode, setMode] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState(null) // downtime category or scrap reason
@@ -55,10 +60,27 @@ export default function ScreenIncidenciaRolito() {
       getMyShift().catch(() => null),
       getDowntimeCategories().catch(() => FALLBACK_DOWNTIME_CATS),
       getScrapReasons().catch(() => FALLBACK_SCRAP_REASONS),
-    ]).then(([s, cats, reasons]) => {
+      api('GET', '/api/production/lines?plant_id=76').catch(() => []),
+    ]).then(([s, cats, reasons, linesRes]) => {
       setShift(s)
       setDowntimeCategories(cats?.length ? cats : FALLBACK_DOWNTIME_CATS)
       setScrapReasons(reasons?.length ? reasons : FALLBACK_SCRAP_REASONS)
+      // Extraer array de lineas de la respuesta (varias formas posibles)
+      const items = Array.isArray(linesRes) ? linesRes
+        : Array.isArray(linesRes?.lines) ? linesRes.lines
+        : Array.isArray(linesRes?.data?.lines) ? linesRes.data.lines
+        : Array.isArray(linesRes?.items) ? linesRes.items
+        : []
+      setLines(items)
+      // Auto-select si solo hay 1 linea de produccion (Barras/Rolito)
+      // Excluir lineas de test (Codex) que tienen type='rolito' pero no son reales
+      const prodLines = items.filter(l => {
+        const n = String(l.type || l.name || '').toLowerCase()
+        const nm = String(l.name || '').toLowerCase()
+        return (n.includes('barra') || n.includes('rolito'))
+          && !nm.includes('codex') && !nm.includes('test')
+      })
+      if (prodLines.length === 1) setLineId(String(prodLines[0].id))
     }).finally(() => setLoading(false))
   }, [])
 
@@ -66,16 +88,18 @@ export default function ScreenIncidenciaRolito() {
 
   async function handleSubmit() {
     if (!selectedCategory || !shift?.id) return
+    if (!lineId) { setError('Selecciona una línea'); return }
     setSaving(true)
     setError('')
 
     try {
+      const lid = Number(lineId) || 0
       if (isMerma) {
         const kg = parseFloat(kgLost)
         if (!kg || kg <= 0) { setError('Ingresa los kg perdidos'); setSaving(false); return }
-        await registerScrap(shift.id, selectedCategory.id, kg, notes || '')
+        await registerScrap(shift.id, selectedCategory.id, kg, notes || '', lid)
       } else {
-        await registerDowntime(shift.id, selectedCategory.id, notes || selectedCategory.name)
+        await registerDowntime(shift.id, selectedCategory.id, notes || selectedCategory.name, 0, lid)
       }
       setSuccess('Incidencia registrada')
       setMode(null)
@@ -146,6 +170,39 @@ export default function ScreenIncidenciaRolito() {
                 </button>
               ))}
             </div>
+
+            {/* Line selector — required by backend */}
+            {mode && lines.length > 0 && (
+              <div>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>LÍNEA</p>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {lines.filter(l => {
+                    const n = String(l.type || l.name || '').toLowerCase()
+                    const nm = String(l.name || '').toLowerCase()
+                    return (n.includes('barra') || n.includes('rolito'))
+                      && !nm.includes('codex') && !nm.includes('test')
+                  }).map(l => {
+                    const isSelected = String(l.id) === String(lineId)
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => setLineId(String(l.id))}
+                        style={{
+                          flex: 1, padding: '12px 10px', borderRadius: TOKENS.radius.md,
+                          background: isSelected ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surface,
+                          border: `2px solid ${isSelected ? 'rgba(43,143,224,0.4)' : TOKENS.colors.border}`,
+                          textAlign: 'center',
+                        }}
+                      >
+                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600, fontSize: 14 }}>
+                          {l.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Category/Reason selection */}
             {mode === 'paro' && (

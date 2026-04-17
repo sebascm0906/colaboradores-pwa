@@ -19,6 +19,7 @@ import {
   CYCLE_STATES,
   EXPECTED_KG_PER_CYCLE,
 } from './rolitoService'
+import OpeningStateBanner from './OpeningStateBanner'
 
 const SHIFT_STATES = {
   draft:       { label: 'Pendiente',   color: TOKENS.colors.textMuted },
@@ -186,6 +187,9 @@ export default function ScreenTurnoRolito() {
               </div>
             </div>
 
+            {/* Opening State — qué recibe este turno del anterior */}
+            <OpeningStateBanner shiftId={shift?.id} typo={typo} />
+
             {/* ── ALERTS (diagnostics) ─────────────────────────── */}
             {diagnostics && diagnostics.map((d, i) => (
               <div key={i} style={{
@@ -214,7 +218,7 @@ export default function ScreenTurnoRolito() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
                       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 4 }}>
-                        CICLO #{activeCycle.cycle_number || '?'}
+                        PRODUCCIÓN #{activeCycle.cycle_number || '?'}
                       </p>
                       <p style={{ ...typo.h2, color: CYCLE_STATES[activeCycle.state]?.color || TOKENS.colors.text, margin: 0 }}>
                         {progress.phaseLabel}
@@ -254,12 +258,12 @@ export default function ScreenTurnoRolito() {
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>CICLO</p>
+                  <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 6 }}>PRODUCCIÓN</p>
                   <p style={{ ...typo.h2, color: TOKENS.colors.textMuted, margin: 0 }}>
-                    Sin ciclo en curso
+                    Listo para producir
                   </p>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textLow, marginTop: 4 }}>
-                    Presiona el boton de abajo para iniciar
+                    Presiona abajo para iniciar
                   </p>
                 </div>
               )}
@@ -313,14 +317,31 @@ export default function ScreenTurnoRolito() {
               <>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>HOY</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <KpiCard label="Ciclos" value={`${kpis.completedCycles}/${kpis.expectedCycles}`}
+                  <KpiCard
+                    label="Ciclos"
+                    value={kpis.expectedCycles ? `${kpis.completedCycles}/${kpis.expectedCycles}` : `${kpis.completedCycles}`}
                     accent={kpis.completedCycles > 0 ? TOKENS.colors.blue2 : TOKENS.colors.textMuted} typo={typo} />
-                  <KpiCard label="Producido" value={`${kpis.totalKgProduced} kg`}
+                  <KpiCard
+                    label="Producido"
+                    value={kpis.totalKgProduced !== null
+                      ? `${kpis.totalKgProduced} kg`
+                      : (kpis.estimated?.producedKg ? `~${Math.round(kpis.estimated.producedKg)} kg` : '—')}
+                    hint={kpis.totalKgProduced === null && kpis.estimated?.producedKg ? 'estimado' : null}
                     accent={TOKENS.colors.blue2} typo={typo} />
-                  <KpiCard label="Empacado" value={`${kpis.totalKgPacked} kg`}
+                  <KpiCard
+                    label="Empacado"
+                    value={kpis.totalKgPacked !== null
+                      ? `${kpis.totalKgPacked} kg`
+                      : (kpis.estimated?.packedKg ? `~${Math.round(kpis.estimated.packedKg)} kg` : '—')}
+                    hint={kpis.totalKgPacked === null && kpis.estimated?.packedKg ? 'estimado' : null}
                     accent={TOKENS.colors.success} typo={typo} />
-                  <KpiCard label="Merma" value={`${kpis.mermaKg} kg (${kpis.mermaPct}%)`}
-                    accent={kpis.mermaPct > 5 ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
+                  <KpiCard
+                    label="Merma"
+                    value={kpis.mermaKg !== null && kpis.mermaPct !== null
+                      ? `${kpis.mermaKg} kg (${kpis.mermaPct}%)`
+                      : '—'}
+                    hint={kpis.mermaKg === null ? 'sin dato backend' : null}
+                    accent={kpis.mermaExceeded ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
                 </div>
               </>
             )}
@@ -328,26 +349,26 @@ export default function ScreenTurnoRolito() {
             {/* ── ACTIONS GRID ─────────────────────────────────── */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>ACCIONES</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <ActionButton label="Nuevo Ciclo" icon="\u23F1" color={TOKENS.colors.blue2}
+              <ActionButton label="Producir" icon={'\u23F1'} color={TOKENS.colors.blue2}
                 onClick={() => navigate('/produccion/ciclo')} typo={typo}
                 disabled={!!activeCycle}
-                disabledMsg={activeCycle ? 'Hay ciclo activo' : ''} />
-              <ActionButton label="Empaque" icon="\uD83D\uDCE6" color={TOKENS.colors.success}
+                disabledMsg={activeCycle ? 'Hay producción activa' : ''} />
+              <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS.colors.success}
                 onClick={() => navigate('/produccion/empaque')} typo={typo} />
-              <ActionButton label="Incidencia" icon="\u26A0" color={TOKENS.colors.warning}
+              <ActionButton label="Reportar problema" icon={'\u26A0'} color={TOKENS.colors.warning}
                 onClick={() => navigate('/produccion/incidencia')} typo={typo} />
-              <ActionButton label="Checklist" icon="\u2611" color="#a78bfa"
+              <ActionButton label="Checklist" icon={'\u2611'} color="#a78bfa"
                 onClick={() => navigate('/produccion/checklist')} typo={typo} />
-              <ActionButton label="Corte" icon="\uD83D\uDCCA" color={TOKENS.colors.blue3}
+              <ActionButton label="Resumen" icon={'\uD83D\uDCCA'} color={TOKENS.colors.blue3}
                 onClick={() => navigate('/produccion/corte')} typo={typo} />
-              <ActionButton label="Cerrar Turno" icon="\uD83D\uDD12" color={TOKENS.colors.textMuted}
+              <ActionButton label="Cerrar Turno" icon={'\uD83D\uDD12'} color={TOKENS.colors.textMuted}
                 onClick={() => navigate('/produccion/cierre')} typo={typo} />
             </div>
 
             {/* ── RECENT CYCLES ─────────────────────────────────── */}
             {cycles.length > 0 && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>CICLOS RECIENTES</p>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 10 }}>ÚLTIMAS PRODUCCIONES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {cycles.slice(-5).reverse().map((c, i) => {
                     const st = CYCLE_STATES[c.state] || CYCLE_STATES.freezing
@@ -369,7 +390,7 @@ export default function ScreenTurnoRolito() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
-                            Ciclo {c.cycle_number} &middot; {timeStr}
+                            Prod. {c.cycle_number} &middot; {timeStr}
                           </p>
                           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 1 }}>
                             {c.state === 'dumped' ? `${c.kg_dumped || 0} kg` : st.label}
@@ -397,7 +418,7 @@ export default function ScreenTurnoRolito() {
   )
 }
 
-function KpiCard({ label, value, accent, typo }) {
+function KpiCard({ label, value, accent, typo, hint }) {
   return (
     <div style={{
       padding: '12px', borderRadius: TOKENS.radius.md,
@@ -407,6 +428,11 @@ function KpiCard({ label, value, accent, typo }) {
       <p style={{ fontSize: 16, fontWeight: 700, color: accent || TOKENS.colors.text, margin: 0, letterSpacing: '-0.02em' }}>
         {value}
       </p>
+      {hint && (
+        <p style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: 0, marginTop: 2, fontStyle: 'italic' }}>
+          {hint}
+        </p>
+      )}
     </div>
   )
 }

@@ -62,25 +62,15 @@ export default function ScreenMermaPT() {
       ])
       if (inv.status === 'rejected') logScreenError('ScreenMermaPT', 'getInventory', inv.reason)
       if (hist.status === 'rejected') logScreenError('ScreenMermaPT', 'getScrapHistory', hist.reason)
-      // Dedupe inventory by product_id (PT has multiple locations)
+      // Inventario ya deduplicado + MP filtrado por el BFF canonico.
       const rawInv = inv.status === 'fulfilled' && Array.isArray(inv.value) ? inv.value : []
-      const byProduct = {}
-      for (const item of rawInv) {
-        const pid = item.product_id?.[0] || item.product_id || item.id
-        const name = item.product || item.product_name || ''
-        if (!byProduct[pid]) {
-          byProduct[pid] = {
-            product_id: pid,
-            product: name,
-            quantity: 0,
-            weight: item.weight_per_unit || 1,
-            total_kg: 0,
-          }
-        }
-        byProduct[pid].quantity += item.quantity || 0
-        byProduct[pid].total_kg += item.total_kg || 0
-      }
-      setInventory(Object.values(byProduct))
+      setInventory(rawInv.map((item) => ({
+        product_id: item.product_id,
+        product: item.product_name,
+        quantity: Number(item.quantity) || 0,
+        weight: Number(item.weight_per_unit) || 1,
+        total_kg: Number(item.total_kg) || 0,
+      })))
       setHistory(hist.status === 'fulfilled' && Array.isArray(hist.value) ? hist.value : [])
     } catch (e) { logScreenError('ScreenMermaPT', 'loadData', e) }
     finally { setLoadingInit(false) }

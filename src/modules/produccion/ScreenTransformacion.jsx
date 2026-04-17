@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getTransformationProducts, createTransformation } from './api'
+import { validateTransformBalance } from './productionRules'
 
-// Productos de salida para transformación de barras
+// Productos de salida para fraccionar barras
 const FALLBACK_OUTPUT_PRODUCTS = [
-  { id: 724, name: 'Barra Grande (75KG)', weight: 75 },
-  { id: 725, name: 'Barra Chica (50KG)', weight: 50 },
-  { id: 727, name: '1/2 Barra Grande (30KG)', weight: 35 },
-  { id: 728, name: '1/2 Barra Chica (20KG)', weight: 25 },
-  { id: 726, name: '1/4 Barra Grande (12KG)', weight: 15 },
+  { id: 724, name: 'Barra Grande (75 kg)', weight: 75 },
+  { id: 725, name: 'Barra Chica (50 kg)', weight: 50 },
+  { id: 727, name: '1/2 Barra Grande (35 kg)', weight: 35 },
+  { id: 728, name: '1/2 Barra Chica (25 kg)', weight: 25 },
+  { id: 726, name: '1/4 Barra Grande (15 kg)', weight: 15 },
 ]
 
 export default function ScreenTransformacion() {
@@ -68,21 +69,27 @@ export default function ScreenTransformacion() {
     setOutputLines(prev => prev.filter((_, i) => i !== idx))
   }
 
-  const inputKg = inputQty ? parseFloat(inputQty) * (FALLBACK_OUTPUT_PRODUCTS.find(p => p.id === inputProduct)?.weight || 75) : 0
+  const inputKg = (Number(inputQty) || 0) * (FALLBACK_OUTPUT_PRODUCTS.find(p => p.id === inputProduct)?.weight || 75)
   const outputKg = outputLines.reduce((sum, l) => {
     const prod = FALLBACK_OUTPUT_PRODUCTS.find(p => p.id === parseInt(l.product_id))
-    return sum + (prod ? parseFloat(l.qty || 0) * prod.weight : 0)
+    return sum + (prod ? (Number(l.qty) || 0) * prod.weight : 0)
   }, 0)
+  const balance = validateTransformBalance(inputKg, outputKg, Number(scrapKg) || 0)
 
   async function handleSubmit() {
     if (!inputQty || !shift?.id) return
+    // Bloqueo: balance critico no permite registro
+    if (balance.level === 'error') {
+      setError('Los kilos de salida + merma no cuadran con la entrada. Revisa las cantidades.')
+      return
+    }
     setError('')
     setSaving(true)
     try {
       await createTransformation({
         shift_id: shift.id,
         input_product_id: inputProduct,
-        input_qty: parseInt(inputQty),
+        input_qty: parseFloat(inputQty) || 0,
         output_lines: outputLines.filter(l => l.product_id && l.qty).map(l => ({
           product_id: parseInt(l.product_id),
           qty: parseFloat(l.qty),
@@ -93,7 +100,7 @@ export default function ScreenTransformacion() {
         room_temp: parseFloat(roomTemp) || 0,
         notes,
       })
-      setSuccess('Transformación registrada')
+      setSuccess('Enviado a almacén')
       setInputQty('')
       setOutputLines([{ product_id: null, qty: '' }])
       setScrapKg('')
@@ -135,7 +142,7 @@ export default function ScreenTransformacion() {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Transformación de Barras</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Pasar a Almacén</span>
         </div>
 
         {loading ? (
@@ -146,7 +153,7 @@ export default function ScreenTransformacion() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Entrada */}
-            <SectionLabel text="ENTRADA (BARRAS A FRACCIONAR)" typo={typo} />
+            <SectionLabel text="LO QUE TIENES (ENTRADA)" typo={typo} />
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 2 }}>
                 <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Producto</label>
@@ -155,8 +162,8 @@ export default function ScreenTransformacion() {
                   onChange={e => setInputProduct(parseInt(e.target.value))}
                   style={selectStyle}
                 >
-                  <option value={724}>Barra Grande (75KG)</option>
-                  <option value={725}>Barra Chica (50KG)</option>
+                  <option value={724}>Barra Grande (75 kg)</option>
+                  <option value={725}>Barra Chica (50 kg)</option>
                 </select>
               </div>
               <div style={{ flex: 1 }}>
@@ -167,12 +174,12 @@ export default function ScreenTransformacion() {
             </div>
             {inputKg > 0 && (
               <p style={{ ...typo.body, color: TOKENS.colors.blue2, textAlign: 'center', margin: 0, fontWeight: 600 }}>
-                Entrada: {inputKg.toFixed(0)} kg
+                Disponible: {inputKg.toFixed(0)} kg
               </p>
             )}
 
             {/* Salida */}
-            <SectionLabel text="SALIDA (PRODUCTOS FRACCIONADOS)" typo={typo} />
+            <SectionLabel text="CANTIDAD A PASAR (SALIDA)" typo={typo} />
             {outputLines.map((line, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <div style={{ flex: 2 }}>
@@ -208,12 +215,39 @@ export default function ScreenTransformacion() {
             </button>
             {outputKg > 0 && (
               <p style={{ ...typo.body, color: TOKENS.colors.success, textAlign: 'center', margin: 0, fontWeight: 600 }}>
-                Salida: {outputKg.toFixed(0)} kg
+                A pasar: {outputKg.toFixed(0)} kg
               </p>
             )}
 
+            {/* Balance en vivo entrada vs salida + merma */}
+            {inputKg > 0 && (outputKg > 0 || scrapKg) && (
+              <div style={{
+                padding: 12, borderRadius: TOKENS.radius.md, marginTop: 4,
+                background: balance.level === 'error' ? 'rgba(239,68,68,0.08)'
+                  : balance.level === 'warning' ? 'rgba(245,158,11,0.08)'
+                  : 'rgba(34,197,94,0.08)',
+                border: `1px solid ${
+                  balance.level === 'error' ? 'rgba(239,68,68,0.25)'
+                  : balance.level === 'warning' ? 'rgba(245,158,11,0.25)'
+                  : 'rgba(34,197,94,0.25)'
+                }`,
+              }}>
+                <p style={{
+                  ...typo.caption, margin: 0, fontWeight: 700, textAlign: 'center',
+                  color: balance.level === 'error' ? TOKENS.colors.error
+                    : balance.level === 'warning' ? TOKENS.colors.warning
+                    : TOKENS.colors.success,
+                }}>
+                  BALANCE: {balance.message}
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0', textAlign: 'center' }}>
+                  Disponible {inputKg.toFixed(0)} kg = A pasar {outputKg.toFixed(0)} kg + Merma {(parseFloat(scrapKg) || 0).toFixed(0)} kg
+                </p>
+              </div>
+            )}
+
             {/* Merma y tiempos */}
-            <SectionLabel text="CONTROL DE PROCESO" typo={typo} />
+            <SectionLabel text="DATOS ADICIONALES" typo={typo} />
             <div style={{ display: 'flex', gap: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Merma (kg)</label>
@@ -246,16 +280,18 @@ export default function ScreenTransformacion() {
             {success && <Msg type="success" text={success} />}
 
             {/* Submit */}
-            <button onClick={handleSubmit} disabled={!inputQty || saving}
+            <button onClick={handleSubmit} disabled={!inputQty || saving || balance.level === 'error'}
               style={{
                 width: '100%', padding: '14px', borderRadius: TOKENS.radius.lg,
-                background: inputQty ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: inputQty ? 'white' : TOKENS.colors.textLow,
+                background: (inputQty && balance.level !== 'error')
+                  ? 'linear-gradient(90deg, #15499B, #2B8FE0)'
+                  : TOKENS.colors.surface,
+                color: (inputQty && balance.level !== 'error') ? 'white' : TOKENS.colors.textLow,
                 fontSize: 15, fontWeight: 600, opacity: saving ? 0.6 : 1,
-                boxShadow: inputQty ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
+                boxShadow: (inputQty && balance.level !== 'error') ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
                 marginTop: 8,
               }}>
-              {saving ? 'Guardando...' : 'Registrar Transformación'}
+              {saving ? 'Guardando...' : balance.level === 'error' ? 'Los kilos no cuadran' : 'Confirmar envío a almacén'}
             </button>
 
             <div style={{ height: 24 }} />

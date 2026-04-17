@@ -335,6 +335,11 @@ const ADMIN_EXTRA_ROLES = [
   { role: 'operador_torres',      label: 'Operador Torres',        desc: 'Torres de Control (sin empleado asignado)' },
 ];
 
+// UTF-8 safe base64 — btoa only handles Latin1, so encode through URI first
+function b64utf8(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
 function buildMockSession(emp) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -347,8 +352,8 @@ function buildMockSession(emp) {
     iat: now,
     _bypass: true,
   };
-  const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }));
-  const body = btoa(JSON.stringify(payload));
+  const header = b64utf8(JSON.stringify({ alg: 'none', typ: 'JWT' }));
+  const body = b64utf8(JSON.stringify(payload));
   const session_token = `${header}.${body}.bypass`;
   return { ...payload, session_token };
 }

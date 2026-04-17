@@ -24,6 +24,7 @@ export const NAV_ITEMS = [
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      status: 'live' },
   { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             status: 'live' },
+  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', status: 'live' },
 ]
 
 export default function AdminShell({

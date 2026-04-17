@@ -19,18 +19,24 @@ const ScreenCiclo           = lazy(() => import('./modules/produccion/ScreenCicl
 const ScreenEmpaque         = lazy(() => import('./modules/produccion/ScreenEmpaque'))
 const ScreenCorte           = lazy(() => import('./modules/produccion/ScreenCorte'))
 const ScreenTransformacion  = lazy(() => import('./modules/produccion/ScreenTransformacion'))
+const ScreenTanqueLista     = lazy(() => import('./modules/produccion/ScreenTanqueLista'))
+const ScreenTanque          = lazy(() => import('./modules/produccion/ScreenTanque'))
 // Producción V2 — Rolito
 const ScreenIncidenciaRolito = lazy(() => import('./modules/produccion/ScreenIncidenciaRolito'))
 const ScreenCierreRolito     = lazy(() => import('./modules/produccion/ScreenCierreRolito'))
+const ScreenHandoverTurno    = lazy(() => import('./modules/produccion/ScreenHandoverTurno'))
+const ScreenReconciliacionPT = lazy(() => import('./modules/produccion/ScreenReconciliacionPT'))
 // Almacén PT V2
 const ScreenAlmacenPT       = lazy(() => import('./modules/almacen-pt/ScreenAlmacenPT'))
 const ScreenRecepcion       = lazy(() => import('./modules/almacen-pt/ScreenRecepcion'))
 const ScreenInventarioPT    = lazy(() => import('./modules/almacen-pt/ScreenInventarioPT'))
 const ScreenTraspasoPT      = lazy(() => import('./modules/almacen-pt/ScreenTraspasoPT'))
-const ScreenDespacho        = lazy(() => import('./modules/almacen-pt/ScreenDespacho'))
-const ScreenHistorialPT     = lazy(() => import('./modules/almacen-pt/ScreenHistorialPT'))
 const ScreenHandoverPT      = lazy(() => import('./modules/almacen-pt/ScreenHandoverPT'))
 const ScreenMermaPT         = lazy(() => import('./modules/almacen-pt/ScreenMermaPT'))
+const ScreenMaterialesIssue    = lazy(() => import('./modules/almacen-pt/ScreenMaterialesIssue'))
+const ScreenMaterialesReport   = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReport'))
+const ScreenMaterialesReconcile = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReconcile'))
+const ScreenMaterialesCrearIssue = lazy(() => import('./modules/almacen-pt/ScreenMaterialesCrearIssue'))
 // Supervisión
 const ScreenSupervision     = lazy(() => import('./modules/supervision/ScreenSupervision'))
 const ScreenParos           = lazy(() => import('./modules/supervision/ScreenParos'))
@@ -48,6 +54,8 @@ const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisici
 const ScreenLiquidaciones   = lazy(() => import('./modules/admin/ScreenLiquidaciones'))
 const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPrima'))
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
+const ScreenMaterialesValidate = lazy(() => import('./modules/admin/ScreenMaterialesValidate'))
+const ScreenMaterialesResolverRejected = lazy(() => import('./modules/admin/ScreenMaterialesResolverRejected'))
 // Entregas V1 (kept for reference, replaced by V2)
 const ScreenEntregas        = lazy(() => import('./modules/entregas/ScreenEntregas'))
 const ScreenValidarTicket   = lazy(() => import('./modules/entregas/ScreenValidarTicket'))
@@ -227,18 +235,24 @@ export default function App() {
             <Route path="/produccion/empaque" element={<PrivateRoute><ScreenEmpaque /></PrivateRoute>} />
             <Route path="/produccion/corte" element={<PrivateRoute><ScreenCorte /></PrivateRoute>} />
             <Route path="/produccion/transformacion" element={<PrivateRoute><ScreenTransformacion /></PrivateRoute>} />
+            <Route path="/produccion/tanque" element={<PrivateRoute><ScreenTanqueLista /></PrivateRoute>} />
+            <Route path="/produccion/tanque/:machineId" element={<PrivateRoute><ScreenTanque /></PrivateRoute>} />
             <Route path="/produccion/incidencia" element={<PrivateRoute><ScreenIncidenciaRolito /></PrivateRoute>} />
             <Route path="/produccion/cierre" element={<PrivateRoute><ScreenCierreRolito /></PrivateRoute>} />
+            <Route path="/produccion/handover" element={<PrivateRoute><ScreenHandoverTurno /></PrivateRoute>} />
+            <Route path="/produccion/reconciliacion" element={<PrivateRoute><ScreenReconciliacionPT /></PrivateRoute>} />
 
             {/* ── Almacén PT V2 ────────────────────────────────────────── */}
             <Route path="/almacen-pt" element={<PrivateRoute><ScreenAlmacenPT /></PrivateRoute>} />
             <Route path="/almacen-pt/recepcion" element={<PrivateRoute><ScreenRecepcion /></PrivateRoute>} />
             <Route path="/almacen-pt/inventario" element={<PrivateRoute><ScreenInventarioPT /></PrivateRoute>} />
             <Route path="/almacen-pt/traspaso" element={<PrivateRoute><ScreenTraspasoPT /></PrivateRoute>} />
-            <Route path="/almacen-pt/despacho" element={<PrivateRoute><ScreenDespacho /></PrivateRoute>} />
-            <Route path="/almacen-pt/historial" element={<PrivateRoute><ScreenHistorialPT /></PrivateRoute>} />
             <Route path="/almacen-pt/handover" element={<PrivateRoute><ScreenHandoverPT /></PrivateRoute>} />
             <Route path="/almacen-pt/merma" element={<PrivateRoute><ScreenMermaPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/materiales" element={<PrivateRoute><ScreenMaterialesIssue /></PrivateRoute>} />
+            <Route path="/almacen-pt/materiales/crear" element={<PrivateRoute><ScreenMaterialesCrearIssue /></PrivateRoute>} />
+            <Route path="/almacen-pt/materiales/report/:issueId" element={<PrivateRoute><ScreenMaterialesReport /></PrivateRoute>} />
+            <Route path="/almacen-pt/materiales/reconciliar" element={<PrivateRoute><ScreenMaterialesReconcile /></PrivateRoute>} />
 
             {/* ── Supervisión Producción ───────────────────────────────── */}
             <Route path="/supervision" element={<PrivateRoute><ScreenSupervision /></PrivateRoute>} />
@@ -258,6 +272,8 @@ export default function App() {
             <Route path="/admin/liquidaciones" element={<PrivateRoute><ScreenLiquidaciones /></PrivateRoute>} />
             <Route path="/admin/materia-prima" element={<PrivateRoute><ScreenMateriaPrima /></PrivateRoute>} />
             <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
+            <Route path="/admin/materiales/validar" element={<PrivateRoute><ScreenMaterialesValidate /></PrivateRoute>} />
+            <Route path="/admin/materiales/resolver-rechazo" element={<PrivateRoute><ScreenMaterialesResolverRejected /></PrivateRoute>} />
 
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
             {/* Entregas V2 — flujo guiado */}

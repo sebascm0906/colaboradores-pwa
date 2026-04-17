@@ -32,13 +32,23 @@ export default function ScreenChecklist() {
       if (!shift?.id) { setError('Sin turno activo'); return }
       const data = await getChecklist(shift.id)
       setChecklist(data)
-      setChecks((data?.checks || []).map(c => ({
-        ...c,
-        localValue: c.passed != null ? c.result_bool : undefined,
-        localNumeric: c.result_numeric || '',
-        localText: c.result_text || '',
-        saved: c.passed != null,
-      })))
+      setChecks((data?.checks || []).map(c => {
+        // Determine if the check was already answered in a real sense.
+        // A fresh check has result_bool=false, result_numeric=0, result_text=''; don't mark those as saved.
+        const hasReal =
+          (c.check_type === 'yes_no' && c.result_bool === true) ||
+          (c.check_type === 'numeric' && Number(c.result_numeric) !== 0) ||
+          (c.check_type === 'text' && !!(c.result_text || '').trim()) ||
+          (c.check_type === 'photo' && !!c.result_photo)
+        return {
+          ...c,
+          localValue: c.check_type === 'yes_no' ? (hasReal ? true : undefined) : undefined,
+          localNumeric: c.result_numeric ? String(c.result_numeric) : '',
+          localText: c.result_text || '',
+          hasPhoto: !!c.result_photo,
+          saved: hasReal,
+        }
+      }))
     } catch (e) {
       logScreenError('ScreenChecklist', 'loadChecklist', e)
       setError('No se pudo cargar el checklist')
@@ -51,12 +61,16 @@ export default function ScreenChecklist() {
     setChecks(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value, saved: false } : c))
   }
 
-  async function saveCheck(idx) {
-    const c = checks[idx]
+  async function saveCheck(idx, overrides = null) {
+    // Read latest state via functional setChecks — avoids stale closure when called from setTimeout.
+    let snapshot = null
+    setChecks(prev => { snapshot = prev; return prev })
+    const c = { ...(snapshot?.[idx] || checks[idx]), ...(overrides || {}) }
+    if (!c || !c.id) return
     const data = {}
-    if (c.check_type === 'yes_no') data.result_bool = c.localValue
-    if (c.check_type === 'numeric') data.result_numeric = parseFloat(c.localNumeric)
-    if (c.check_type === 'text') data.result_text = c.localText
+    if (c.check_type === 'yes_no') data.result_bool = !!c.localValue
+    if (c.check_type === 'numeric') data.result_numeric = parseFloat(c.localNumeric || 0)
+    if (c.check_type === 'text') data.result_text = c.localText || ''
 
     try {
       await submitCheck(c.id, data)
@@ -80,7 +94,10 @@ export default function ScreenChecklist() {
       try {
         await submitCheck(photoCheckId, { result_photo: reader.result })
         setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
-      } catch (err) { logScreenError('ScreenChecklist', 'submitCheck(photo)', err) }
+      } catch (err) {
+        logScreenError('ScreenChecklist', 'submitCheck(photo)', err)
+        setError('Error subiendo foto — intenta de nuevo')
+      }
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -272,7 +289,7 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
           {[true, false].map(val => (
             <button
               key={String(val)}
-              onClick={() => { onUpdate(idx, 'localValue', val); setTimeout(() => onSave(idx), 100) }}
+              onClick={() => { onUpdate(idx, 'localValue', val); onSave(idx, { localValue: val }) }}
               style={{
                 flex: 1, padding: '8px', borderRadius: TOKENS.radius.sm,
                 background: check.localValue === val

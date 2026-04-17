@@ -76,6 +76,7 @@ function MobileAdminHub() {
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
+    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning },
   ]
 
   return (

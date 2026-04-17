@@ -43,16 +43,25 @@ export default function ScreenTraspasoPT() {
 
   async function loadData() {
     setLoading(true)
+    setError('')
     try {
       const [inv, cedis, history] = await Promise.all([
         getInventory(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getInventory', e); return [] }),
         getCedisList().catch((e) => { logScreenError('ScreenTraspasoPT', 'getCedisList', e); return [] }),
         getTodayTransfers(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getTodayTransfers', e); return [] }),
       ])
-      setInventory(inv || [])
+      // El BFF ya dedup + filtra MP + excluye stock ≤ 0. La pantalla solo
+      // consume la lista plana.
+      setInventory(Array.isArray(inv) ? inv : [])
       setCedisList(cedis || [])
       setTodayTransfers(Array.isArray(history) ? history : [])
-    } catch (e) { logScreenError('ScreenTraspasoPT', 'loadData', e) }
+      if (!inv.length) {
+        setError('No hay inventario disponible para traspasar.')
+      }
+    } catch (e) {
+      logScreenError('ScreenTraspasoPT', 'loadData', e)
+      setError('No se pudo cargar la información. Intenta de nuevo.')
+    }
     setLoading(false)
   }
 
@@ -269,7 +278,7 @@ export default function ScreenTraspasoPT() {
                         background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
                       }}>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        + {(item.product || item.product_name || '').replace('LAURITA ', '').replace('BOLSA DE HIELO ', '')}
+                        + {item.product || item.product_name || ''}
                       </p>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 1 }}>
                         {fmtNum(item.quantity)} uds

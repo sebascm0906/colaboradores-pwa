@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { getMyShift, getCycles, getPackingEntries } from './api'
-import { getSaltLevel, MACHINE_ID_BARRA } from './barraService'
+import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
+import OpeningStateBanner from './OpeningStateBanner'
 
 // V2: Rolito users get redirected to the new guided hub
 import ScreenTurnoRolito from './ScreenTurnoRolito'
@@ -32,6 +33,7 @@ export default function ScreenMiTurno() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saltData, setSaltData] = useState(null) // Barra: salt level from machine
+  const [tankData, setTankData] = useState(null) // Barra: tank summary (ready count, temp, etc.)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -54,11 +56,18 @@ export default function ScreenMiTurno() {
       setShift(s)
       if (s?.id) {
         const promises = [getCycles(s.id), getPackingEntries(s.id)]
-        if (isBarras) promises.push(getSaltLevel(MACHINE_ID_BARRA).catch(() => null))
+        if (isBarras) {
+          promises.push(getSaltLevel(MACHINE_ID_BARRA).catch(() => null))
+          promises.push(listTanks().catch(() => ({ tanks: [] })))
+        }
         const results = await Promise.all(promises)
         setCycles(results[0] || [])
         setPacking(results[1] || [])
-        if (isBarras && results[2]) setSaltData(results[2])
+        if (isBarras) {
+          if (results[2]) setSaltData(results[2])
+          const tanksRes = results[3]
+          if (tanksRes?.tanks?.length) setTankData(tanksRes.tanks[0])
+        }
       }
     } catch (e) {
       setError(e.message === 'no_session' ? 'Sesion expirada' : 'No se pudo cargar el turno')
@@ -70,37 +79,26 @@ export default function ScreenMiTurno() {
   const totalKgPacked = packing.reduce((sum, p) => sum + (p.total_kg || 0), 0)
   const stateInfo = STATES[shift?.state] || STATES.draft
 
-  // Acciones rapidas — adaptadas segun linea (rolito vs barras)
+  // Acciones — orden por flujo real de trabajo
   const ACTIONS = [
-    {
-      id: 'checklist',
-      label: 'Inspección',
-      desc: 'Checklist HACCP',
+    // BARRA: 1. Tanque = acción principal (extraer canastillas)
+    ...(isBarras ? [{
+      id: 'tanque',
+      label: 'Extraer del tanque',
+      desc: `${tankData?.ready_slots_count || 0} canastillas listas`,
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/><line x1="3" y1="12" x2="21" y2="12"/>
         </svg>
       ),
-      route: '/produccion/checklist',
-      color: TOKENS.colors.warning,
-    },
-    {
-      id: 'ciclo',
-      label: isBarras ? 'Ciclo Salmuera' : 'Nuevo Ciclo',
-      desc: isBarras ? 'Congelación en tanque' : 'Congelación + deshielo',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-        </svg>
-      ),
-      route: '/produccion/ciclo',
-      color: TOKENS.colors.blue2,
-    },
-    // Transformación — solo para operador de barra
+      route: '/produccion/tanque',
+      color: (tankData?.ready_slots_count || 0) > 0 ? TOKENS.colors.success : '#38bdf8',
+    }] : []),
+    // 2. Pasar a almacén (después de extraer, fraccionas y envías)
     ...(isBarras ? [{
       id: 'transformacion',
-      label: 'Transformación',
-      desc: 'Fraccionar barras',
+      label: 'Pasar a almacén',
+      desc: 'Fraccionar y enviar barras',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
@@ -109,6 +107,7 @@ export default function ScreenMiTurno() {
       route: '/produccion/transformacion',
       color: '#a78bfa',
     }] : []),
+    // 3. Empaque
     {
       id: 'empaque',
       label: 'Empaque',
@@ -122,10 +121,50 @@ export default function ScreenMiTurno() {
       route: '/produccion/empaque',
       color: TOKENS.colors.success,
     },
+    // ROLITO/genérico: Producción (tracking de ciclos de congelación)
+    ...(!isBarras ? [{
+      id: 'ciclo',
+      label: 'Nuevo Ciclo',
+      desc: 'Congelación + deshielo',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+      ),
+      route: '/produccion/ciclo',
+      color: TOKENS.colors.blue2,
+    }] : []),
+    // 4. Reportar problema
+    {
+      id: 'incidencia',
+      label: 'Reportar problema',
+      desc: 'Paro, merma o incidencia',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      ),
+      route: '/produccion/incidencia',
+      color: TOKENS.colors.warning,
+    },
+    // 6. Inspección (no urgente, al inicio o final del turno)
+    {
+      id: 'checklist',
+      label: 'Inspección',
+      desc: 'Checklist HACCP',
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+      ),
+      route: '/produccion/checklist',
+      color: TOKENS.colors.textMuted,
+    },
+    // 7. Corte / Cierre (al final del turno)
     {
       id: 'corte',
-      label: 'Corte',
-      desc: 'Resumen del dia',
+      label: 'Resumen del turno',
+      desc: 'Resumen de producción',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
@@ -135,21 +174,9 @@ export default function ScreenMiTurno() {
       color: TOKENS.colors.blue3,
     },
     {
-      id: 'incidencia',
-      label: 'Incidencia',
-      desc: 'Reportar paro o merma',
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-      ),
-      route: '/produccion/incidencia',
-      color: TOKENS.colors.warning,
-    },
-    {
       id: 'cierre',
-      label: 'Cierre',
-      desc: 'Cerrar turno',
+      label: 'Cerrar turno',
+      desc: 'Finalizar y cerrar',
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -254,38 +281,118 @@ export default function ScreenMiTurno() {
                 </div>
               </div>
 
-              {/* Mini stats */}
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <MiniStat label="Ciclos" value={cycles.length} typo={typo} />
-                <MiniStat label="Kg prod." value={shift.total_kg_produced?.toFixed(0) || '0'} accent={TOKENS.colors.blue2} typo={typo} />
-                <MiniStat label="Kg emp." value={totalKgPacked.toFixed(0)} accent={TOKENS.colors.success} typo={typo} />
-              </div>
-
-              {/* Barra: Salt level + brine temp */}
-              {isBarras && saltData && (
-                <div style={{
-                  display: 'flex', gap: 8, marginTop: 10,
-                  padding: '10px 12px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(43,143,224,0.06)', border: '1px solid rgba(43,143,224,0.15)',
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Sal tanque</p>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: saltData.salt_level < 3 ? TOKENS.colors.warning : TOKENS.colors.blue2, margin: '2px 0 0' }}>
-                      {saltData.salt_level}%
-                    </p>
+              {/* Mini stats — Barra: métricas operativas reales.
+                  Umbrales leídos del tanque (configurados en backend). */}
+              {isBarras ? (() => {
+                const tempThr = tankData?.min_brine_temp_for_harvest  // e.g., -7
+                const saltThr = tankData?.min_salt_level_for_harvest  // e.g., 65 ppm
+                const saltUnit = tankData?.salt_level_unit || 'ppm'
+                const tempBad = tempThr != null && !!saltData?.brine_temp && saltData.brine_temp > tempThr
+                const saltBad = saltThr != null && !!saltData?.salt_level && saltData.salt_level < saltThr
+                return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+                  {/* Fila 1: canastillas + temp + sal */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <MiniStat
+                      label="Canastillas listas"
+                      value={tankData?.ready_slots_count ?? '—'}
+                      accent={(tankData?.ready_slots_count || 0) > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted}
+                      typo={typo}
+                    />
+                    <MiniStat
+                      label="Temp salmuera"
+                      value={saltData?.brine_temp ? `${saltData.brine_temp}°C` : '—'}
+                      accent={tempBad ? TOKENS.colors.error : TOKENS.colors.blue2}
+                      typo={typo}
+                    />
+                    <MiniStat
+                      label={`Sal (${saltUnit})`}
+                      value={saltData?.salt_level ? saltData.salt_level : '—'}
+                      accent={saltBad ? TOKENS.colors.warning : TOKENS.colors.blue2}
+                      typo={typo}
+                    />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Temp salmuera</p>
-                    <p style={{ fontSize: 15, fontWeight: 700, color: TOKENS.colors.text, margin: '2px 0 0' }}>
-                      {saltData.brine_temp ? `${saltData.brine_temp}°C` : '--'}
-                    </p>
+                  {/* Fila 2: extracciones reales (del tanque) + última extracción */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <MiniStat
+                      label="Extrac. 30min"
+                      value={tankData?.extractions_last_30min ?? '—'}
+                      accent={TOKENS.colors.blue2}
+                      typo={typo}
+                    />
+                    <MiniStat
+                      label="Barras/canast."
+                      value={tankData?.bars_per_basket || 8}
+                      typo={typo}
+                    />
+                    <MiniStat
+                      label="Última extracción"
+                      value={tankData?.last_extraction_time
+                        ? new Date(tankData.last_extraction_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+                        : '—'}
+                      typo={typo}
+                    />
                   </div>
+                  {/* Alerta de temp o sal (umbrales del tanque) */}
+                  {tempBad && (
+                    <div style={{
+                      padding: '8px 12px', borderRadius: TOKENS.radius.sm,
+                      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <span style={{ fontSize: 14 }}>&#x26A0;</span>
+                      <span style={{ ...typo.caption, color: TOKENS.colors.error, fontWeight: 600 }}>
+                        Temperatura {saltData.brine_temp}°C — debe ser {tempThr}°C o menor para extraer
+                      </span>
+                    </div>
+                  )}
+                </div>
+                )
+              })() : (
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <MiniStat label="Producciones" value={cycles.length} typo={typo} />
+                  <MiniStat label="Producido" value={`${shift.total_kg_produced?.toFixed(0) || '0'} kg`} accent={TOKENS.colors.blue2} typo={typo} />
+                  <MiniStat label="Empacado" value={`${totalKgPacked.toFixed(0)} kg`} accent={TOKENS.colors.success} typo={typo} />
                 </div>
               )}
             </div>
 
+            {/* Opening State — qué recibe este turno del anterior */}
+            <OpeningStateBanner shiftId={shift.id} typo={typo} />
+
+            {/* Barra: CTA principal — ir al tanque */}
+            {isBarras && tankData && (tankData.ready_slots_count || 0) > 0 && (
+              <button onClick={() => navigate(`/produccion/tanque/${tankData.id}`)} style={{
+                marginTop: 12, padding: 14, borderRadius: TOKENS.radius.lg, textAlign: 'left',
+                background: 'linear-gradient(90deg, rgba(34,197,94,0.18), rgba(34,197,94,0.06))',
+                border: '1px solid rgba(34,197,94,0.35)',
+                display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+              }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: TOKENS.radius.md,
+                  background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.30)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ ...typo.overline, color: '#22c55e', margin: 0 }}>
+                    {tankData.ready_slots_count} CANASTILLA{tankData.ready_slots_count > 1 ? 'S' : ''} LISTA{tankData.ready_slots_count > 1 ? 'S' : ''}
+                  </p>
+                  <p style={{ ...typo.body, color: 'white', margin: 0, marginTop: 2, fontWeight: 600 }}>
+                    Ir al tanque a extraer
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(34,197,94,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+            )}
+
             {/* Acciones */}
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>ACCIONES</p>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 12 }}>ACCIONES</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {ACTIONS.map(action => (
                 <ActionCard key={action.id} action={action} typo={typo} onClick={() => navigate(action.route)} />
@@ -295,7 +402,7 @@ export default function ScreenMiTurno() {
             {/* Últimos ciclos */}
             {cycles.length > 0 && (
               <>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>ÚLTIMOS CICLOS</p>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>ÚLTIMAS PRODUCCIONES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {cycles.slice(-3).reverse().map((c, i) => (
                     <CycleRow key={c.id || i} cycle={c} typo={typo} />
@@ -390,7 +497,7 @@ function CycleRow({ cycle, typo }) {
       </div>
       <div style={{ flex: 1 }}>
         <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
-          Ciclo {cycle.cycle_number} &middot; {timeStr}
+          Prod. {cycle.cycle_number} &middot; {timeStr}
         </p>
         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
           {cycle.kg_dumped ? `${cycle.kg_dumped} kg` : 'En proceso'}

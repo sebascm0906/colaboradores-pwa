@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getEnergyReadings, createEnergyReading } from './api'
+import { validateEnergyReadings } from '../produccion/productionRules'
 import { logScreenError } from '../shared/logScreenError'
 
 export default function ScreenEnergia() {
@@ -43,9 +44,28 @@ export default function ScreenEnergia() {
   async function handleSubmit(type) {
     const form = type === 'start' ? formStart : formEnd
     if (!form.kwh) return
+
+    const kwhValue = Number(form.kwh)
+    if (!Number.isFinite(kwhValue) || kwhValue < 0) {
+      setMsg({ type: 'error', text: 'Ingresa un numero positivo' })
+      return
+    }
+    // Si es end: validar contra start
+    if (type === 'end' && startReading) {
+      if (kwhValue < Number(startReading.kwh_value)) {
+        setMsg({ type: 'error', text: `Fin (${kwhValue}) menor que inicio (${startReading.kwh_value}). Revisar medidor.` })
+        return
+      }
+    }
+    // Foto obligatoria
+    if (!form.photo) {
+      setMsg({ type: 'error', text: 'Foto del medidor obligatoria' })
+      return
+    }
+
     setSubmitting(true)
     try {
-      const payload = { shift_id: shift.id, reading_type: type, kwh_value: Number(form.kwh) }
+      const payload = { shift_id: shift.id, reading_type: type, kwh_value: kwhValue }
       if (form.photo) {
         const reader = new FileReader()
         const b64 = await new Promise((resolve) => { reader.onload = () => resolve(reader.result); reader.readAsDataURL(form.photo) })
@@ -60,7 +80,19 @@ export default function ScreenEnergia() {
     finally { setSubmitting(false) }
   }
 
-  useEffect(() => { if (msg) { const t = setTimeout(() => setMsg(null), 3500); return () => clearTimeout(t) } }, [msg])
+  // Validacion global (para mostrar badge en el header)
+  const energyValidation = useMemo(
+    () => validateEnergyReadings(startReading, endReading),
+    [startReading, endReading]
+  )
+
+  useEffect(() => {
+    if (msg) {
+      const duration = msg.type === 'error' ? 6000 : 3500
+      const t = setTimeout(() => setMsg(null), duration)
+      return () => clearTimeout(t)
+    }
+  }, [msg])
 
   return (
     <div style={{
@@ -111,7 +143,12 @@ export default function ScreenEnergia() {
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>&#x26A0;&#xFE0F;</div>
             <p style={{ ...typo.title, color: TOKENS.colors.warning }}>Sin turno activo</p>
-            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>Abre un turno primero desde Control de Turno.</p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6 }}>Abre un turno para poder registrar lecturas.</p>
+            <button onClick={() => navigate('/supervision/turno')} style={{
+              marginTop: 14, padding: '10px 20px', borderRadius: TOKENS.radius.sm,
+              background: 'linear-gradient(135deg, #15499B 0%, #2B8FE0 100%)',
+              color: 'white', fontSize: 13, fontWeight: 600,
+            }}>Ir a Control de Turno</button>
           </div>
         ) : (
           <>
@@ -182,9 +219,10 @@ export default function ScreenEnergia() {
             {/* Card Lectura Fin */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl, marginBottom: 12,
-              background: endReading ? 'rgba(34,197,94,0.04)' : TOKENS.glass.panel,
+              background: endReading ? 'rgba(34,197,94,0.04)' : !startReading ? 'rgba(148,163,184,0.04)' : TOKENS.glass.panel,
               border: `1px solid ${endReading ? 'rgba(34,197,94,0.15)' : TOKENS.colors.border}`,
               boxShadow: TOKENS.shadow.soft,
+              opacity: !startReading && !endReading ? 0.5 : 1,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Lectura Fin</p>
@@ -195,7 +233,11 @@ export default function ScreenEnergia() {
                 )}
               </div>
 
-              {endReading ? (
+              {!startReading && !endReading ? (
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center', padding: '8px 0' }}>
+                  Registra la lectura de inicio primero
+                </p>
+              ) : endReading ? (
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 28, fontWeight: 700, color: TOKENS.colors.blue2, margin: 0 }}>{endReading.kwh_value} <span style={{ fontSize: 14, fontWeight: 400, color: TOKENS.colors.textMuted }}>kWh</span></p>
@@ -227,7 +269,7 @@ export default function ScreenEnergia() {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </>
         )}
         <div style={{ height: 32 }} />

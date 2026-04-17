@@ -1,7 +1,7 @@
 // ScreenCierreRolito.jsx — V2 Cierre de Turno Guiado
 // Muestra resumen del dia + cuadratura de bolsas + checklist entrega.
-// Backend confirmado:
-//   x_bags_received, x_bags_remaining → EXISTEN en gf.production.shift
+// Backend: POST /api/production/shift/bag-reconciliation (contrato canonico)
+//   Campos internos x_bags_* son responsabilidad de Odoo, no del frontend.
 //   action_close → se intenta, con fallback a state='done'
 //   Checklist entrega: local-only (template no existe en Odoo aun)
 import { useEffect, useMemo, useState, useCallback } from 'react'
@@ -9,9 +9,11 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import {
   getShiftOverview,
-  closeShift,
   saveBagReconciliation,
 } from './rolitoService'
+import { loadShiftReadiness } from '../shared/shiftReadiness'
+import { closeShiftServerSide } from '../shared/supervisorAuth'
+import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
@@ -19,12 +21,13 @@ export default function ScreenCierreRolito() {
   const typo = useMemo(() => getTypo(sw), [sw])
 
   const [data, setData] = useState({ shift: null, cycles: [], packing: [], kpis: null })
+  const [readiness, setReadiness] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [closing, setClosing] = useState(false)
 
-  // Bag reconciliation — persisted to x_bags_received / x_bags_remaining
+  // Bag reconciliation — persisted via POST /api/production/shift/bag-reconciliation
   const [bagsReceived, setBagsReceived] = useState('')
   const [bagsRemaining, setBagsRemaining] = useState('')
 
@@ -40,6 +43,11 @@ export default function ScreenCierreRolito() {
     try {
       const result = await getShiftOverview()
       setData(result)
+      // Readiness centralizado (servicio compartido, no duplica logica)
+      if (result.shift?.id) {
+        const { readiness: r } = await loadShiftReadiness(result.shift.id)
+        setReadiness(r)
+      }
     } catch {
       setError('Error cargando datos')
     } finally {
@@ -55,6 +63,17 @@ export default function ScreenCierreRolito() {
   const bagsRemainingNum = parseInt(bagsRemaining) || 0
   const bagsDiff = bagsReceivedNum > 0 ? bagsReceivedNum - totalBagsUsed - bagsRemainingNum : null
   const allChecked = checks.every(c => c.done)
+  // Autoridad de cierre: backend (_get_close_readiness). Frontend solo refleja.
+  const backendCanClose = readiness?.canClose === true
+  const hasBlockers = (readiness?.blockers?.length || 0) > 0
+  const canClose = allChecked && backendCanClose && !hasBlockers
+
+  // Coherencia ciclos <-> empaque (Fase 3) — aviso UX-friendly
+  const coherence = useMemo(
+    () => computePackingCoherence(data.cycles, data.packing),
+    [data.cycles, data.packing]
+  )
+  const coherenceHeadline = useMemo(() => getCoherenceHeadline(coherence), [coherence])
 
   function toggleCheck(id) {
     setChecks(prev => prev.map(c => c.id === id ? { ...c, done: !c.done } : c))
@@ -70,14 +89,51 @@ export default function ScreenCierreRolito() {
         await saveBagReconciliation(shift.id, bagsReceivedNum, bagsRemainingNum)
       }
 
-      await closeShift(shift.id)
-      setSuccess('Turno cerrado')
+      const result = await closeShiftServerSide({ shift_id: shift.id })
+      if (!result.ok) {
+        setError(result.error || 'No se pudo cerrar el turno')
+        return
+      }
+      setSuccess('Turno cerrado correctamente')
       setTimeout(() => navigate('/'), 2000)
     } catch (e) {
       setError(e.message || 'Error al cerrar turno')
     } finally {
       setClosing(false)
     }
+  }
+
+  // Mapear bloqueadores a rutas para CTAs accionables.
+  // Acepta objeto {code, message} (contrato real) o string (legacy).
+  function blockerRoute(b) {
+    const code = (b && typeof b === 'object' ? b.code : '') || ''
+    // Mapeo por code (autoridad backend — evita heuristicas de texto)
+    const byCode = {
+      energy_end: '/supervision/energia',
+      energy_start: '/supervision/energia',
+      open_downtime: '/supervision/paros',
+      open_cycles: '/produccion/ciclo',
+      open_incidents: '/supervision/paros',
+      balance: '/produccion/empaque',
+      checklist: '/produccion/checklist',
+      shift_state: null,
+    }
+    if (code && byCode[code] !== undefined) return byCode[code]
+    // Fallback por texto (para codes no mapeados)
+    const t = ((b && typeof b === 'object' ? b.message : b) || '').toString().toLowerCase()
+    if (t.includes('checklist') || t.includes('inspecci')) return '/produccion/checklist'
+    if (t.includes('empaque') || t.includes('bolsa') || t.includes('packing') || t.includes('balance')) return '/produccion/empaque'
+    if (t.includes('ciclo') || t.includes('producci') || t.includes('congela')) return '/produccion/ciclo'
+    if (t.includes('energ')) return '/supervision/energia'
+    if (t.includes('paro')) return '/supervision/paros'
+    if (t.includes('merma')) return '/supervision/merma'
+    if (t.includes('turno')) return '/supervision/turno'
+    return null
+  }
+  function blockerText(b) {
+    if (!b) return ''
+    if (typeof b === 'string') return b
+    return b.message || b.code || ''
   }
 
   return (
@@ -125,20 +181,100 @@ export default function ScreenCierreRolito() {
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 12 }}>RESUMEN DEL DIA</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <SummaryItem label="Ciclos" value={kpis ? `${kpis.completedCycles}` : '0'} typo={typo} />
-                <SummaryItem label="Producido" value={kpis ? `${kpis.totalKgProduced} kg` : '0'} accent={TOKENS.colors.blue2} typo={typo} />
-                <SummaryItem label="Empacado" value={kpis ? `${kpis.totalKgPacked} kg` : '0'} accent={TOKENS.colors.success} typo={typo} />
-                <SummaryItem label="Merma" value={kpis ? `${kpis.mermaKg} kg (${kpis.mermaPct}%)` : '0'}
-                  accent={kpis?.mermaPct > 5 ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
+                <SummaryItem
+                  label="Producido"
+                  value={kpis?.totalKgProduced !== null && kpis?.totalKgProduced !== undefined
+                    ? `${kpis.totalKgProduced} kg`
+                    : '—'}
+                  accent={TOKENS.colors.blue2} typo={typo} />
+                <SummaryItem
+                  label="Empacado"
+                  value={kpis?.totalKgPacked !== null && kpis?.totalKgPacked !== undefined
+                    ? `${kpis.totalKgPacked} kg`
+                    : '—'}
+                  accent={TOKENS.colors.success} typo={typo} />
+                <SummaryItem
+                  label="Merma"
+                  value={kpis?.mermaKg !== null && kpis?.mermaPct !== null && kpis?.mermaKg !== undefined
+                    ? `${kpis.mermaKg} kg (${kpis.mermaPct}%)`
+                    : '—'}
+                  accent={kpis?.mermaExceeded ? TOKENS.colors.error : TOKENS.colors.success} typo={typo} />
               </div>
             </div>
+
+            {/* ── AVISOS OPERATIVOS (no bloquean) ─────────────── */}
+            {coherenceHeadline && (
+              <div style={{
+                padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                  {coherenceHeadline}
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  Producido {Math.round(coherence.summary.totalProduced)} kg · Empacado {Math.round(coherence.summary.totalPacked)} kg
+                </p>
+              </div>
+            )}
+
+            {/* ── AVISOS BACKEND (no bloquean, solo informan) ──── */}
+            {readiness && readiness.warnings && readiness.warnings.length > 0 && (
+              <div style={{
+                padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: '0 0 6px', fontWeight: 700 }}>
+                  Avisos antes de cerrar
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {readiness.warnings.map((w, i) => (
+                    <span key={i} style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>• {blockerText(w)}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── BLOQUEOS DE CIERRE (desde readiness) ────────── */}
+            {readiness && readiness.blockers && readiness.blockers.length > 0 && (
+              <div style={{
+                padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.error, margin: '0 0 8px', fontWeight: 700 }}>
+                  Faltan cosas para cerrar
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {readiness.blockers.map((b, i) => {
+                    const route = blockerRoute(b)
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, flex: 1 }}>• {blockerText(b)}</span>
+                        {route && (
+                          <button onClick={() => navigate(route)} style={{
+                            padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                            background: 'rgba(43,143,224,0.12)', border: '1px solid rgba(43,143,224,0.25)',
+                            color: TOKENS.colors.blue2, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+                          }}>
+                            Ir a corregir
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ── CUADRATURA BOLSAS ───────────────────────────── */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl,
               background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>CUADRATURA DE BOLSAS</p>
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>CONTEO DE BOLSAS</p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  Revisa cuantas bolsas te dieron y cuantas te quedan
+                </p>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -174,18 +310,26 @@ export default function ScreenCierreRolito() {
                 </div>
                 {bagsDiff !== null && (
                   <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '8px 12px', borderRadius: TOKENS.radius.md, marginTop: 4,
+                    padding: '10px 12px', borderRadius: TOKENS.radius.md, marginTop: 4,
                     background: bagsDiff === 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
                     border: `1px solid ${bagsDiff === 0 ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
                   }}>
-                    <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Diferencia</span>
-                    <span style={{
-                      ...typo.body, fontWeight: 700,
-                      color: bagsDiff === 0 ? TOKENS.colors.success : TOKENS.colors.error,
-                    }}>
-                      {bagsDiff === 0 ? 'Cuadra' : `${bagsDiff > 0 ? '+' : ''}${bagsDiff} bolsas`}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Diferencia</span>
+                      <span style={{
+                        ...typo.body, fontWeight: 700,
+                        color: bagsDiff === 0 ? TOKENS.colors.success : TOKENS.colors.error,
+                      }}>
+                        {bagsDiff === 0 ? 'Todo cuadra' : `${bagsDiff > 0 ? '+' : ''}${bagsDiff} bolsas`}
+                      </span>
+                    </div>
+                    {bagsDiff !== 0 && (
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                        {bagsDiff > 0
+                          ? 'Faltan bolsas — revisa si hubo alguna rota o perdida'
+                          : 'Sobran bolsas — revisa si alguien mas registro empaque'}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -196,15 +340,7 @@ export default function ScreenCierreRolito() {
               padding: 16, borderRadius: TOKENS.radius.xl,
               background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>CHECKLIST DE ENTREGA</p>
-                <span style={{
-                  ...typo.caption, padding: '2px 8px', borderRadius: TOKENS.radius.pill,
-                  background: 'rgba(43,143,224,0.1)', color: TOKENS.colors.blue2, fontWeight: 700,
-                }}>
-                  Local
-                </span>
-              </div>
+              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 12px' }}>CHECKLIST DE ENTREGA</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {checks.map(c => (
                   <button
@@ -258,21 +394,29 @@ export default function ScreenCierreRolito() {
               }}>{success}</div>
             )}
 
-            {/* Close button */}
+            {/* Close button — autoridad: backend readiness.canClose + checklist local */}
             <button
               onClick={handleClose}
-              disabled={closing || !allChecked}
+              disabled={closing || !canClose}
               style={{
                 width: '100%', padding: '16px',
                 borderRadius: TOKENS.radius.lg,
-                background: allChecked ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
-                color: allChecked ? 'white' : TOKENS.colors.textLow,
+                background: canClose ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+                color: canClose ? 'white' : TOKENS.colors.textLow,
                 fontSize: 16, fontWeight: 700,
-                boxShadow: allChecked ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
+                boxShadow: canClose ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
                 opacity: closing ? 0.6 : 1,
               }}
             >
-              {closing ? 'Cerrando...' : allChecked ? 'CERRAR TURNO' : 'Completa el checklist para cerrar'}
+              {closing
+                ? 'Cerrando...'
+                : canClose
+                  ? 'CERRAR TURNO'
+                  : hasBlockers
+                    ? 'Corrige los pendientes para cerrar'
+                    : !backendCanClose
+                      ? 'Cargando estado del turno...'
+                      : 'Completa el checklist para cerrar'}
             </button>
 
             <div style={{ height: 24 }} />

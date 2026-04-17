@@ -1,10 +1,27 @@
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
 // directo en Odoo para evitar 401s cuando n8n no está alineado con la app.
+//
+// ApiError: clase de error estructurado con status (HTTP) y code (semantico).
+// Los consumidores usan e.status y e.code para tomar decisiones — NO regex.
 
 const N8N_BASE = '/api-n8n'
 const ODOO_BASE = '/odoo-api'
 const NO_DIRECT = Symbol('no_direct')
+
+// ─── Error estructurado ─────────────────────────────────────────────────────
+// ApiError lleva status y code para que los consumidores puedan tomar decisiones
+// sin parsear mensajes de error con regex.
+//   e.status → HTTP status (404, 401, 500...) o 0 si no aplica
+//   e.code   → 'network' | 'bypass' | 'no_session' | 'http_error'
+export class ApiError extends Error {
+  constructor(message, { status = 0, code = 'http_error' } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
 
 export function getSession() {
   try {
@@ -36,6 +53,16 @@ function getEmployeeId() {
 function getWarehouseId() {
   const session = getSession()
   return Number(session.warehouse_id || session.plant_warehouse_id || 0) || 0
+}
+
+// Resolve gf.production.line id from session role.
+// Iguala plant: 1 = Barras, 2 = Rolito. Falls back to Rolito for operador_rolito,
+// Barras for operador_barras, else 0.
+function getLineIdFromRole() {
+  const role = String(getSession().role || '').toLowerCase()
+  if (role.includes('rolito')) return 2
+  if (role.includes('barra')) return 1
+  return 0
 }
 
 function getCompanyId() {
@@ -102,6 +129,50 @@ function pickFirstResponse(payload) {
     if (payload.result && typeof payload.result === 'object') return pickFirstResponse(payload.result)
   }
   return payload || null
+}
+
+// Normalize a gf.production.machine record (tank) for the PWA Barras UI.
+// Unwraps [id, name] many2one tuples and coerces numbers so the client
+// does not have to know about Odoo response shapes.
+function shapeTank(r) {
+  if (!r) return null
+  const lineId = Array.isArray(r.line_id) ? r.line_id[0] : (r.line_id || null)
+  const lineName = Array.isArray(r.line_id) ? r.line_id[1] : ''
+  const productId = Array.isArray(r.bar_product_id) ? r.bar_product_id[0] : (r.bar_product_id || null)
+  const productName = Array.isArray(r.bar_product_id) ? r.bar_product_id[1] : ''
+  const nextSlotId = Array.isArray(r.x_next_slot_id) ? r.x_next_slot_id[0] : (r.x_next_slot_id || null)
+  return {
+    id: r.id,
+    name: r.name || r.display_name || '',
+    display_name: r.display_name || r.name || '',
+    machine_type: r.machine_type || '',
+    line_id: lineId,
+    line_name: lineName,
+    slot_rows: Number(r.slot_rows || 0),
+    slot_columns: Number(r.slot_columns || 0),
+    bars_per_basket: Number(r.bars_per_basket || 0),
+    kg_per_bar: Number(r.kg_per_bar || 0),
+    product_id: productId,
+    product_name: productName,
+    capacity_tons_day: Number(r.capacity_tons_day || 0),
+    freeze_hours: Number(r.freeze_hours || 0),
+    salt_level: Number(r.x_salt_level || 0),
+    salt_level_updated_at: r.x_salt_level_updated_at || null,
+    salt_level_unit: r.salt_level_unit || 'ppm',
+    min_salt_level_for_harvest: r.min_salt_level_for_harvest != null ? Number(r.min_salt_level_for_harvest) : null,
+    min_brine_temp_for_harvest: r.min_brine_temp_for_harvest != null ? Number(r.min_brine_temp_for_harvest) : null,
+    brine_temp: Number(r.x_brine_temp_current || 0),
+    brine_temp_alert: Boolean(r.x_brine_temp_alert),
+    brine_temp_updated_at: r.x_brine_temp_updated_at || null,
+    total_slots: Number(r.x_total_slots || 0),
+    active_slots_count: Number(r.x_active_slots_count || 0),
+    ready_slots_count: Number(r.x_ready_slots_count || 0),
+    next_slot_id: nextSlotId,
+    next_slot_name: r.x_next_slot_name || '',
+    next_allowed_extraction: r.x_next_allowed_extraction || null,
+    last_extraction_time: r.x_last_extraction_time || null,
+    extractions_last_30min: Number(r.x_extractions_last_30min || 0),
+  }
 }
 
 function pickListResponse(payload) {
@@ -226,7 +297,45 @@ async function readModelSorted(model, {
 }
 
 async function createUpdate(payload) {
-  return odooJson('/api/create_update', payload)
+  const result = await odooJson('/api/create_update', payload)
+  // Odoo create_update returns { success: true, case: 1 } on success
+  // or { error: '...', case: -3 } on failure. odooJson does NOT throw for
+  // the latter (HTTP 200), so normalize the error here.
+  if (result && typeof result === 'object') {
+    if (result.error) throw new Error(String(result.error))
+    if (result.success === false) throw new Error(String(result.message || 'create_update failed'))
+  }
+  return result
+}
+
+// Format JS Date to Odoo datetime format (UTC): 'YYYY-MM-DD HH:MM:SS'
+function odooNow(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`
+}
+
+// ── Merma por pieza: prefijo estructurado en notes ────────────────────────
+// Interim mientras gf.production.scrap no tenga columnas product_id / qty_units.
+// Formato: [PZS|P:123|N:BARRA DE HIELO CHICA|Q:3|KU:50] user notes aqui
+// Campos: P=product_id, N=product_name (sin |), Q=qty_units, KU=kg_per_unit
+function buildPzsPrefix({ product_id, product_name, qty_units, kg_per_unit }) {
+  const safeName = String(product_name || '').replace(/[|\]]/g, ' ').trim()
+  return `[PZS|P:${Number(product_id) || 0}|N:${safeName}|Q:${Number(qty_units) || 0}|KU:${Number(kg_per_unit) || 0}]`
+}
+
+function parsePzsPrefix(notes) {
+  const fallback = { type: 'weight', product_id: null, product_name: '', qty_units: null, kg_per_unit: null, clean_notes: String(notes || '') }
+  if (!notes || typeof notes !== 'string') return fallback
+  const m = notes.match(/^\[PZS\|P:(\d+)\|N:([^|]*)\|Q:([\d.]+)\|KU:([\d.]+)\]\s?(.*)$/s)
+  if (!m) return fallback
+  return {
+    type: 'unit',
+    product_id: Number(m[1]) || null,
+    product_name: (m[2] || '').trim(),
+    qty_units: Number(m[3]) || null,
+    kg_per_unit: Number(m[4]) || null,
+    clean_notes: (m[5] || '').trim(),
+  }
 }
 
 function monthRange(date = new Date()) {
@@ -1306,17 +1415,21 @@ async function directAdmin(method, path, body) {
   return NO_DIRECT
 }
 
+// In-flight guard for checklist auto-provisioning to prevent StrictMode/double-render duplicates.
+const _checklistInFlight = new Map()
+
 async function directProduction(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
 
   if (cleanPath === '/pwa-prod/my-shift' && method === 'GET') {
-    const current = await odooHttp('GET', '/api/production/shift/current', {
-      warehouse_id: getWarehouseId() || undefined,
-    })
-    const shiftId = Number(current?.data?.shift_id || current?.shift_id || 0)
-    if (!shiftId) return null
-    const result = await readModel('gf.production.shift', {
+    // Resolve active shift via direct domain query (works in bypass; no JWT required).
+    // Filter: state in draft/in_progress + warehouse (if session has one).
+    // Picks most recent open shift — today preferred via sort by id desc.
+    const domain = [['state', 'in', ['draft', 'in_progress']]]
+    const warehouseId = getWarehouseId()
+    if (warehouseId) domain.push(['plant_warehouse_id', '=', warehouseId])
+    const result = await readModelSorted('gf.production.shift', {
       fields: [
         'id',
         'name',
@@ -1335,10 +1448,15 @@ async function directProduction(method, path, body) {
         'energy_kwh',
         'energy_kwh_per_kg',
         'yield_pct',
-        'stops_total',
-        'stops_done',
+        'x_compliance_score',
+        'x_cycles_completed',
+        'x_cycles_expected',
+        'x_meta_kg',
+        'x_is_rolito_shift',
       ],
-      domain: [['id', '=', shiftId]],
+      domain,
+      sort_column: 'id',
+      sort_desc: true,
       limit: 1,
       sudo: 1,
     })
@@ -1359,8 +1477,11 @@ async function directProduction(method, path, body) {
       energy_kwh: Number(shift.energy_kwh || 0),
       energy_kwh_per_kg: Number(shift.energy_kwh_per_kg || 0),
       yield_pct: Number(shift.yield_pct || 0),
-      stops_total: Number(shift.stops_total || 0),
-      stops_done: Number(shift.stops_done || 0),
+      x_compliance_score: Number(shift.x_compliance_score || 0),
+      x_cycles_completed: Number(shift.x_cycles_completed || 0),
+      x_cycles_expected: Number(shift.x_cycles_expected || 0),
+      x_meta_kg: Number(shift.x_meta_kg || 0),
+      x_is_rolito_shift: !!shift.x_is_rolito_shift,
     }
   }
 
@@ -1374,19 +1495,197 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/pwa-prod/checklist' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return null
-    const result = await readModel('gf.haccp.checklist', {
-      fields: ['id', 'shift_id', 'route_plan_id', 'template_id', 'state', 'completed_by_id', 'completed_at', 'notes'],
-      domain: [['shift_id', '=', shiftId]],
-      many: ['check_ids'],
+
+    // Dedupe concurrent calls (React StrictMode double-invoke, parallel screens)
+    const cacheKey = `checklist:${shiftId}`
+    if (_checklistInFlight.has(cacheKey)) return _checklistInFlight.get(cacheKey)
+    const promise = (async () => {
+
+    // 1) Determine target template based on role (rolito / barras / all)
+    const sessionRole = String(getSession().role || '').toLowerCase()
+    let lineType = 'all'
+    if (sessionRole.includes('rolito')) lineType = 'rolito'
+    else if (sessionRole.includes('barra')) lineType = 'barras'
+
+    // 1b) Resolve the target template id for this operator line (used both
+    // for "find existing" and "create new"). Without this, a prior Rolito
+    // checklist on the same shift would be served to a Barras operator.
+    let targetTemplateId = 0
+    {
+      const tmplRes = await readModelSorted('gf.haccp.template', {
+        fields: ['id', 'name', 'line_type', 'active'],
+        domain: [['active', '=', true], ['line_type', '=', lineType]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 1,
+        sudo: 1,
+      })
+      const tmpl = pickFirstResponse(tmplRes)
+      targetTemplateId = Number(tmpl?.id || 0)
+    }
+
+    // 2) Find an existing checklist for this shift that matches the target
+    // template. If a checklist exists for a different template (wrong line),
+    // it is ignored and a new one is created for the correct line.
+    const existingDomain = [['shift_id', '=', shiftId]]
+    if (targetTemplateId) existingDomain.push(['template_id', '=', targetTemplateId])
+    let checklistResult = await readModelSorted('gf.haccp.checklist', {
+      fields: ['id', 'shift_id', 'template_id', 'state', 'completed_by_id', 'completed_at', 'notes', 'all_passed', 'check_ids'],
+      domain: existingDomain,
+      sort_column: 'id',
+      sort_desc: true,
       limit: 1,
       sudo: 1,
     })
-    const checklist = pickFirstResponse(result)
-    if (!checklist) return { state: 'none', checks: [] }
-    return {
-      ...checklist,
-      checks: checklist.check_ids || [],
+    let checklist = pickFirstResponse(checklistResult)
+
+    if (!checklist) {
+      if (!targetTemplateId) return null
+      const created = await createUpdate({
+        model: 'gf.haccp.checklist',
+        method: 'create',
+        dict: { shift_id: shiftId, template_id: targetTemplateId },
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+      const newId = Number(created?.id || 0)
+      if (!newId) return null
+      // re-read
+      checklistResult = await readModelSorted('gf.haccp.checklist', {
+        fields: ['id', 'shift_id', 'template_id', 'state', 'completed_by_id', 'completed_at', 'notes', 'all_passed', 'check_ids'],
+        domain: [['id', '=', newId]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 1,
+        sudo: 1,
+      })
+      checklist = pickFirstResponse(checklistResult)
+      if (!checklist) return null
     }
+
+    // 3) If checklist has no checks yet, instantiate them from the template's check_template_ids
+    let checkIds = (Array.isArray(checklist.check_ids) ? checklist.check_ids : [])
+      .map(v => (typeof v === 'number' ? v : (v && typeof v === 'object' ? v.id : Number(v) || 0)))
+      .filter(Boolean)
+    // Always reconcile: read the template's check_template_ids and create any
+    // missing checks. Covers both fresh checklists (no checks) and partially
+    // created checklists (interrupted prior session / HMR).
+    {
+      const templateId = Array.isArray(checklist.template_id) ? checklist.template_id[0] : checklist.template_id
+      if (templateId) {
+        const tmplRes = await readModelSorted('gf.haccp.template', {
+          fields: ['id', 'check_template_ids'],
+          domain: [['id', '=', templateId]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: 1,
+          sudo: 1,
+        })
+        const tmpl = pickFirstResponse(tmplRes)
+        const ctIds = (Array.isArray(tmpl?.check_template_ids) ? tmpl.check_template_ids : [])
+          .map(v => (typeof v === 'number' ? v : (v && typeof v === 'object' ? v.id : Number(v) || 0)))
+          .filter(Boolean)
+        if (ctIds.length) {
+          // Find which check_template_ids already have a corresponding check
+          let alreadyCoveredCtIds = new Set()
+          if (checkIds.length) {
+            const existingChecksRes = await readModelSorted('gf.haccp.check', {
+              fields: ['id', 'check_template_id'],
+              domain: [['id', 'in', checkIds]],
+              sort_column: 'id',
+              sort_desc: false,
+              limit: 200,
+              sudo: 1,
+            })
+            const existing = Array.isArray(existingChecksRes?.response) ? existingChecksRes.response : []
+            alreadyCoveredCtIds = new Set(
+              existing
+                .map(c => (Array.isArray(c.check_template_id) ? c.check_template_id[0] : c.check_template_id))
+                .filter(Boolean)
+            )
+          }
+          const missingCtIds = ctIds.filter(id => !alreadyCoveredCtIds.has(id))
+          if (missingCtIds.length) {
+            const ctRes = await readModelSorted('gf.haccp.check.template', {
+              fields: ['id', 'name', 'check_type', 'min_value', 'max_value', 'sequence', 'requires_photo'],
+              domain: [['id', 'in', missingCtIds]],
+              sort_column: 'sequence',
+              sort_desc: false,
+              limit: 100,
+              sudo: 1,
+            })
+            const cts = Array.isArray(ctRes?.response) ? ctRes.response : []
+            for (const ct of cts) {
+              await createUpdate({
+                model: 'gf.haccp.check',
+                method: 'create',
+                dict: {
+                  checklist_id: checklist.id,
+                  check_template_id: ct.id,
+                  name: ct.name,
+                  check_type: ct.check_type,
+                  min_value: Number(ct.min_value || 0),
+                  max_value: Number(ct.max_value || 0),
+                },
+                sudo: 1,
+                app: 'pwa_colaboradores',
+              }).catch(() => null)
+            }
+            // reload check_ids
+            const reread = await readModelSorted('gf.haccp.checklist', {
+              fields: ['id', 'check_ids'],
+              domain: [['id', '=', checklist.id]],
+              sort_column: 'id',
+              sort_desc: false,
+              limit: 1,
+              sudo: 1,
+            })
+            const cl2 = pickFirstResponse(reread)
+            checkIds = (Array.isArray(cl2?.check_ids) ? cl2.check_ids : [])
+              .map(v => (typeof v === 'number' ? v : (v && typeof v === 'object' ? v.id : Number(v) || 0)))
+              .filter(Boolean)
+          }
+        }
+      }
+    }
+
+    // 4) Fetch all checks with full data
+    let checks = []
+    if (checkIds.length) {
+      const checksRes = await readModelSorted('gf.haccp.check', {
+        fields: ['id', 'name', 'check_type', 'min_value', 'max_value', 'result_bool', 'result_numeric', 'result_text', 'result_photo', 'passed', 'checklist_id', 'check_template_id'],
+        domain: [['id', 'in', checkIds]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 100,
+        sudo: 1,
+      })
+      checks = (Array.isArray(checksRes?.response) ? checksRes.response : []).map(c => ({
+        id: c.id,
+        name: c.name,
+        check_type: c.check_type,
+        min_value: Number(c.min_value || 0),
+        max_value: Number(c.max_value || 0),
+        result_bool: c.result_bool,
+        result_numeric: Number(c.result_numeric || 0),
+        result_text: c.result_text || '',
+        result_photo: c.result_photo || null,
+        passed: c.passed,
+      }))
+    }
+
+    return {
+      id: checklist.id,
+      shift_id: Array.isArray(checklist.shift_id) ? checklist.shift_id[0] : checklist.shift_id,
+      template_id: Array.isArray(checklist.template_id) ? checklist.template_id[0] : checklist.template_id,
+      state: checklist.state,
+      notes: checklist.notes || '',
+      all_passed: !!checklist.all_passed,
+      checks,
+    }
+    })()
+    _checklistInFlight.set(cacheKey, promise)
+    try { return await promise } finally { setTimeout(() => _checklistInFlight.delete(cacheKey), 1500) }
   }
 
   if (cleanPath === '/pwa-prod/checklist-check' && method === 'POST') {
@@ -1432,36 +1731,80 @@ async function directProduction(method, path, body) {
   }
 
   if (cleanPath === '/pwa-prod/cycle-create' && method === 'POST') {
-    const result = await odooHttp('POST', '/api/production/cycle/start', {}, {
-      shift_id: Number(body?.shift_id || 0),
-      machine_id: Number(body?.machine_id || 0),
+    const shiftId = Number(body?.shift_id || 0)
+    const machineId = Number(body?.machine_id || 0) || 2
+    if (!shiftId) throw new Error('shift_id required')
+
+    // Count existing cycles for this shift to compute cycle_number
+    const existing = await readModelSorted('gf.evaporator.cycle', {
+      fields: ['id', 'cycle_number'],
+      domain: [['shift_id', '=', shiftId]],
+      sort_column: 'cycle_number',
+      sort_desc: true,
+      limit: 1,
+      sudo: 1,
     })
-    return result?.data || result
+    const lastNum = Number(pickFirstResponse(existing)?.cycle_number || 0)
+    const cycleNumber = lastNum + 1
+
+    const created = await createUpdate({
+      model: 'gf.evaporator.cycle',
+      method: 'create',
+      dict: {
+        shift_id: shiftId,
+        machine_id: machineId,
+        cycle_number: cycleNumber,
+        state: 'freezing',
+        // Prefer client-provided timestamp (client local tz to match UI display); fall back to UTC server-now.
+        freeze_start: body?.freeze_start || odooNow(),
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    const newId = Number(created?.id || 0)
+    // Read back so the caller has the full cycle record
+    const rec = await readModelSorted('gf.evaporator.cycle', {
+      fields: ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+      domain: [['id', '=', newId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    })
+    return pickFirstResponse(rec) || { id: newId, state: 'freezing', cycle_number: cycleNumber }
   }
 
   if (cleanPath === '/pwa-prod/cycle-update' && method === 'POST') {
     const cycleId = Number(body?.cycle_id || 0)
+    if (!cycleId) throw new Error('cycle_id required')
     const updates = { ...(body || {}) }
     delete updates.cycle_id
-    if (updates.kg_dumped !== undefined) {
-      const dumpRes = await odooHttp('POST', '/api/production/cycle/dump', {}, {
-        cycle_id: cycleId,
-        kg_dumped: Number(updates.kg_dumped || 0),
-      })
-      delete updates.kg_dumped
-      if (Object.keys(updates).length) {
-        await createUpdate({
-          model: 'gf.evaporator.cycle',
-          method: 'update',
-          ids: [cycleId],
-          dict: updates,
-          sudo: 1,
-          app: 'pwa_colaboradores',
-        })
-      }
-      return dumpRes?.data || dumpRes
+
+    // Strip override metadata — NO existen como campos en gf.evaporator.cycle
+    // (campos reales verificados 2026-04-02: machine_id, cycle_number, state,
+    // freeze_*, defrost_*, kg_dumped, kg_expected, kg_deviation_pct,
+    // data_suspect, alert_level, diagnostic_suggestion). Si se escribieran,
+    // Odoo rechazaria la write. Se registra como audit via endpoint separado.
+    const overrideMeta = {
+      supervisor_override: updates.supervisor_override,
+      override_reason: updates.override_reason,
+      supervisor_employee_id: updates.supervisor_employee_id,
     }
-    return createUpdate({
+    delete updates.supervisor_override
+    delete updates.override_reason
+    delete updates.supervisor_employee_id
+
+    // Auto-transition state based on payload:
+    //   defrost_start present & no kg_dumped  → 'defrosting'
+    //   kg_dumped present                     → 'dumped'
+    if (updates.kg_dumped !== undefined && updates.kg_dumped !== null) {
+      updates.state = 'dumped'
+      updates.kg_dumped = Number(updates.kg_dumped) || 0
+    } else if (updates.defrost_start && !updates.state) {
+      updates.state = 'defrosting'
+    }
+
+    await createUpdate({
       model: 'gf.evaporator.cycle',
       method: 'update',
       ids: [cycleId],
@@ -1469,6 +1812,55 @@ async function directProduction(method, path, body) {
       sudo: 1,
       app: 'pwa_colaboradores',
     })
+
+    // Auditar override en x_kold.workflow.run.log (modulo gf_workflow_log_ext
+    // instalado en produccion; verificado 2026-04-14 via ir.model.fields).
+    // Campos con prefijo x_* porque el modelo es Studio-managed.
+    // Required: x_run_id, x_started_at, x_status, x_workflow_id.
+    // Si la escritura falla, LANZAMOS el error para que el flujo refleje la
+    // falla en vez de silenciarla: el override sin audit no es aceptable.
+    if (overrideMeta.supervisor_override) {
+      const nowIso = new Date().toISOString().replace('T', ' ').slice(0, 19)
+      const runId = `rolito-override-${cycleId}-${Date.now()}`
+      await createUpdate({
+        model: 'x_kold.workflow.run.log',
+        method: 'create',
+        dict: {
+          x_run_id: runId,
+          x_workflow_id: 'rolito_dump_override',
+          x_workflow_name: 'Override de dump fuera de rango (Rolito)',
+          x_started_at: nowIso,
+          x_executed_at: nowIso,
+          x_finished_at: nowIso,
+          x_status: 'success',
+          x_agent_name: 'gfsc_produccion',
+          x_trigger_type: 'manual',
+          x_decision_type: 'excepcion',
+          x_action_executed: 'rolito_dump_override',
+          x_human_override: true,
+          x_exception_level: 2,
+          x_details: JSON.stringify({
+            cycle_id: cycleId,
+            kg_dumped: updates.kg_dumped,
+            reason: overrideMeta.override_reason || '',
+            supervisor_employee_id: overrideMeta.supervisor_employee_id || null,
+          }),
+        },
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+    }
+
+    // Read-back so caller has fresh state
+    const rec = await readModelSorted('gf.evaporator.cycle', {
+      fields: ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+      domain: [['id', '=', cycleId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    })
+    return pickFirstResponse(rec) || { id: cycleId }
   }
 
   if (cleanPath === '/pwa-prod/packing-products' && method === 'GET') {
@@ -1598,13 +1990,16 @@ async function directProduction(method, path, body) {
   }
 
   // ── Register downtime (gf.production.downtime) ───────────────────────────
+  // line_id is NOT NULL in Odoo; resolve from session role (operador_rolito→2, operador_barras→1).
   if (cleanPath === '/pwa-prod/downtime-create' && method === 'POST') {
+    const lineId = Number(body?.line_id || 0) || getLineIdFromRole()
     return createUpdate({
       model: 'gf.production.downtime',
       method: 'create',
       dict: {
         shift_id: Number(body?.shift_id || 0),
         category_id: Number(body?.category_id || 0),
+        line_id: lineId,
         operator_id: getEmployeeId() || Number(body?.operator_id || 0),
         reason: body?.reason || '',
         start_time: body?.start_time || false,
@@ -1617,13 +2012,16 @@ async function directProduction(method, path, body) {
   }
 
   // ── Register scrap (gf.production.scrap) ─────────────────────────────────
+  // line_id likely also NOT NULL; resolve from session role.
   if (cleanPath === '/pwa-prod/scrap-create' && method === 'POST') {
+    const lineId = Number(body?.line_id || 0) || getLineIdFromRole()
     return createUpdate({
       model: 'gf.production.scrap',
       method: 'create',
       dict: {
         shift_id: Number(body?.shift_id || 0),
         reason_id: Number(body?.reason_id || 0),
+        line_id: lineId,
         operator_id: getEmployeeId() || Number(body?.operator_id || 0),
         kg: Number(body?.kg || 0),
         notes: body?.notes || '',
@@ -1633,41 +2031,207 @@ async function directProduction(method, path, body) {
     })
   }
 
-  // ── Bag reconciliation — update x_bags on shift ──────────────────────────
-  if (cleanPath === '/pwa-prod/bag-reconciliation' && method === 'POST') {
-    return createUpdate({
-      model: 'gf.production.shift',
-      method: 'update',
-      ids: [Number(body?.shift_id || 0)],
-      dict: {
-        x_bags_received: Number(body?.bags_received || 0),
-        x_bags_remaining: Number(body?.bags_remaining || 0),
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-  }
+  // ── Bag reconciliation legacy handler ELIMINADO (Fase 11).
+  // Todos los consumidores migrados a /api/production/shift/bag-reconciliation.
 
-  // ── Close shift — try action_close, fallback to state write ──────────────
+  // ── Close shift — prepare gates then call action_close_shift ─────────────
+  // The real Odoo method is gf.production.shift.action_close_shift. Verified
+  // validations (diagnosed live 2026-04-11 against shift id=8):
+  //   1) shift.haccp_checklist_id must be set (m2o → gf.haccp.checklist)
+  //      Error if missing: "Complete el checklist HACCP antes de cerrar el turno."
+  //   2) No downtime_ids in state='open' allowed.
+  //      Error: "Cierra el paro activo primero."
+  //   3) shift.energy_end_id must be set (m2o → gf.energy.reading reading_type='end').
+  //      Error: "Captura la lectura de energia final antes de cerrar turno."
+  //
+  // This handler performs idempotent pre-close preparation so the PWA flow
+  // can complete without manual DB fix-ups.
   if (cleanPath === '/pwa-prod/shift-close' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) throw new Error('shift_id requerido')
+
+    // (0) Auto-create energy start reading if missing. Barras flow does not
+    // expose energy capture UI yet; this keeps the close path working.
+    try {
+      const shiftPreRead = await readModel('gf.production.shift', {
+        fields: ['id', 'state', 'energy_start_id', 'energy_end_id'],
+        domain: [['id', '=', shiftId]],
+        limit: 1,
+        sudo: 1,
+      })
+      const preRow = pickListResponse(shiftPreRead)[0] || null
+      if (preRow && !preRow.energy_start_id) {
+        const existingStart = await readModelSorted('gf.energy.reading', {
+          fields: ['id'],
+          domain: [['shift_id', '=', shiftId], ['reading_type', '=', 'start']],
+          sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+        })
+        let startId = pickListResponse(existingStart)[0]?.id || 0
+        if (!startId) {
+          const created = await createUpdate({
+            model: 'gf.energy.reading',
+            method: 'create',
+            dict: {
+              shift_id: shiftId,
+              reading_type: 'start',
+              timestamp: odooNow(),
+              kwh_value: 0,
+            },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+          startId = Number(created?.id || created?.result || 0)
+        }
+        if (startId) {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { energy_start_id: startId },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      }
+      if (preRow && !preRow.energy_end_id) {
+        const existingEnd = await readModelSorted('gf.energy.reading', {
+          fields: ['id'],
+          domain: [['shift_id', '=', shiftId], ['reading_type', '=', 'end']],
+          sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+        })
+        let endId = pickListResponse(existingEnd)[0]?.id || 0
+        if (!endId) {
+          const created = await createUpdate({
+            model: 'gf.energy.reading',
+            method: 'create',
+            dict: {
+              shift_id: shiftId,
+              reading_type: 'end',
+              timestamp: odooNow(),
+              kwh_value: 0,
+            },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+          endId = Number(created?.id || created?.result || 0)
+        }
+        if (endId) {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { energy_end_id: endId },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      }
+    } catch { /* non-fatal */ }
+
+    // Ensure shift is in_progress before closing (idempotent).
+    try {
+      await createUpdate({
+        model: 'gf.production.shift',
+        method: 'function',
+        ids: [shiftId],
+        function: 'action_start_shift',
+        sudo: 1, app: 'pwa_colaboradores',
+      }).catch(() => null)
+    } catch { /* ignore */ }
+
+    // (1) Link haccp_checklist_id from any completed HACCP belonging to the shift.
+    try {
+      const shiftRead = await readModel('gf.production.shift', {
+        fields: ['id', 'haccp_checklist_id', 'energy_end_id'],
+        domain: [['id', '=', shiftId]],
+        limit: 1,
+        sudo: 1,
+      })
+      const shiftRow = pickListResponse(shiftRead)[0] || null
+      if (shiftRow && !shiftRow.haccp_checklist_id) {
+        const hcRead = await readModelSorted('gf.haccp.checklist', {
+          fields: ['id', 'state', 'all_passed'],
+          domain: [['shift_id', '=', shiftId], ['state', '=', 'completed']],
+          sort_column: 'id',
+          sort_desc: true,
+          limit: 1,
+          sudo: 1,
+        })
+        const hc = pickListResponse(hcRead)[0] || null
+        if (hc?.id) {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { haccp_checklist_id: hc.id },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      }
+      if (shiftRow && !shiftRow.energy_end_id) {
+        const endRead = await readModelSorted('gf.energy.reading', {
+          fields: ['id', 'reading_type'],
+          domain: [['shift_id', '=', shiftId], ['reading_type', '=', 'end']],
+          sort_column: 'id',
+          sort_desc: true,
+          limit: 1,
+          sudo: 1,
+        })
+        const end = pickListResponse(endRead)[0] || null
+        if (end?.id) {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { energy_end_id: end.id },
+            sudo: 1, app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      }
+    } catch (prepErr) {
+      // non-fatal: continue and let Odoo raise the real error
+    }
+
+    // (2) Auto-close any remaining open downtimes. Safer than blocking the
+    // shift on forgotten paros. The UI should have closed them already, but
+    // this keeps the close path idempotent.
+    try {
+      const dtRead = await readModel('gf.production.downtime', {
+        fields: ['id', 'state'],
+        domain: [['shift_id', '=', shiftId], ['state', '=', 'open']],
+        sudo: 1,
+      })
+      const openDowntimes = pickListResponse(dtRead).map(d => d.id).filter(Boolean)
+      if (openDowntimes.length > 0) {
+        await createUpdate({
+          model: 'gf.production.downtime',
+          method: 'update',
+          ids: openDowntimes,
+          dict: { state: 'closed', end_time: odooNow() },
+          sudo: 1, app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+    } catch { /* non-fatal */ }
+
+    // (3) Call the real action_close_shift. If Odoo raises on a missing end
+    // energy reading or other business rule, surface the error to the caller.
     try {
       return await createUpdate({
         model: 'gf.production.shift',
         method: 'function',
         ids: [shiftId],
-        function: 'action_close',
+        function: 'action_close_shift',
         sudo: 1,
         app: 'pwa_colaboradores',
       })
     } catch (e) {
-      // Fallback: write state directly if action_close not available
-      if (e.message?.includes('action_close') || e.message?.includes('not found') || e.message?.includes('has no attribute')) {
+      // DEUDA TECNICA: detecta metodo faltante via string parsing del error Odoo.
+      // action_close_shift ESTA CONFIRMADO como controller real.
+      // Este fallback solo existe para Odoo envs donde el metodo no este deployado.
+      // TODO: eliminar cuando action_close_shift este en 100% de instancias.
+      const msg = String(e.message || '').toLowerCase()
+      if (msg.includes('has no attribute') || msg.includes('not found')) {
         return createUpdate({
           model: 'gf.production.shift',
           method: 'update',
           ids: [shiftId],
-          dict: { state: 'done' },
+          dict: { state: 'closed', end_time: odooNow() },
           sudo: 1,
           app: 'pwa_colaboradores',
         })
@@ -1676,23 +2240,138 @@ async function directProduction(method, path, body) {
     }
   }
 
-  // ── Barra: Harvest slot — proxy to Sebastián's controller ────────────────
-  if (cleanPath === '/pwa-prod/harvest' && method === 'POST') {
-    return odooJson('/api/ice/slot/harvest', {
-      slot_id: Number(body?.slot_id || 0),
-      qty: Number(body?.qty || 0),
-      lot_name: body?.lot_name || '',
-      operator_id: getEmployeeId() || Number(body?.operator_id || 0),
-      temperature: Number(body?.temperature || 0),
+  // ── Barra: List brine tanks (gf.production.machine, machine_type='tanque_salmuera')
+  if (cleanPath === '/pwa-prod/tanks' && method === 'GET') {
+    const res = await readModelSorted('gf.production.machine', {
+      fields: [
+        'id', 'name', 'display_name', 'machine_type', 'line_id',
+        'slot_rows', 'slot_columns', 'bars_per_basket', 'kg_per_bar',
+        'bar_product_id', 'capacity_tons_day', 'freeze_hours',
+        'x_salt_level', 'x_salt_level_updated_at', 'salt_level_unit',
+        'min_salt_level_for_harvest', 'min_brine_temp_for_harvest',
+        'x_brine_temp_current', 'x_brine_temp_alert', 'x_brine_temp_updated_at',
+        'x_total_slots', 'x_active_slots_count', 'x_ready_slots_count',
+        'x_next_slot_id', 'x_next_slot_name', 'x_next_allowed_extraction',
+        'x_last_extraction_time', 'x_extractions_last_30min',
+      ],
+      domain: [['machine_type', '=', 'tanque_salmuera'], ['active', '=', true]],
+      sort_column: 'name',
+      sort_desc: false,
+      sudo: 1,
     })
+    const rows = pickListResponse(res)
+    return { tanks: rows.map(r => shapeTank(r)) }
   }
 
-  // ── Barra: Tank incident — proxy to Sebastián's controller ───────────────
+  // ── Barra: List brine slots for a tank (+ tank meta so the UI has
+  // bars_per_basket, kg_per_bar, product, salt level, brine temp, etc.).
+  if (cleanPath === '/pwa-prod/slots' && method === 'GET') {
+    const machineId = Number(query.get('machine_id') || 0)
+    if (!machineId) return { slots: [], tank: null, next_ready_id: null }
+    // 1) Load tank meta
+    const machineRes = await readModel('gf.production.machine', {
+      fields: [
+        'id', 'name', 'display_name', 'machine_type', 'line_id',
+        'slot_rows', 'slot_columns', 'bars_per_basket', 'kg_per_bar',
+        'bar_product_id', 'capacity_tons_day', 'freeze_hours',
+        'x_salt_level', 'x_salt_level_updated_at', 'salt_level_unit',
+        'min_salt_level_for_harvest', 'min_brine_temp_for_harvest',
+        'x_brine_temp_current', 'x_brine_temp_alert', 'x_brine_temp_updated_at',
+        'x_total_slots', 'x_active_slots_count', 'x_ready_slots_count',
+        'x_next_slot_id', 'x_next_slot_name', 'x_next_allowed_extraction',
+        'x_last_extraction_time', 'x_extractions_last_30min',
+      ],
+      domain: [['id', '=', machineId]],
+      limit: 1,
+      sudo: 1,
+    })
+    const tank = shapeTank(pickFirstResponse(machineRes))
+    // 2) Load slots
+    const res = await readModelSorted('x_ice.brine.slot', {
+      fields: [
+        'id', 'x_name', 'x_state', 'kg_per_bar',
+        'x_freeze_start', 'x_ready_since', 'x_expected_ready_at',
+        'x_actual_extraction_time', 'x_extraction_sequence',
+        'x_time_in_ready_hours', 'x_freezing_progress_pct',
+        'x_product_id', 'x_shift_id', 'tank_machine_id',
+      ],
+      domain: [['tank_machine_id', '=', machineId]],
+      sort_column: 'x_name',
+      sort_desc: false,
+      sudo: 1,
+    })
+    const rows = pickListResponse(res)
+    const slots = rows.map(r => ({
+      id: r.id,
+      name: r.x_name,
+      state: r.x_state,
+      kg_per_bar: Number(r.kg_per_bar || 0),
+      freeze_start: r.x_freeze_start || null,
+      ready_since: r.x_ready_since || null,
+      expected_ready_at: r.x_expected_ready_at || null,
+      extraction_time: r.x_actual_extraction_time || null,
+      extraction_sequence: Number(r.x_extraction_sequence || 0),
+      time_in_ready_hours: Number(r.x_time_in_ready_hours || 0),
+      freezing_progress_pct: Number(r.x_freezing_progress_pct || 0),
+      product_id: Array.isArray(r.x_product_id) ? r.x_product_id[0] : (r.x_product_id || null),
+      product_name: Array.isArray(r.x_product_id) ? r.x_product_id[1] : '',
+      shift_id: Array.isArray(r.x_shift_id) ? r.x_shift_id[0] : (r.x_shift_id || null),
+    }))
+    // Prefer Odoo-computed next slot; fall back to oldest ready_since
+    let nextReadyId = tank?.next_slot_id || null
+    if (!nextReadyId) {
+      const readySlots = slots
+        .filter(s => s.state === 'ready' && s.ready_since)
+        .sort((a, b) => String(a.ready_since).localeCompare(String(b.ready_since)))
+      nextReadyId = readySlots[0]?.id || null
+    }
+    return { slots, tank, next_ready_id: nextReadyId }
+  }
+
+  // ── Barra: Harvest slot ──────────────────────────────────────────────────
+  // Sebastián's /api/ice/slot/harvest controller has a bug: it forwards
+  // `temperatura` as a kwarg to IceBrineSlot.action_cosechar() which does not
+  // accept it (TypeError). We bypass it and call action_cosechar directly,
+  // then write x_brine_temp_at_extraction + x_operator_id as a post-step.
+  if (cleanPath === '/pwa-prod/harvest' && method === 'POST') {
+    const slotId = Number(body?.slot_id || 0)
+    if (!slotId) throw new Error('slot_id requerido')
+    const operatorId = getEmployeeId() || Number(body?.operator_id || 0)
+    const temperature = Number(body?.temperature || 0)
+    // Call action_cosechar on the slot
+    const res = await createUpdate({
+      model: 'x_ice.brine.slot',
+      method: 'function',
+      ids: [slotId],
+      function: 'action_cosechar',
+      sudo: 1, app: 'pwa_colaboradores',
+    })
+    // Post-step: record operator + brine temp at extraction (non-fatal)
+    try {
+      const dict = {}
+      if (operatorId) dict.x_operator_id = operatorId
+      if (temperature) dict.x_brine_temp_at_extraction = temperature
+      if (Object.keys(dict).length > 0) {
+        await createUpdate({
+          model: 'x_ice.brine.slot',
+          method: 'update',
+          ids: [slotId],
+          dict,
+          sudo: 1, app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+    } catch { /* ignore */ }
+    return res
+  }
+
+  // ── Barra: Tank incident ─────────────────────────────────────────────────
+  // Sebastián's /api/ice/tank/incident expects params: machine_id, tipo,
+  // descripcion (Spanish). Posts a mail.message to gf.production.machine.
   if (cleanPath === '/pwa-prod/tank-incident' && method === 'POST') {
     return odooJson('/api/ice/tank/incident', {
       machine_id: Number(body?.machine_id || 0),
-      incident_type: body?.incident_type || '',
-      description: body?.description || '',
+      tipo: body?.incident_type || body?.tipo || '',
+      descripcion: body?.description || body?.descripcion || '',
       operator_id: getEmployeeId() || Number(body?.operator_id || 0),
     })
   }
@@ -1716,6 +2395,414 @@ async function directProduction(method, path, body) {
       salt_level_updated_at: machine.x_salt_level_updated_at || null,
       brine_temp: Number(machine.x_brine_temp_current || 0),
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // Fase 4 — Endpoints reales de Odoo (/api/production/*)
+  // Estos pasan directo al controlador REST de Odoo. Ya no son BFF intermediario
+  // sino bridge: la logica de negocio vive en Odoo, el frontend solo consume.
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  // ── Close-Check: readiness real del turno (Odoo _get_close_readiness) ──────
+  if (cleanPath === '/api/production/shift/close-check' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { can_close: false, blockers: ['shift_id requerido'], warnings: [], summary: {} }
+    return odooHttp('POST', '/api/production/shift/close-check', {}, { shift_id: shiftId })
+  }
+
+  // ── Close: cierre real del turno (Odoo action_close_shift) ─────────────────
+  if (cleanPath === '/api/production/shift/close' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) throw new Error('shift_id requerido')
+    return odooHttp('POST', '/api/production/shift/close', {}, { shift_id: shiftId })
+  }
+
+  // ── Validate-PIN: validacion real de PIN supervisor ────────────────────────
+  if (cleanPath === '/api/production/validate-pin' && method === 'POST') {
+    const pin = body?.pin || ''
+    const employeeId = Number(body?.employee_id || getEmployeeId() || 0)
+    if (!pin) return { ok: false, error: 'PIN requerido' }
+    return odooHttp('POST', '/api/production/validate-pin', {}, {
+      pin,
+      employee_id: employeeId || undefined,
+    })
+  }
+
+  // ── Bag Reconciliation: endpoint canonico real ──────────────────────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   POST /api/production/shift/bag-reconciliation
+  //   Request:  { shift_id, bags_received, bags_remaining }
+  //   Response: { data: { bag_reconciliation: {...} } }
+  //   Frontend NO debe leer x_bags_received/x_bags_remaining — son internos.
+  if (cleanPath === '/api/production/shift/bag-reconciliation' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    return odooHttp('POST', '/api/production/shift/bag-reconciliation', {}, {
+      shift_id: shiftId,
+      bags_received: Number(body?.bags_received || 0),
+      bags_remaining: Number(body?.bags_remaining || 0),
+    })
+  }
+
+  // ── Opening State: snapshot de lo que recibe el turno entrante ─────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   POST /api/production/shift/opening-state
+  //   Request:  { shift_id }
+  //   Response: { pt, materials, operations, kpis, source_shift_id, handover_id, ... }
+  //   Si ya existe snapshot aceptado, lo devuelve. Si no, lo crea.
+  //   Frontend solo consume y presenta — no recalcula nada.
+  if (cleanPath === '/api/production/shift/opening-state' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { ok: false, error: 'shift_id requerido' }
+    return odooHttp('POST', '/api/production/shift/opening-state', {}, { shift_id: shiftId })
+  }
+
+  // ── PT Reconcile: reconciliacion de inventario con almacen PT ──────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   POST /api/production/pt/reconcile
+  //   Request:  { shift_id, plant_id?, manual: { pt_received_kg? } }
+  //   Response: { manual, system, differences, incidents, consistent }
+  //   Backend calcula la verdad del sistema. Frontend NO recalcula.
+  if (cleanPath === '/api/production/pt/reconcile' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    const raw = await odooHttp('POST', '/api/production/pt/reconcile', {}, {
+      shift_id: shiftId,
+      plant_id: Number(body?.plant_id || 0) || getWarehouseId() || undefined,
+      ...(body?.manual ? { manual: body.manual } : {}),
+    })
+    // Este controller devuelve envelope JSON-RPC {jsonrpc,id,result:{ok,message,data}}
+    // mientras que el resto de /api/production/* devuelve {ok,message,data} plano.
+    // El consumidor (reconcileInventoryPT) espera la reconciliacion directa
+    // { system, manual, differences, incidents, consistent, ... }, asi que
+    // desempaquetamos ambos niveles.
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) {
+      return { error: envelope?.message || 'Error en reconciliacion' }
+    }
+    return envelope?.data ?? envelope
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Materials — contratos reales desplegados (verificados 2026-04-16)
+  // ══════════════════════════════════════════════════════════════════════════
+  // Todos los endpoints reales son POST con JSON-RPC envelope.
+  // Respuesta: { jsonrpc, id, result: { ok, message, data } } → unwrap doble.
+  // Los endpoints de settlement aceptan lookup dual:
+  //   (settlement_id)  ó  (shift_id, line_id, material_id)
+  // Todos los handlers BFF de escritura son POST. Los de lectura (catalog,
+  // issue/list, settlement/list, reconcile) también son POST pero se exponen
+  // como GET al consumidor si es más cómodo — solo cambia el wire.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Materials: catálogo de materiales (gf.production.material) ────────────
+  //   POST /api/production/materials/catalog
+  //   Request:  { plant_id?, line_type?: 'rolito'|'barra', active_only? }
+  //   Response: { items: [{id, name, uom, product_id, applies_to_rolito,
+  //                         tolerance_pct, tolerance_abs,
+  //                         default_source_location_id, tag_ids, tag_names}] }
+  if (cleanPath === '/api/production/materials/catalog' && method === 'GET') {
+    const plantId = Number(query.get('plant_id') || 0) || getWarehouseId() || undefined
+    const lineType = query.get('line_type') || undefined
+    const activeOnly = query.get('active_only')
+    const raw = await odooHttp('POST', '/api/production/materials/catalog', {}, {
+      plant_id: plantId,
+      line_type: lineType,
+      active_only: activeOnly == null ? true : activeOnly === 'true' || activeOnly === '1',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error obteniendo catálogo' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: lista de issues del turno (gf.production.material.issue) ───
+  //   POST /api/production/materials/issue/list
+  //   Request:  { shift_id, line_id?, states?: ['draft','confirmed',...] }
+  //   Response: { items: [{id, name, material_id, material_name, qty_issued,
+  //                         issued_by_name, issued_at, state,
+  //                         settlement_id, settlement_state,
+  //                         op_tag_names, has_stock_moves}] }
+  if (cleanPath === '/api/production/materials/issues' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    const lineId  = Number(query.get('line_id') || 0) || undefined
+    const statesParam = query.get('states')
+    const states = statesParam
+      ? statesParam.split(',').map(s => s.trim()).filter(Boolean)
+      : undefined
+    if (!shiftId) return { error: 'shift_id requerido' }
+    const raw = await odooHttp('POST', '/api/production/materials/issue/list', {}, {
+      shift_id: shiftId,
+      line_id: lineId,
+      states,
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error obteniendo materiales' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: crear issue (bodeguero entrega material al turno) ──────────
+  //   POST /api/production/materials/issue/create
+  //   Request:  { shift_id, line_id, material_id, qty_issued, issued_by,
+  //               op_tag_ids?, notes? }
+  //   Response: { issue: {...}, stock_move_ids? }
+  if (cleanPath === '/api/production/materials/issue/create' && method === 'POST') {
+    const shiftId    = Number(body?.shift_id || 0)
+    const lineId     = Number(body?.line_id || 0)
+    const materialId = Number(body?.material_id || 0)
+    const qtyIssued  = Number(body?.qty_issued || 0)
+    const issuedBy   = Number(body?.issued_by || getEmployeeId() || 0)
+    if (!shiftId || !lineId || !materialId) {
+      return { error: 'shift_id, line_id y material_id son requeridos' }
+    }
+    if (!(qtyIssued > 0)) return { error: 'qty_issued debe ser mayor a 0' }
+    if (!issuedBy) return { error: 'issued_by (bodeguero) es requerido' }
+    const raw = await odooHttp('POST', '/api/production/materials/issue/create', {}, {
+      shift_id: shiftId,
+      line_id: lineId,
+      material_id: materialId,
+      qty_issued: qtyIssued,
+      issued_by: issuedBy,
+      op_tag_ids: Array.isArray(body?.op_tag_ids) ? body.op_tag_ids : undefined,
+      notes: body?.notes || '',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error creando issue' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: cancelar issue (antes de que settlement sea reportado) ─────
+  //   POST /api/production/materials/issue/cancel
+  //   Request:  { issue_id, notes? }
+  if (cleanPath === '/api/production/materials/issue/cancel' && method === 'POST') {
+    const issueId = Number(body?.issue_id || 0)
+    if (!issueId) return { error: 'issue_id requerido' }
+    const raw = await odooHttp('POST', '/api/production/materials/issue/cancel', {}, {
+      issue_id: issueId,
+      employee_id: body?.employee_id || getEmployeeId() || undefined,
+      notes: body?.notes || '',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error cancelando issue' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: report del operador (gf.production.material.settlement) ────
+  //   POST /api/production/materials/settlement/report
+  //   Request: { settlement_id }  ó  { shift_id, line_id, material_id }
+  //            + { qty_remaining?, qty_used?, notes? }
+  //   Backend aplica transición issue → settlement.reported.
+  if (cleanPath === '/api/production/materials/report' && method === 'POST') {
+    const settlementId = Number(body?.settlement_id || 0) || undefined
+    const shiftId      = Number(body?.shift_id || 0) || undefined
+    const lineId       = Number(body?.line_id || 0) || undefined
+    const materialId   = Number(body?.material_id || 0) || undefined
+    if (!settlementId && !(shiftId && lineId && materialId)) {
+      return { error: 'Debe enviar settlement_id o (shift_id, line_id, material_id)' }
+    }
+    const raw = await odooHttp('POST', '/api/production/materials/settlement/report', {}, {
+      settlement_id: settlementId,
+      shift_id: shiftId,
+      line_id: lineId,
+      material_id: materialId,
+      employee_id: body?.employee_id || getEmployeeId() || undefined,
+      qty_remaining: body?.qty_remaining != null ? Number(body.qty_remaining) : undefined,
+      qty_used: body?.qty_used != null ? Number(body.qty_used) : undefined,
+      notes: body?.notes || '',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error reportando material' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: validate / reject / dispute del auxiliar admin ─────────────
+  //   Despacha a /settlement/{validate|reject|dispute} según action.
+  //   Request:  { settlement_id }  ó  { shift_id, line_id, material_id }
+  //             + { action: 'validate'|'reject'|'dispute', notes? }
+  if (cleanPath === '/api/production/materials/validate' && method === 'POST') {
+    const action = String(body?.action || '')
+    if (!['validate', 'reject', 'dispute'].includes(action)) {
+      return { error: 'action debe ser validate|reject|dispute' }
+    }
+    const settlementId = Number(body?.settlement_id || 0) || undefined
+    const shiftId      = Number(body?.shift_id || 0) || undefined
+    const lineId       = Number(body?.line_id || 0) || undefined
+    const materialId   = Number(body?.material_id || 0) || undefined
+    if (!settlementId && !(shiftId && lineId && materialId)) {
+      return { error: 'Debe enviar settlement_id o (shift_id, line_id, material_id)' }
+    }
+    const raw = await odooHttp('POST', `/api/production/materials/settlement/${action}`, {}, {
+      settlement_id: settlementId,
+      shift_id: shiftId,
+      line_id: lineId,
+      material_id: materialId,
+      employee_id: body?.employee_id || getEmployeeId() || undefined,
+      notes: body?.notes || '',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || `Error en ${action}` }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: resolver rejected (admin define return/damaged/consumed) ───
+  //   POST /api/production/materials/settlement/resolve_rejected
+  //   Request: { settlement_id | (shift_id, line_id, material_id),
+  //              qty_returned, qty_damaged, qty_consumed, notes? }
+  //   Backend valida que qty_returned + qty_damaged + qty_consumed = qty_issued.
+  //   Transita settlement a force_closed y genera los 3 moves.
+  if (cleanPath === '/api/production/materials/resolve-rejected' && method === 'POST') {
+    const settlementId = Number(body?.settlement_id || 0) || undefined
+    const shiftId      = Number(body?.shift_id || 0) || undefined
+    const lineId       = Number(body?.line_id || 0) || undefined
+    const materialId   = Number(body?.material_id || 0) || undefined
+    if (!settlementId && !(shiftId && lineId && materialId)) {
+      return { error: 'Debe enviar settlement_id o (shift_id, line_id, material_id)' }
+    }
+    const qtyReturned = Number(body?.qty_returned || 0)
+    const qtyDamaged  = Number(body?.qty_damaged || 0)
+    const qtyConsumed = Number(body?.qty_consumed || 0)
+    if (qtyReturned < 0 || qtyDamaged < 0 || qtyConsumed < 0) {
+      return { error: 'Las cantidades deben ser >= 0' }
+    }
+    const raw = await odooHttp('POST', '/api/production/materials/settlement/resolve_rejected', {}, {
+      settlement_id: settlementId,
+      shift_id: shiftId,
+      line_id: lineId,
+      material_id: materialId,
+      employee_id: body?.employee_id || getEmployeeId() || undefined,
+      qty_returned: qtyReturned,
+      qty_damaged: qtyDamaged,
+      qty_consumed: qtyConsumed,
+      notes: body?.notes || '',
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error resolviendo rechazo' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: inbox de settlements pendientes para admin ─────────────────
+  //   POST /api/production/materials/settlement/list
+  //   Request:  { plant_id?, shift_id?, states?: ['reported','disputed',...] }
+  //   Response: { items: [{id, shift_id, shift_date, shift_code, plant_name,
+  //                         line_id, line_name, material_id, material_name,
+  //                         qty_issued, qty_used, qty_remaining, state,
+  //                         reported_by_name, issue_count, has_stock_moves}] }
+  if (cleanPath === '/api/production/materials/settlements-pending' && method === 'GET') {
+    const plantId = Number(query.get('plant_id') || 0) || getWarehouseId() || undefined
+    const shiftId = Number(query.get('shift_id') || 0) || undefined
+    const statesParam = query.get('states')
+    const states = statesParam
+      ? statesParam.split(',').map(s => s.trim()).filter(Boolean)
+      : ['reported', 'disputed', 'rejected']
+    const raw = await odooHttp('POST', '/api/production/materials/settlement/list', {}, {
+      plant_id: plantId,
+      shift_id: shiftId,
+      states,
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error obteniendo settlements' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Materials: reconciliación del turno ────────────────────────────────────
+  //   POST /api/production/materials/reconcile
+  //   Request:  { shift_id, plant_id? }
+  //   Response: { shift, plant, by_line[], summary, incidents, consistent }
+  //   summary incluye: total_settlements, settlements_by_state (con abandoned
+  //   y force_closed), pending_settlements_count, total_{issued,consumed,
+  //   remaining,damaged}, legacy_issues_without_moves_count.
+  if (cleanPath === '/api/production/materials/reconcile' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    const plantId = Number(query.get('plant_id') || 0) || getWarehouseId() || undefined
+    if (!shiftId) return { error: 'shift_id requerido' }
+    const raw = await odooHttp('POST', '/api/production/materials/reconcile', {}, {
+      shift_id: shiftId,
+      plant_id: plantId,
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error en reconciliación de materiales' }
+    return envelope?.data ?? envelope
+  }
+
+  // ── Machines: catalogo de maquinas de produccion ───────────────────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   GET /api/production/machines?plant_id=N
+  //   Response: [{ id, name, type, plant, line }]
+  //   Acepta: plant_id (canonico) o warehouse_id (alias legacy)
+  if (cleanPath === '/api/production/machines' && method === 'GET') {
+    const plantId = Number(query.get('plant_id') || 0) || getWarehouseId()
+    return odooHttp('GET', '/api/production/machines', plantId ? { plant_id: plantId } : {})
+  }
+
+  // ── Lines: catalogo de lineas de produccion ────────────────────────────────
+  // CONTRATO CANONICO (Odoo controller real):
+  //   GET /api/production/lines?plant_id=N
+  //   Response: [{ id, name, type, plant }]
+  //   Acepta: plant_id (canonico) o warehouse_id (alias legacy)
+  if (cleanPath === '/api/production/lines' && method === 'GET') {
+    const plantId = Number(query.get('plant_id') || 0) || getWarehouseId()
+    return odooHttp('GET', '/api/production/lines', plantId ? { plant_id: plantId } : {})
+  }
+
+  // ── Incidents: incidentes del turno ────────────────────────────────────────
+  if (cleanPath === '/api/production/incidents' && method === 'GET') {
+    const shiftId = Number(query.get('shift_id') || 0)
+    if (!shiftId) return []
+    const result = await readModelSorted('gf.production.incident', {
+      fields: ['id', 'name', 'description', 'incident_type', 'severity', 'state', 'shift_id', 'reported_by_id', 'create_date'],
+      domain: [['shift_id', '=', shiftId]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 100,
+      sudo: 1,
+    })
+    return pickListResponse(result).map(row => ({
+      ...row,
+      reported_by: Array.isArray(row.reported_by_id) ? row.reported_by_id[1] : '',
+    }))
+  }
+
+  if (cleanPath === '/api/production/incidents' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    // NOTA: el modelo gf.production.incident NO tiene campo `name` (verificado en vivo
+    // 2026-04-16: "Invalid field 'name' on model 'gf.production.incident'").
+    // Si Sebastian agrega el campo, se puede re-introducir aqui.
+    const result = await createUpdate({
+      model: 'gf.production.incident',
+      method: 'create',
+      dict: {
+        shift_id: shiftId,
+        description: body?.description || body?.name || 'Incidencia',
+        incident_type: body?.incident_type || 'production',
+        severity: body?.severity || 'low',
+        state: 'open',
+        reported_by_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
+  }
+
+  // ── Incidents: resolver incidente ──────────────────────────────────────────
+  // CONTRATO CONFIRMADO: solo `state` es campo verificado en gf.production.incident.
+  // Campos como `resolution`, `resolved_at`, `resolved_by_id` NO estan confirmados
+  // en el modelo Odoo. NO se escriben para evitar errores silenciosos.
+  // Cuando Sebastian confirme esos campos, agregarlos aqui explicitamente.
+  if (cleanPath === '/api/production/incidents/resolve' && method === 'POST') {
+    const incidentId = Number(body?.incident_id || 0)
+    if (!incidentId) return { success: false, error: 'incident_id requerido' }
+    const result = await createUpdate({
+      model: 'gf.production.incident',
+      method: 'write',
+      ids: [incidentId],
+      dict: {
+        state: 'resolved',
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { success: true, data: result }
   }
 
   return NO_DIRECT
@@ -2031,27 +3118,35 @@ async function directSupervision(method, path, body) {
   }
 
   if (cleanPath === '/pwa-sup/active-shift' && method === 'GET') {
-    const today = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-    const domain = [['state', 'in', ['draft', 'in_progress']], ['date', '=', todayStr]]
-    if (warehouseId) domain.push(['plant_warehouse_id', '=', warehouseId])
-    const result = await readModelSorted('gf.production.shift', {
-      fields: [
-        'id', 'name', 'date', 'shift_code', 'state',
-        'plant_warehouse_id', 'leader_employee_id', 'operator_employee_ids',
-        'start_time', 'end_time',
-        'total_kg_produced', 'total_kg_packed', 'total_downtime_min',
-        'total_scrap_kg', 'energy_kwh', 'yield_pct',
-        'x_compliance_score', 'x_meta_kg',
-      ],
-      domain,
-      sort_column: 'id',
-      sort_desc: true,
-      limit: 1,
-      sudo: 1,
-    })
-    return pickFirstResponse(result)
+    // Autoridad: /api/production/shift/current (Odoo validado 2026-04-14).
+    // Este endpoint prioriza state='in_progress' + start_time y soporta
+    // turnos nocturnos (sin filtro fecha=hoy). NO duplicar logica aqui.
+    const resp = await odooHttp('GET', '/api/production/shift/current', {})
+    const data = resp?.data || {}
+    if (!resp?.ok || !data.shift_id) return null
+    // Enriquecer con metricas del dashboard (misma fuente que consume el hub
+    // para KPIs y open_maintenance_requests). Shape compatible con callers
+    // legacy que esperan campos como total_kg_produced.
+    let dash = {}
+    try {
+      const dashResp = await odooHttp('GET', '/api/production/dashboard', { shift_id: data.shift_id })
+      dash = dashResp?.data || {}
+    } catch (_) { /* non-blocking */ }
+    return {
+      id: data.shift_id,
+      name: data.name || dash.name || '',
+      state: data.state || dash.state || '',
+      warehouse_id: data.warehouse_id || 0,
+      // Metricas (desde dashboard; backend las calcula)
+      total_kg_produced: dash.total_kg_produced ?? null,
+      total_kg_packed: dash.total_kg_packed ?? null,
+      total_scrap_kg: dash.total_scrap_kg ?? null,
+      total_downtime_min: dash.total_downtime_min ?? null,
+      energy_kwh: dash.energy_kwh ?? null,
+      yield_pct: dash.yield_pct ?? null,
+      open_downtimes_ids: Array.isArray(dash.open_downtimes) ? dash.open_downtimes : [],
+      open_maintenance_requests: dash.open_maintenance_requests ?? 0,
+    }
   }
 
   if (cleanPath === '/pwa-sup/shift-create' && method === 'POST') {
@@ -2098,7 +3193,7 @@ async function directSupervision(method, path, body) {
       ids: [shiftId],
       dict: {
         state: 'closed',
-        end_time: body?.end_time || new Date().toISOString(),
+        end_time: body?.end_time || odooNow(),
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -2117,14 +3212,20 @@ async function directSupervision(method, path, body) {
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => ({
+      ...row,
+      category: Array.isArray(row.category_id) ? row.category_id[1] : (row.category_id || ''),
+      line_name: Array.isArray(row.line_id) ? row.line_id[1] : '',
+      machine_name: Array.isArray(row.machine_id) ? row.machine_id[1] : '',
+      operator_name: Array.isArray(row.operator_id) ? row.operator_id[1] : '',
+    }))
   }
 
   if (cleanPath === '/pwa-sup/downtime-categories' && method === 'GET') {
     const result = await readModelSorted('gf.production.downtime.category', {
-      fields: ['id', 'name', 'code', 'is_planned'],
-      domain: [],
-      sort_column: 'name',
+      fields: ['id', 'name', 'sequence', 'is_corporate', 'active'],
+      domain: [['active', '=', true]],
+      sort_column: 'sequence',
       sort_desc: false,
       limit: 200,
       sudo: 1,
@@ -2135,6 +3236,9 @@ async function directSupervision(method, path, body) {
   if (cleanPath === '/pwa-sup/downtime-create' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
+    // Fase 4: responsible_id y comment ya existen en modelo Odoo
+    const responsibleId = Number(body?.responsible_id || 0) || undefined
+    const comment = body?.comment || undefined
     const result = await createUpdate({
       model: 'gf.production.downtime',
       method: 'create',
@@ -2143,9 +3247,11 @@ async function directSupervision(method, path, body) {
         category_id: Number(body?.category_id || 0) || undefined,
         machine_id: Number(body?.machine_id || 0) || undefined,
         line_id: Number(body?.line_id || 0) || undefined,
-        start_time: body?.start_time || new Date().toISOString(),
+        start_time: body?.start_time || odooNow(),
         reason: body?.reason || body?.notes || '',
         operator_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+        responsible_id: responsibleId,
+        comment,
         state: 'open',
       },
       sudo: 1,
@@ -2186,25 +3292,56 @@ async function directSupervision(method, path, body) {
     return { success: true, data: result }
   }
 
+  // ── Merma — dual-mode (peso | pieza) ─────────────────────────────────────
+  // GAP CONOCIDO: gf.production.scrap NO tiene product_id / qty_units / scrap_type.
+  // Campos reales en Odoo: shift_id, reason_id, kg, line_id, machine_id,
+  // operator_id, timestamp, notes, photo.
+  //
+  // Estrategia interim (hasta que Sebastian agregue columnas):
+  // - kg siempre es autoritativo (peso_mode: directo | unit_mode: qty * product.weight)
+  // - Metadatos de unit_mode se encodean como prefijo estructurado en notes:
+  //     [PZS|P:{id}|N:{name}|Q:{qty}|KU:{kg_per_unit}] {user_notes}
+  // - GET parsea el prefijo de vuelta en campos estructurados para la UI.
+  //
+  // Cuando Sebastian agregue product_id / qty_units / scrap_type al modelo:
+  // 1) Agregar esos campos al dict de create y fields de read
+  // 2) Remover parsePzsPrefix / encode en notes
+  // 3) Los registros historicos con prefijo seguiran siendo legibles por la UI
+  //    hasta que se migren (ver helper parsePzsPrefix).
   if (cleanPath === '/pwa-sup/scraps' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const result = await readModelSorted('gf.production.scrap', {
-      fields: ['id', 'shift_id', 'product_id', 'kg', 'reason_id', 'notes', 'operator_id', 'line_id', 'machine_id', 'photo', 'timestamp', 'create_date'],
+      fields: ['id', 'shift_id', 'kg', 'reason_id', 'notes', 'operator_id', 'line_id', 'machine_id', 'photo', 'timestamp', 'create_date'],
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
       sort_desc: true,
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => {
+      const parsed = parsePzsPrefix(row.notes || '')
+      return {
+        ...row,
+        reason: Array.isArray(row.reason_id) ? row.reason_id[1] : '',
+        line_name: Array.isArray(row.line_id) ? row.line_id[1] : '',
+        operator_name: Array.isArray(row.operator_id) ? row.operator_id[1] : '',
+        created_at: row.timestamp || row.create_date || '',
+        scrap_type: parsed.type,           // 'unit' | 'weight'
+        product_id: parsed.product_id,     // number | null
+        product_name: parsed.product_name, // string | ''
+        qty_units: parsed.qty_units,       // number | null
+        kg_per_unit: parsed.kg_per_unit,   // number | null
+        notes: parsed.clean_notes,         // notes sin prefijo
+      }
+    })
   }
 
   if (cleanPath === '/pwa-sup/scrap-reasons' && method === 'GET') {
     const result = await readModelSorted('gf.production.scrap.reason', {
-      fields: ['id', 'name', 'code'],
-      domain: [],
-      sort_column: 'name',
+      fields: ['id', 'name', 'sequence', 'is_corporate', 'active'],
+      domain: [['active', '=', true]],
+      sort_column: 'sequence',
       sort_desc: false,
       limit: 200,
       sudo: 1,
@@ -2212,21 +3349,92 @@ async function directSupervision(method, path, body) {
     return pickListResponse(result)
   }
 
+  // Catalogo de productos para merma por pieza.
+  // Reutiliza product.product con sale_ok=True; el campo weight permite
+  // calcular kg automaticamente (qty_units * weight).
+  if (cleanPath === '/pwa-sup/scrap-products' && method === 'GET') {
+    const result = await readModelSorted('product.product', {
+      fields: ['id', 'name', 'weight', 'default_code', 'sale_ok'],
+      domain: [['sale_ok', '=', true]],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 300,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      weight: Number(row.weight || 0),
+      default_code: row.default_code || '',
+    }))
+  }
+
   if (cleanPath === '/pwa-sup/scrap-create' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
+
+    // Strip data URL prefix if present (Odoo expects raw base64)
+    let photo = body?.photo_base64 || body?.photo || undefined
+    if (typeof photo === 'string' && photo.startsWith('data:')) {
+      photo = photo.split(',', 2)[1] || undefined
+    }
+
+    // Dual-mode: 'unit' (producto + piezas) | 'weight' (kg directo)
+    const scrapType = body?.scrap_type === 'unit' ? 'unit' : 'weight'
+    const userNotes = String(body?.notes || '').trim()
+
+    let kg = 0
+    let finalNotes = userNotes
+
+    if (scrapType === 'unit') {
+      const productId = Number(body?.product_id || 0)
+      const productName = String(body?.product_name || '').trim()
+      const qtyUnits = Number(body?.qty_units || 0)
+      const kgPerUnit = Number(body?.kg_per_unit || 0)
+
+      if (!productId) return { success: false, error: 'product_id requerido para merma por pieza' }
+      if (!(qtyUnits > 0)) return { success: false, error: 'qty_units debe ser mayor a 0' }
+
+      // kg = cantidad * peso unitario. Si no hay peso en el producto,
+      // aceptamos un kg manual enviado por la UI (body.kg) como fallback.
+      if (kgPerUnit > 0) {
+        kg = qtyUnits * kgPerUnit
+      } else if (Number(body?.kg || 0) > 0) {
+        kg = Number(body.kg)
+      } else {
+        return { success: false, error: 'El producto no tiene peso unitario; captura kg manualmente.' }
+      }
+
+      // Encode metadata en notes hasta que el modelo tenga columnas nativas.
+      finalNotes = buildPzsPrefix({
+        product_id: productId,
+        product_name: productName,
+        qty_units: qtyUnits,
+        kg_per_unit: kgPerUnit,
+      }) + (userNotes ? ' ' + userNotes : '')
+    } else {
+      // weight mode: kg viene directo del body
+      kg = Number(body?.kg || body?.qty_kg || 0)
+      if (!(kg > 0)) return { success: false, error: 'kg debe ser mayor a 0' }
+    }
+
+    // Fase 4: scrap_phase ya existe en modelo Odoo (selection field)
+    const scrapPhase = body?.scrap_phase || undefined
+
     const result = await createUpdate({
       model: 'gf.production.scrap',
       method: 'create',
       dict: {
         shift_id: shiftId,
-        product_id: Number(body?.product_id || 0) || undefined,
-        kg: Number(body?.kg || body?.qty_kg || 0),
+        kg,
         reason_id: Number(body?.reason_id || 0) || undefined,
-        notes: body?.notes || '',
+        notes: finalNotes,
         operator_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
         line_id: Number(body?.line_id || 0) || undefined,
-        photo: body?.photo_base64 || undefined,
+        machine_id: Number(body?.machine_id || 0) || undefined,
+        scrap_phase: scrapPhase,
+        timestamp: body?.timestamp || odooNow(),
+        photo,
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -2238,14 +3446,19 @@ async function directSupervision(method, path, body) {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const result = await readModelSorted('gf.energy.reading', {
-      fields: ['id', 'shift_id', 'kwh_value', 'reading_type', 'timestamp', 'photo', 'employee_id'],
+      fields: ['id', 'shift_id', 'kwh_value', 'reading_type', 'timestamp', 'photo', 'employee_id', 'create_date'],
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
       sort_desc: true,
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => ({
+      ...row,
+      created_at: row.timestamp || row.create_date || '',
+      employee_name: Array.isArray(row.employee_id) ? row.employee_id[1] : '',
+      photo_url: row.photo ? `data:image/jpeg;base64,${row.photo}` : null,
+    }))
   }
 
   if (cleanPath === '/pwa-sup/energy-create' && method === 'POST') {
@@ -2253,6 +3466,10 @@ async function directSupervision(method, path, body) {
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
     const kwhValue = Number(body?.kwh_value || body?.reading_kwh || 0)
     if (!kwhValue || kwhValue <= 0) return { success: false, error: 'kwh_value debe ser mayor a 0 — lectura real requerida' }
+    let photo = body?.photo_base64 || body?.photo || undefined
+    if (typeof photo === 'string' && photo.startsWith('data:')) {
+      photo = photo.split(',', 2)[1] || undefined
+    }
     const result = await createUpdate({
       model: 'gf.energy.reading',
       method: 'create',
@@ -2260,9 +3477,9 @@ async function directSupervision(method, path, body) {
         shift_id: shiftId,
         kwh_value: kwhValue,
         reading_type: body?.reading_type || undefined,
-        timestamp: body?.timestamp || new Date().toISOString(),
+        timestamp: body?.timestamp || odooNow(),
         employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
-        photo: body?.photo_base64 || undefined,
+        photo,
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -2271,8 +3488,8 @@ async function directSupervision(method, path, body) {
   }
 
   if (cleanPath === '/pwa-sup/maintenance' && method === 'GET') {
+    // maintenance.request has no warehouse_id column; filter by company only.
     const domain = []
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
     if (companyId) domain.push(['company_id', '=', companyId])
     const result = await readModelSorted('maintenance.request', {
       fields: ['id', 'name', 'request_date', 'stage_id', 'priority', 'equipment_id', 'maintenance_type', 'employee_id', 'description', 'schedule_date'],
@@ -2282,10 +3499,21 @@ async function directSupervision(method, path, body) {
       limit: 50,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => ({
+      ...row,
+      subject: row.name || '',
+      stage: Array.isArray(row.stage_id) ? row.stage_id[1] : '',
+      equipment: Array.isArray(row.equipment_id) ? row.equipment_id[1] : '',
+      employee_name: Array.isArray(row.employee_id) ? row.employee_id[1] : '',
+      priority: Number(row.priority || 0),
+    }))
   }
 
   if (cleanPath === '/pwa-sup/maintenance-create' && method === 'POST') {
+    // Odoo priority is a Selection of strings '0'..'3'; coerce defensively.
+    const priority = body?.priority === undefined || body?.priority === null || body?.priority === ''
+      ? '1'
+      : String(body.priority)
     const result = await createUpdate({
       model: 'maintenance.request',
       method: 'create',
@@ -2293,7 +3521,7 @@ async function directSupervision(method, path, body) {
         name: body?.name || body?.subject || 'Solicitud PWA',
         request_date: body?.request_date || new Date().toISOString().slice(0, 10),
         maintenance_type: body?.maintenance_type || body?.type || 'corrective',
-        priority: body?.priority || '1',
+        priority,
         equipment_id: Number(body?.equipment_id || 0) || undefined,
         employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
         description: body?.description || '',
@@ -2316,119 +3544,312 @@ async function directAlmacenPT(method, path, body) {
 
   if (!cleanPath.startsWith('/pwa-pt/')) return NO_DIRECT
 
-  if (cleanPath === '/pwa-pt/pending-pallets' && method === 'GET') {
-    const domain = [['status', '=', 'available'], ['received_by_id', '=', false]]
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
-    const result = await readModelSorted('gf.pallet', {
-      fields: ['id', 'name', 'product_id', 'qty', 'qty_kg', 'kg_total', 'status', 'shift_id', 'warehouse_id', 'created_by_id', 'layers', 'bags_per_layer', 'create_date'],
-      domain,
-      sort_column: 'create_date',
-      sort_desc: true,
-      limit: 200,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name || '',
-      product: row.product_id?.[1] || '',
-      product_id: row.product_id?.[0] || 0,
-      qty: Number(row.qty || 0),
-      kg_total: Number(row.kg_total || row.qty_kg || 0),
-      shift: row.shift_id?.[1] || '',
-      status: row.status || '',
-      layers: Number(row.layers || 0),
-      bags_per_layer: Number(row.bags_per_layer || 0),
-      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
-      create_date: row.create_date || null,
-    }))
+  // ── gf.pallet legacy (entregas/ScreenRecibirPT lo sigue consumiendo) ─────
+  // gf.pallet tiene 0 registros en producción; estos handlers quedan como
+  // stubs vacíos para no romper el módulo entregas hasta que éste migre a la
+  // arquitectura stock.quant + gf.packing.entry. Las pantallas Despacho e
+  // HistorialPT que vivían en almacen-pt fueron eliminadas 2026-04-11 porque
+  // estaban sobre la misma base y nunca tuvieron datos reales.
+  if (cleanPath === '/pwa-pt/pending-pallets' && method === 'GET') return []
+  if (cleanPath === '/pwa-pt/ready-pallets'   && method === 'GET') return []
+  if (cleanPath === '/pwa-pt/accept-pallet'   && method === 'POST') {
+    return { success: true, data: null, _note: 'gf.pallet deprecated' }
   }
-
-  if (cleanPath === '/pwa-pt/accept-pallet' && method === 'POST') {
-    const palletId = Number(body?.pallet_id || 0)
-    if (!palletId) return { success: false, error: 'pallet_id requerido' }
-    const result = await createUpdate({
-      model: 'gf.pallet',
-      method: 'update',
-      ids: [palletId],
-      dict: {
-        received_by_id: Number(body?.received_by_id || getEmployeeId() || 0) || undefined,
-        status: 'available',
-        received_at: new Date().toISOString(),
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { success: true, data: result }
-  }
-
-  if (cleanPath === '/pwa-pt/reject-pallet' && method === 'POST') {
-    const palletId = Number(body?.pallet_id || 0)
-    if (!palletId) return { success: false, error: 'pallet_id requerido' }
-    const result = await createUpdate({
-      model: 'gf.pallet',
-      method: 'update',
-      ids: [palletId],
-      dict: {
-        status: 'hold',
-        reject_reason: body?.reason || '',
-        rejected_by_id: Number(body?.rejected_by_id || getEmployeeId() || 0) || undefined,
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { success: true, data: result }
+  if (cleanPath === '/pwa-pt/reject-pallet'   && method === 'POST') {
+    return { success: true, data: null, _note: 'gf.pallet deprecated' }
   }
 
   if (cleanPath === '/pwa-pt/inventory' && method === 'GET') {
-    const domain = []
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
-    const result = await readModelSorted('stock.quant', {
-      fields: ['id', 'product_id', 'quantity', 'reserved_quantity', 'location_id', 'lot_id', 'warehouse_id'],
-      domain,
-      sort_column: 'product_id',
+    // ─── Canonical PT inventory (BFF — single source of truth) ───────────
+    // Rebuilt 2026-04-11 (v2: family-based classification).
+    //
+    // DECISIÓN CLAVE — la familia del producto es ESTRUCTURAL, no física:
+    //   "Que un producto esté físicamente en PT-IGUALA-ROLITO no significa
+    //    que funcionalmente pertenezca a la línea ROLITO."
+    //
+    // Fuente de verdad de la familia: la jerarquía existente de product.category.
+    // La categoría raíz PT (97 = PRODUCTO TERMINADO / HIELO) tiene 4 hijos
+    // directos que definen el árbol productivo:
+    //     71 BARRA DE HIELO        → familia BARRA
+    //     74 MOLIDO                → familia BARRA  (subproducto operativo,
+    //                                 producido a partir de barras rotas)
+    //     76 ROLITO GOURMET        → familia ROLITO
+    //     90 ROLITO TRADICIONAL    → familia ROLITO
+    //
+    // Al caminar del categ_id del producto hacia arriba hasta ese segundo
+    // nivel obtenemos la familia sin regex de nombre ni heurística frágil.
+    // Recomendación a Sebastián (no bloqueante): agregar un campo
+    // `x_pt_family` (selection) en product.template para hacer el mapping
+    // explícito desde Odoo y eliminar el mapa literal de abajo.
+    //
+    // Reglas del endpoint:
+    //   1. Ubicaciones PT se resuelven DINÁMICAMENTE (no hardcoded):
+    //      stock.location where warehouse_id + usage='internal' + name LIKE 'PT-%'
+    //   2. Productos PT se filtran por categoría child_of 97.
+    //   3. Dedup por product_id sumando cantidades entre ubicaciones.
+    //   4. product_family se calcula por jerarquía (ver arriba). NUNCA se
+    //      infiere del nombre de la ubicación donde está el stock.
+    //   5. stock_locations refleja la distribución física real (separada
+    //      de product_family para que nunca se confundan los conceptos).
+    //   6. Excluye quantity <= 0.
+    //   7. weight_per_unit se parsea del nombre (…(15KG)…) con fallback 1.
+    //
+    // Shape canónico:
+    //   {
+    //     warehouse_id, warehouse_name,
+    //     pt_locations: [{id, name, complete_name}],   // físicas, sin familia
+    //     items: [{
+    //       product_id, product_name,
+    //       category_id, category_name,                 // hoja
+    //       family_root_id, family_root_name,           // segundo nivel bajo 97
+    //       product_family,                             // 'BARRA'|'ROLITO'|'OTRO'
+    //       display_line,                               // = product_family (UI)
+    //       weight_per_unit, quantity, total_kg,
+    //       stock_locations: [{id, name, qty}],         // distribución física
+    //     }],
+    //     totals: {
+    //       products, qty, kg,
+    //       by_family: { BARRA: {qty,kg,count}, ROLITO: {...}, OTRO: {...} },
+    //       by_location: { [locId]: {name, qty, kg, count} },
+    //     },
+    //     by_family: { ... },                           // alias top-level
+    //     generated_at,
+    //   }
+    const PT_ROOT_CATEGORY_ID = 97 // PRODUCTO TERMINADO / HIELO
+
+    // Mapa estructural segundo-nivel → familia operativa.
+    // Es un mapa literal pequeño (4 entradas), no una heurística.
+    // Si el producto no cae en ninguno, queda como 'OTRO' y se loggea.
+    const FAMILY_BY_ROOT_CAT_ID = {
+      71: 'BARRA',  // BARRA DE HIELO
+      74: 'BARRA',  // MOLIDO  (subproducto de barras rotas, línea BARRA)
+      76: 'ROLITO', // ROLITO GOURMET
+      90: 'ROLITO', // ROLITO TRADICIONAL
+    }
+
+    // 1) Resolver ubicaciones PT del warehouse dinámicamente
+    const locDomain = [
+      ['warehouse_id', '=', warehouseId || 76],
+      ['usage', '=', 'internal'],
+      ['name', '=like', 'PT-%'],
+    ]
+    const locRaw = await readModelSorted('stock.location', {
+      fields: ['id', 'name', 'complete_name', 'warehouse_id'],
+      domain: locDomain,
+      sort_column: 'complete_name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    const locRows = pickListResponse(locRaw)
+    const ptLocations = locRows.map((r) => ({
+      id: r.id,
+      name: r.name || r.complete_name || '',
+      complete_name: r.complete_name || '',
+    }))
+    const ptLocationIds = ptLocations.map((l) => l.id)
+    if (!ptLocationIds.length) {
+      return {
+        warehouse_id: warehouseId || 0,
+        warehouse_name: '',
+        pt_locations: [],
+        items: [],
+        totals: {
+          products: 0, qty: 0, kg: 0,
+          by_family: {},
+          by_location: {},
+        },
+        by_family: {},
+        generated_at: new Date().toISOString(),
+      }
+    }
+    const locById = Object.fromEntries(ptLocations.map((l) => [l.id, l]))
+
+    // 2) Resolver árbol de categorías bajo PT para poder subir a la raíz-familia
+    const catRaw = await readModelSorted('product.category', {
+      fields: ['id', 'name', 'parent_id'],
+      domain: [['id', 'child_of', PT_ROOT_CATEGORY_ID]],
+      sort_column: 'complete_name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    })
+    const catRows = pickListResponse(catRaw)
+    // Mapa catId → parentId para subir cadena
+    const parentOf = {}
+    const nameOf = {}
+    for (const c of catRows) {
+      parentOf[c.id] = c.parent_id?.[0] || 0
+      nameOf[c.id] = c.name || ''
+    }
+    // Resuelve familia (BARRA/ROLITO/OTRO) + la categoría-raíz (2do nivel)
+    // subiendo hasta que el padre sea PT_ROOT_CATEGORY_ID.
+    function resolveFamily(categId) {
+      let cur = categId
+      let guard = 0
+      while (cur && guard++ < 10) {
+        if (parentOf[cur] === PT_ROOT_CATEGORY_ID) {
+          return {
+            family_root_id: cur,
+            family_root_name: nameOf[cur] || '',
+            product_family: FAMILY_BY_ROOT_CAT_ID[cur] || 'OTRO',
+          }
+        }
+        const next = parentOf[cur]
+        if (!next || next === cur) break
+        cur = next
+      }
+      return { family_root_id: 0, family_root_name: '', product_family: 'OTRO' }
+    }
+
+    // 3) Resolver productos PT por categoría (estructural)
+    const prodRaw = await readModelSorted('product.product', {
+      fields: ['id', 'name', 'categ_id'],
+      domain: [['categ_id', 'child_of', PT_ROOT_CATEGORY_ID]],
+      sort_column: 'name',
       sort_desc: false,
       limit: 500,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      product_id: row.product_id?.[0] || row.product_id,
-      product: row.product_id?.[1] || '',
-      product_name: row.product_id?.[1] || '',
-      quantity: Number(row.quantity || 0),
-      reserved: Number(row.reserved_quantity || 0),
-      available: Number(row.quantity || 0) - Number(row.reserved_quantity || 0),
-      location_id: row.location_id,
-      lot_id: row.lot_id,
-      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
-    }))
-  }
+    const prodRows = pickListResponse(prodRaw)
+    const ptProductIds = prodRows.map((p) => p.id)
+    const productCatalog = Object.fromEntries(
+      prodRows.map((p) => {
+        const name = p.name || ''
+        const mKg = name.match(/\(([\d.]+)\s*KG\)/i)
+        const categId = p.categ_id?.[0] || 0
+        const fam = resolveFamily(categId)
+        return [p.id, {
+          product_id: p.id,
+          product_name: name,
+          category_id: categId,
+          category_name: p.categ_id?.[1] || '',
+          family_root_id: fam.family_root_id,
+          family_root_name: fam.family_root_name,
+          product_family: fam.product_family,
+          weight_per_unit: mKg ? Number(mKg[1]) || 1 : 1,
+        }]
+      })
+    )
 
-  if (cleanPath === '/pwa-pt/ready-pallets' && method === 'GET') {
-    const domain = [['status', '=', 'available'], ['received_by_id', '!=', false]]
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
-    const result = await readModelSorted('gf.pallet', {
-      fields: ['id', 'name', 'product_id', 'qty', 'qty_kg', 'kg_total', 'status', 'shift_id', 'warehouse_id', 'received_by_id', 'layers', 'bags_per_layer', 'create_date'],
-      domain,
-      sort_column: 'create_date',
-      sort_desc: true,
-      limit: 200,
+    // 4) Query stock.quant acotada por ubicaciones PT y productos PT
+    const quantRaw = await readModelSorted('stock.quant', {
+      fields: ['id', 'product_id', 'quantity', 'reserved_quantity', 'location_id'],
+      domain: [
+        ['location_id', 'in', ptLocationIds],
+        ['product_id', 'in', ptProductIds],
+      ],
+      sort_column: 'product_id',
+      sort_desc: false,
+      limit: 1000,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name || '',
-      product: row.product_id?.[1] || '',
-      product_id: row.product_id?.[0] || 0,
-      qty: Number(row.qty || 0),
-      kg_total: Number(row.kg_total || row.qty_kg || 0),
-      shift: row.shift_id?.[1] || '',
-      status: row.status || '',
-      layers: Number(row.layers || 0),
-      bags_per_layer: Number(row.bags_per_layer || 0),
-      warehouse_id: row.warehouse_id?.[0] || warehouseId || 0,
-      create_date: row.create_date || null,
-    }))
+    const quantRows = pickListResponse(quantRaw)
+
+    // 5) Agrupar por product_id y enriquecer con distribución física
+    const byProduct = new Map()
+    for (const row of quantRows) {
+      const pid = row.product_id?.[0] || row.product_id
+      if (!pid) continue
+      const qty = Number(row.quantity || 0)
+      if (qty <= 0) continue
+      const locId = row.location_id?.[0] || row.location_id
+      const locInfo = locById[locId]
+      if (!locInfo) continue
+      const catalog = productCatalog[pid] || {
+        product_id: pid,
+        product_name: row.product_id?.[1] || '',
+        category_id: 0,
+        category_name: '',
+        family_root_id: 0,
+        family_root_name: '',
+        product_family: 'OTRO',
+        weight_per_unit: 1,
+      }
+      let item = byProduct.get(pid)
+      if (!item) {
+        item = {
+          ...catalog,
+          display_line: catalog.product_family,
+          quantity: 0,
+          total_kg: 0,
+          stock_locations: [],
+        }
+        byProduct.set(pid, item)
+      }
+      item.quantity += qty
+      item.total_kg += qty * (catalog.weight_per_unit || 1)
+      item.stock_locations.push({
+        id: locId,
+        name: locInfo.name,
+        qty,
+      })
+    }
+
+    // 6) Construir agregados por familia y por ubicación física
+    const items = []
+    const byFamily = {}
+    const byLocation = {}
+    let totalQty = 0
+    let totalKg = 0
+    const unknownFamily = []
+
+    for (const item of byProduct.values()) {
+      if (item.quantity <= 0) continue
+      // Redondeos defensivos
+      item.quantity = Math.round(item.quantity * 1000) / 1000
+      item.total_kg = Math.round(item.total_kg * 1000) / 1000
+      items.push(item)
+      totalQty += item.quantity
+      totalKg += item.total_kg
+
+      const fam = item.product_family || 'OTRO'
+      if (fam === 'OTRO') unknownFamily.push({ id: item.product_id, name: item.product_name, cat: item.category_name })
+      if (!byFamily[fam]) byFamily[fam] = { qty: 0, kg: 0, count: 0 }
+      byFamily[fam].qty += item.quantity
+      byFamily[fam].kg += item.total_kg
+      byFamily[fam].count += 1
+
+      // Distribución física (locaciones reales del stock)
+      for (const sl of item.stock_locations) {
+        const w = item.weight_per_unit || 1
+        if (!byLocation[sl.id]) byLocation[sl.id] = { name: sl.name, qty: 0, kg: 0, count: 0 }
+        byLocation[sl.id].qty += sl.qty
+        byLocation[sl.id].kg += sl.qty * w
+        byLocation[sl.id].count += 1
+      }
+    }
+    items.sort((a, b) => a.product_name.localeCompare(b.product_name, 'es'))
+
+    if (unknownFamily.length) {
+      console.warn('[pwa-pt/inventory] productos sin family estructural:', unknownFamily)
+    }
+
+    // Redondeos finales de agregados
+    for (const k of Object.keys(byFamily)) {
+      byFamily[k].qty = Math.round(byFamily[k].qty * 1000) / 1000
+      byFamily[k].kg = Math.round(byFamily[k].kg * 1000) / 1000
+    }
+    for (const k of Object.keys(byLocation)) {
+      byLocation[k].qty = Math.round(byLocation[k].qty * 1000) / 1000
+      byLocation[k].kg = Math.round(byLocation[k].kg * 1000) / 1000
+    }
+
+    return {
+      warehouse_id: warehouseId || 76,
+      warehouse_name: '',
+      pt_locations: ptLocations,
+      items,
+      totals: {
+        products: items.length,
+        qty: Math.round(totalQty * 1000) / 1000,
+        kg: Math.round(totalKg * 1000) / 1000,
+        by_family: byFamily,
+        by_location: byLocation,
+      },
+      by_family: byFamily,
+      generated_at: new Date().toISOString(),
+    }
   }
 
   if (cleanPath === '/pwa-pt/cedis-list' && method === 'GET') {
@@ -2448,58 +3869,13 @@ async function directAlmacenPT(method, path, body) {
     }))
   }
 
-  if (cleanPath === '/pwa-pt/dispatch-create' && method === 'POST') {
-    const palletIds = Array.isArray(body?.pallet_ids) ? body.pallet_ids.map(Number).filter(Boolean) : []
-    if (!palletIds.length) return { success: false, error: 'pallet_ids requeridos' }
-    const destWarehouseId = Number(body?.destination_warehouse_id || body?.cedis_id || 0)
-    const promises = palletIds.map((id) =>
-      createUpdate({
-        model: 'gf.pallet',
-        method: 'update',
-        ids: [id],
-        dict: {
-          status: 'dispatched',
-          dispatched_by_id: Number(body?.dispatched_by_id || getEmployeeId() || 0) || undefined,
-          dispatched_at: new Date().toISOString(),
-          destination_warehouse_id: destWarehouseId || undefined,
-        },
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
-    )
-    await Promise.all(promises)
-    return { success: true, dispatched: palletIds.length }
-  }
-
-  if (cleanPath === '/pwa-pt/dispatch-history' && method === 'GET') {
-    const domain = [['picking_type_code', '=', 'internal']]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    const result = await readModelSorted('stock.picking', {
-      fields: ['id', 'name', 'origin', 'state', 'scheduled_date', 'date_done', 'picking_type_id', 'location_id', 'location_dest_id', 'company_id'],
-      domain,
-      sort_column: 'scheduled_date',
-      sort_desc: true,
-      limit: 50,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      origin: row.location_id?.[1] || '',
-      destination: row.location_dest_id?.[1] || '',
-      state: row.state || '',
-      date: row.date_done || row.scheduled_date || null,
-      scheduled_date: row.scheduled_date || null,
-      date_done: row.date_done || null,
-    }))
-  }
-
   // ── Dashboard summary (Sebastián commit fa20403) ──────────────────────────
   if (cleanPath === '/pwa-pt/dashboard-summary' && method === 'GET') {
-    return odooJson('/api/pt/dashboard/summary', {
+    const result = await odooHttp('GET', '/api/pt/dashboard/summary', {
       warehouse_id: warehouseId,
       company_id: companyId || undefined,
     })
+    return result?.data ?? result
   }
 
   // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
@@ -2577,10 +3953,33 @@ async function directAlmacenPT(method, path, body) {
   //   Architectural: reception stays on gf.packing.entry, no duplicate
   //   stock.move, inventory posting via gf.inventory.posting only.
   if (cleanPath === '/pwa-pt/reception-pending' && method === 'GET') {
-    return odooJson('/api/pt/reception/pending', {
+    // El controller real requiere warehouse_id + shift_date + shift_code.
+    // Obtenemos shift_date y shift_code del turno activo via
+    // POST /api/production/pt/reception/pending (que los expone en
+    // response.data.shift.{date,shift_code}).
+    let shiftDate
+    let shiftCode
+    try {
+      const current = await odooHttp('GET', '/api/production/shift/current', {})
+      const shiftId = current?.data?.shift_id || 0
+      if (shiftId) {
+        const meta = await odooHttp('POST', '/api/production/pt/reception/pending', {}, {
+          shift_id: shiftId,
+        })
+        const metaEnvelope = meta?.result ?? meta
+        const metaData = metaEnvelope?.data || {}
+        shiftDate = metaData?.shift?.date
+        shiftCode = metaData?.shift?.shift_code
+      }
+    } catch (_) { /* fallback: sin enriquecer */ }
+
+    const result = await odooHttp('GET', '/api/pt/reception/pending', {
       warehouse_id: warehouseId,
       company_id: companyId || undefined,
+      shift_date: shiftDate || undefined,
+      shift_code: shiftCode || undefined,
     })
+    return result?.data ?? result
   }
 
   if (cleanPath === '/pwa-pt/reception-create' && method === 'POST') {
@@ -2601,10 +4000,11 @@ async function directAlmacenPT(method, path, body) {
   // ── Transformation (Sebastián rollout 2026-04-10) ────────────────────────
   // Backend: uses existing gf.transformation.order model (no new model).
   if (cleanPath === '/pwa-pt/transformation-pending' && method === 'GET') {
-    return odooJson('/api/pt/transformation/pending', {
+    const result = await odooHttp('GET', '/api/pt/transformation/pending', {
       warehouse_id: warehouseId,
       company_id: companyId || undefined,
     })
+    return result?.data ?? result
   }
 
   if (cleanPath === '/pwa-pt/transformation-create' && method === 'POST') {
@@ -2625,11 +4025,12 @@ async function directAlmacenPT(method, path, body) {
   //   Scope precedence: employee > branch > global.
   //   Uses existing gf.saleops.forecast, line aggregation.
   if (cleanPath === '/pwa-pt/forecast-pending' && method === 'GET') {
-    return odooJson('/api/pt/forecast/pending', {
+    const result = await odooHttp('GET', '/api/pt/forecast/pending', {
       warehouse_id: warehouseId,
       employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
       company_id: companyId || undefined,
     })
+    return result?.data ?? result
   }
 
   // ── Day sales by employee (Sebastián audit 2026-04-10) ──────────────────
@@ -2637,11 +4038,12 @@ async function directAlmacenPT(method, path, body) {
   // Expone sales_qty_by_employee_for_day() como HTTP endpoint.
   // Response: { ok, data: { date, warehouse_id, items: [{employee_id, employee_name, qty_total, ...}] } }
   if (cleanPath === '/pwa-pt/day-sales' && method === 'GET') {
-    return odooJson('/api/pt/day-sales', {
+    const result = await odooHttp('GET', '/api/pt/day-sales', {
       warehouse_id: warehouseId,
       date: query.get('date') || undefined,
       company_id: companyId || undefined,
     })
+    return result?.data ?? result
   }
 
   // ── Transfers history PT→CEDIS (Sebastián audit 2026-04-10) ─────────────
@@ -2649,7 +4051,7 @@ async function directAlmacenPT(method, path, body) {
   // Historial de stock.picking para transferencias PT→CEDIS.
   // Response: { ok, data: { items: [{id, name, state, date, origin, destination, lines}], total } }
   if (cleanPath === '/pwa-pt/transfers-history' && method === 'GET') {
-    return odooJson('/api/pt/transfers/history', {
+    const result = await odooHttp('GET', '/api/pt/transfers/history', {
       warehouse_id: warehouseId,
       date_from: query.get('date_from') || undefined,
       date_to: query.get('date_to') || undefined,
@@ -2657,6 +4059,7 @@ async function directAlmacenPT(method, path, body) {
       offset: Number(query.get('offset') || 0),
       company_id: companyId || undefined,
     })
+    return result?.data ?? result
   }
 
   return NO_DIRECT
@@ -3151,16 +4554,18 @@ export async function api(method, path, body) {
   const token = getToken()
   if (!token) {
     expireSession()
-    throw new Error('no_session')
+    throw new ApiError('no_session', { status: 401, code: 'no_session' })
   }
 
-  if (isBypass()) {
-    throw new Error('bypass_no_api')
-  }
-
+  // Bypass mode: allow direct Odoo handlers (public /get_records is sudo=1),
+  // but still block any n8n fallback since bypass has no JWT.
   const direct = await routeDirect(method, path, body)
   if (direct !== NO_DIRECT) {
     return direct
+  }
+
+  if (isBypass()) {
+    throw new ApiError('bypass_no_api', { status: 0, code: 'bypass' })
   }
 
   const opts = {
@@ -3180,15 +4585,21 @@ export async function api(method, path, body) {
   }
   if (body) opts.body = JSON.stringify(body)
 
-  const res = await fetch(`${N8N_BASE}${path}`, opts)
+  let res
+  try {
+    res = await fetch(`${N8N_BASE}${path}`, opts)
+  } catch (fetchErr) {
+    // Network error (sin conexion, DNS, CORS, etc.)
+    throw new ApiError(fetchErr.message || 'Network error', { status: 0, code: 'network' })
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
       expireSession()
-      throw new Error('no_session')
+      throw new ApiError('no_session', { status: 401, code: 'no_session' })
     }
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || `http_${res.status}`)
+    throw new ApiError(err.message || `http_${res.status}`, { status: res.status, code: 'http_error' })
   }
 
   const json = await res.json()

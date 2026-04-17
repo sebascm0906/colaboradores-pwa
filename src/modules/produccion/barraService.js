@@ -12,6 +12,8 @@ import {
   harvestSlot,
   createTankIncident,
   getMachineSalt,
+  getTankSlots,
+  getTanks,
 } from './api'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -26,20 +28,35 @@ export const INCIDENT_TYPES = [
   { id: 'other',         label: 'Otro',                    icon: '\u2753' },
 ]
 
+// ── Tanks ───────────────────────────────────────────────────────────────────
+
+/**
+ * List all brine tanks (machine_type='tanque_salmuera'). Returns { tanks }.
+ */
+export async function listTanks() {
+  return getTanks()
+}
+
+// ── Slots ───────────────────────────────────────────────────────────────────
+
+/**
+ * List brine slots for a tank. Returns { slots, tank, next_ready_id }.
+ * `tank` has bars_per_basket, kg_per_bar, product, salt level, brine temp, etc.
+ */
+export async function listSlots(machineId = MACHINE_ID_BARRA) {
+  return getTankSlots(machineId)
+}
+
 // ── Harvest ─────────────────────────────────────────────────────────────────
 
 /**
- * Harvest a brine slot — calls POST /api/ice/slot/harvest
+ * Harvest a brine slot — calls action_cosechar on x_ice.brine.slot
  * @param {number} slotId — x_ice.brine.slot id
- * @param {number} qty — kg harvested
- * @param {string} lotName — lot identifier
- * @param {number} [temperature] — brine temp at extraction
+ * @param {number} [temperature] — brine temp at extraction (recorded post-harvest)
  */
-export async function harvest(slotId, qty, lotName, temperature = 0) {
+export async function harvest(slotId, temperature = 0) {
   return harvestSlot({
     slot_id: slotId,
-    qty: parseFloat(qty) || 0,
-    lot_name: lotName || '',
     temperature: parseFloat(temperature) || 0,
   })
 }

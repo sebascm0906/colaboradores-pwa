@@ -17,6 +17,15 @@ import {
   FALLBACK_PRODUCTS,
 } from './rolitoService'
 import { getPackingEntries } from './api'
+import { computePackingCoherence } from '../shared/packingCoherence'
+
+// Lista de ciclos no empacados del turno (los que aun no tienen kg_packed)
+function getUnpackedCycles(cycles) {
+  if (!Array.isArray(cycles)) return []
+  return cycles
+    .filter(c => c.state === 'dumped' && (c.kg_dumped || 0) > 0)
+    .sort((a, b) => (b.cycle_number || 0) - (a.cycle_number || 0))
+}
 
 export default function ScreenEmpaqueRolito() {
   const navigate = useNavigate()
@@ -26,7 +35,8 @@ export default function ScreenEmpaqueRolito() {
   const [shift, setShift] = useState(null)
   const [products, setProducts] = useState(FALLBACK_PRODUCTS)
   const [entries, setEntries] = useState([])
-  const [lastCycleId, setLastCycleId] = useState(null)
+  const [cycles, setCycles] = useState([])
+  const [selectedCycleId, setSelectedCycleId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -46,21 +56,40 @@ export default function ScreenEmpaqueRolito() {
       setShift(overview.shift)
       setProducts(prods)
       setEntries([])
+      setCycles(overview.cycles || [])
 
       if (overview.shift?.id) {
         const ents = await getPackingEntries(overview.shift.id).catch(() => [])
         setEntries(ents || [])
       }
 
-      // Get last dumped cycle for linking
+      // Preseleccionar el ultimo ciclo dumped (operador puede cambiar)
       const lastDumped = getLastDumpedCycle(overview.cycles)
-      setLastCycleId(lastDumped?.id || null)
+      if (lastDumped?.id) setSelectedCycleId(prev => prev ?? lastDumped.id)
     } catch {
       setError('Error cargando datos')
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const unpackedCycles = useMemo(() => getUnpackedCycles(cycles), [cycles])
+  const selectedCycle = useMemo(
+    () => cycles.find(c => c.id === selectedCycleId) || null,
+    [cycles, selectedCycleId]
+  )
+
+  // Coherencia ciclos vs empaque — warnings no bloqueantes (Fase 3)
+  const coherence = useMemo(
+    () => computePackingCoherence(cycles, entries),
+    [cycles, entries]
+  )
+  const selectedCycleCoherence = useMemo(
+    () => selectedCycleId
+      ? coherence.perCycle.find(x => x.cycleId === selectedCycleId) || null
+      : null,
+    [coherence, selectedCycleId]
+  )
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -70,11 +99,16 @@ export default function ScreenEmpaqueRolito() {
 
   async function handleSubmit() {
     if (!selectedProduct || qtyBags <= 0 || !shift?.id) return
+    // Bloqueo duro: ciclo obligatorio
+    if (!selectedCycleId) {
+      setError('Selecciona el ciclo al que pertenece este empaque')
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      // cycle_id se envia — backend puede o no vincularlo
-      await registerPacking(shift.id, selectedProduct.id, qtyBags, lastCycleId)
+      // cycle_id se envia siempre — backend debe persistirlo
+      await registerPacking(shift.id, selectedProduct.id, qtyBags, selectedCycleId)
       setSuccess(`${qtyBags} bolsas registradas (${totalKg} kg)`)
       setQtyBags(0)
       // Reload entries
@@ -138,19 +172,85 @@ export default function ScreenEmpaqueRolito() {
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 2 }}>{entries.length} registros</p>
             </div>
 
-            {/* cycle_id linkage notice */}
-            {lastCycleId && (
-              <div style={{
-                padding: 8, borderRadius: TOKENS.radius.md,
-                background: 'rgba(43,143,224,0.06)', border: '1px solid rgba(43,143,224,0.15)',
-                textAlign: 'center',
-              }}>
-                <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: 0 }}>
-                  Vinculado al ciclo #{lastCycleId}
-                  <span style={{ color: TOKENS.colors.textLow }}> (si backend lo acepta)</span>
+            {/* Cycle selector — obligatorio */}
+            <div>
+              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>
+                CICLO DE ESTE EMPAQUE <span style={{ color: TOKENS.colors.error }}>*</span>
+              </p>
+              {unpackedCycles.length === 0 ? (
+                <div style={{
+                  padding: 12, borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                    No hay ciclos terminados todavia
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                    Termina un ciclo de congelacion antes de empacar
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                  {unpackedCycles.map(c => {
+                    const active = selectedCycleId === c.id
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedCycleId(c.id)}
+                        style={{
+                          flexShrink: 0, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                          background: active ? 'rgba(43,143,224,0.16)' : TOKENS.colors.surface,
+                          border: `2px solid ${active ? 'rgba(43,143,224,0.5)' : TOKENS.colors.border}`,
+                          color: active ? TOKENS.colors.blue2 : TOKENS.colors.textSoft,
+                          fontSize: 13, fontWeight: 700,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                        }}
+                      >
+                        <span>Ciclo #{c.cycle_number || c.id}</span>
+                        <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.8 }}>
+                          {Math.round(c.kg_dumped || 0)} kg
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {selectedCycle && (
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0', textAlign: 'center' }}>
+                  Seleccionado: Ciclo #{selectedCycle.cycle_number || selectedCycle.id} — {Math.round(selectedCycle.kg_dumped || 0)} kg producidos
                 </p>
-              </div>
-            )}
+              )}
+
+              {/* Alerta de coherencia (no bloquea) */}
+              {selectedCycleCoherence && selectedCycleCoherence.status !== 'ok' && (
+                <div style={{
+                  marginTop: 8, padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                  background: selectedCycleCoherence.status === 'over'
+                    ? 'rgba(239,68,68,0.08)'
+                    : 'rgba(245,158,11,0.08)',
+                  border: `1px solid ${selectedCycleCoherence.status === 'over'
+                    ? 'rgba(239,68,68,0.25)'
+                    : 'rgba(245,158,11,0.25)'}`,
+                }}>
+                  <p style={{
+                    ...typo.caption, margin: 0, fontWeight: 600,
+                    color: selectedCycleCoherence.status === 'over'
+                      ? TOKENS.colors.error
+                      : TOKENS.colors.warning,
+                  }}>
+                    {selectedCycleCoherence.status === 'over'
+                      ? 'Ya empacaste mas de lo producido en este ciclo'
+                      : selectedCycleCoherence.status === 'partial'
+                        ? 'Aun falta empacar producto de este ciclo'
+                        : 'Este ciclo aun no se ha empacado'}
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                    Producido {Math.round(selectedCycleCoherence.produced)} kg · Empacado {Math.round(selectedCycleCoherence.packed)} kg
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Product selection — big buttons */}
             <div>
@@ -261,21 +361,29 @@ export default function ScreenEmpaqueRolito() {
             )}
 
             {/* Submit */}
-            <button
-              onClick={handleSubmit}
-              disabled={!selectedProduct || qtyBags <= 0 || saving}
-              style={{
-                width: '100%', padding: '16px',
-                borderRadius: TOKENS.radius.lg,
-                background: (selectedProduct && qtyBags > 0) ? 'linear-gradient(90deg, #15803d, #22c55e)' : TOKENS.colors.surface,
-                color: (selectedProduct && qtyBags > 0) ? 'white' : TOKENS.colors.textLow,
-                fontSize: 16, fontWeight: 700,
-                boxShadow: (selectedProduct && qtyBags > 0) ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
-                opacity: saving ? 0.6 : 1,
-              }}
-            >
-              {saving ? 'Guardando...' : 'CONFIRMAR EMPAQUE'}
-            </button>
+            {(() => {
+              const canSubmit = selectedProduct && qtyBags > 0 && selectedCycleId
+              const labelBlocked = !selectedCycleId ? 'SELECCIONA UN CICLO' :
+                !selectedProduct ? 'SELECCIONA UNA BOLSA' :
+                qtyBags <= 0 ? 'INGRESA CANTIDAD' : 'CONFIRMAR EMPAQUE'
+              return (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || saving}
+                  style={{
+                    width: '100%', padding: '16px',
+                    borderRadius: TOKENS.radius.lg,
+                    background: canSubmit ? 'linear-gradient(90deg, #15803d, #22c55e)' : TOKENS.colors.surface,
+                    color: canSubmit ? 'white' : TOKENS.colors.textLow,
+                    fontSize: 16, fontWeight: 700,
+                    boxShadow: canSubmit ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? 'Guardando...' : labelBlocked}
+                </button>
+              )
+            })()}
 
             {/* History */}
             {entries.length > 0 && (

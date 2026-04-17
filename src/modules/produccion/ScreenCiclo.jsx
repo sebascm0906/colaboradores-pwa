@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
@@ -24,6 +24,8 @@ export default function ScreenCiclo() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const submittingRef = useRef(false)
 
   // Formulario
   const [freezeStart, setFreezeStart] = useState('')
@@ -62,8 +64,11 @@ export default function ScreenCiclo() {
   }
 
   async function handleSubmit() {
-    if (!freezeStart) { setError('Hora de inicio de congelación es obligatoria'); return }
+    if (!freezeStart) { setError('Ingresa la hora de inicio'); return }
+    if (!kgParsed || kgParsed <= 0) { setError('Ingresa los kg descargados'); return }
     if (!shift?.id) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setError('')
     setSaving(true)
 
@@ -89,7 +94,8 @@ export default function ScreenCiclo() {
         await updateCycle(cycleId, updates)
       }
 
-      setSuccess('Ciclo registrado correctamente')
+      submittingRef.current = false
+      setSuccess(isBarras ? 'Producción registrada' : 'Ciclo registrado correctamente')
       // Limpiar formulario
       setFreezeStart('')
       setFreezeEnd('')
@@ -100,12 +106,15 @@ export default function ScreenCiclo() {
       setTimeout(() => navigate('/produccion'), 1500)
     } catch (e) {
       setError(e.message || 'Error al guardar el ciclo')
+      submittingRef.current = false
     } finally {
       setSaving(false)
     }
   }
 
-  const canSubmit = freezeStart && !saving
+  // Requiere hora inicio Y kg > 0 para evitar ciclos fantasma
+  const kgParsed = kgDumped === '' ? 0 : parseFloat(kgDumped)
+  const canSubmit = freezeStart && kgParsed > 0 && !saving
 
   return (
     <div style={{
@@ -135,7 +144,7 @@ export default function ScreenCiclo() {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{isBarras ? 'Ciclo Salmuera' : 'Nuevo Ciclo'}</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{isBarras ? 'Producción' : 'Nuevo Ciclo'}</span>
         </div>
 
         {loading ? (
@@ -160,9 +169,9 @@ export default function ScreenCiclo() {
             </div>
 
             {/* Kg descargados */}
-            <SectionLabel text="DESCARGA" typo={typo} />
+            <SectionLabel text={isBarras ? 'RESULTADO' : 'DESCARGA'} typo={typo} />
             <div>
-              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Kg descargados</label>
+              <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>{isBarras ? 'Kg producidos' : 'Kg descargados'}</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -177,6 +186,17 @@ export default function ScreenCiclo() {
                 }}
               />
             </div>
+
+            {/* Hint: falta kg */}
+            {freezeStart && kgParsed <= 0 && !error && (
+              <div style={{
+                padding: 10, borderRadius: TOKENS.radius.md,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                color: '#f59e0b', ...typo.caption, textAlign: 'center',
+              }}>
+                Ingresa los kg descargados para registrar el ciclo
+              </div>
+            )}
 
             {/* Error */}
             {error && (
@@ -215,7 +235,7 @@ export default function ScreenCiclo() {
                 marginTop: 8,
               }}
             >
-              {saving ? 'Guardando...' : 'Registrar Ciclo'}
+              {saving ? 'Guardando...' : isBarras ? 'Registrar Producción' : 'Registrar Ciclo'}
             </button>
 
             <div style={{ height: 24 }} />

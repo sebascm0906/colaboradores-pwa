@@ -28,66 +28,185 @@ import { api } from '../../lib/api'
 /** Default warehouse: Planta Iguala */
 export const DEFAULT_WAREHOUSE_ID = 76
 
-/** PT locations in Planta Iguala */
-export const PT_LOCATIONS = {
-  ROLITO: { id: 1164, name: 'PT-IGUALA-ROLITO', path: 'PIGU/PT-IGUALA-ROLITO' },
-  BARRA:  { id: 1519, name: 'PT-IGUALA-BARRA',  path: 'PIGU/PT-IGUALA-BARRA' },
-}
-
-/** Products with known weights (verified in production) */
-export const KNOWN_PRODUCTS = [
-  { id: 758, name: 'LAURITA ROLITO 15KG', weight: 15, line: 'ROLITO' },
-  { id: 761, name: 'LAURITA ROLITO 5.5KG', weight: 5.5, line: 'ROLITO' },
-  { id: 760, name: 'LAURITA ROLITO 3.8KG', weight: 3.8, line: 'ROLITO' },
-  { id: 724, name: 'BARRA GRANDE 75KG', weight: 75, line: 'BARRA' },
-  { id: 725, name: 'BARRA CHICA 50KG', weight: 50, line: 'BARRA' },
-  { id: 726, name: '1/4 BARRA GRANDE 12KG', weight: 15, line: 'BARRA' },
-  { id: 727, name: '1/2 BARRA GRANDE 30KG', weight: 35, line: 'BARRA' },
-  { id: 728, name: '1/2 BARRA CHICA 20KG', weight: 25, line: 'BARRA' },
-  { id: 729, name: 'MOLIDO 25KG', weight: 25, line: 'BARRA' },
-  { id: 730, name: 'MOLIDO 35KG', weight: 35, line: 'BARRA' },
-]
-
 /** FIFO thresholds (days) */
 export const FIFO_THRESHOLDS = { ok: 3, warn: 7 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  LIVE — Inventory (stock.quant)
+//  LIVE — Inventory (stock.quant)  — BFF canonical single source of truth
 // ═══════════════════════════════════════════════════════════════════════════════
+//
+// Todas las pantallas PT consumen el inventario desde UNA sola salida canónica
+// producida por `/pwa-pt/inventory` en `src/lib/api.js`. El BFF ya:
+//   - Resuelve ubicaciones PT dinámicamente (sin IDs hardcoded).
+//   - Filtra productos por categoría estructural (no regex de nombre).
+//   - Deduplica por product_id sumando cantidades entre ubicaciones.
+//   - Excluye MP y cantidades ≤ 0.
+//   - Calcula weight_per_unit parseando el nombre (fallback 1).
+//
+// Este servicio sólo hace:
+//   1. Fetch + cache resiliente en localStorage.
+//   2. Exponer la forma canónica (`getInventoryCanonical`) para pantallas que
+//      necesitan totales/by_family.
+//   3. Exponer la lista plana `items[]` (`getInventory`) para pantallas que
+//      solo necesitan iterar productos.
+//
+// Cada item del canonical incluye:
+//   product_family   → 'BARRA' | 'ROLITO' | 'OTRO'  (estructural, por categoría)
+//   display_line     → alias UI de product_family
+//   stock_locations  → distribución física real (NO se usa para clasificar)
+//
+// Nadie más debe reconstruir agregados, reclasificar por ubicación, ni
+// filtrar MP aquí.
 
-/**
- * Get current inventory for a warehouse from stock.quant.
- * Returns items with location grouping info.
- */
-export async function getInventory(warehouseId = DEFAULT_WAREHOUSE_ID) {
-  const items = await api('GET', `/pwa-pt/inventory?warehouse_id=${warehouseId}`)
-  return (items || []).map(item => {
-    const locName = item.location_id?.[1] || item.location || ''
-    const locId = item.location_id?.[0] || item.location_id || 0
-    const weight = getProductWeight(item.product_id || item.id)
-    return {
-      ...item,
-      location_name: locName,
-      location_id_num: locId,
-      line: locName.includes('BARRA') ? 'BARRA' : locName.includes('ROLITO') ? 'ROLITO' : 'OTRO',
-      weight_per_unit: weight,
-      total_kg: (item.quantity || 0) * weight,
-    }
-  })
+const INVENTORY_CACHE_KEY = 'gf_pt_inventory_cache_v1'
+/** Cache TTL: 5 min — cache sólo es fallback, no fuente primaria */
+const INVENTORY_CACHE_TTL_MS = 5 * 60 * 1000
+/** Cache stale limit: 24 h — después de esto el fallback deja de servir */
+const INVENTORY_CACHE_MAX_STALE_MS = 24 * 60 * 60 * 1000
+
+function readInventoryCache(warehouseId) {
+  try {
+    const raw = localStorage.getItem(INVENTORY_CACHE_KEY)
+    if (!raw) return null
+    const entry = JSON.parse(raw)
+    if (!entry || entry.warehouse_id !== warehouseId) return null
+    const age = Date.now() - Number(entry.ts || 0)
+    if (age > INVENTORY_CACHE_MAX_STALE_MS) return null
+    return { data: entry.data, age, fresh: age <= INVENTORY_CACHE_TTL_MS }
+  } catch {
+    return null
+  }
+}
+
+function writeInventoryCache(warehouseId, data) {
+  try {
+    localStorage.setItem(INVENTORY_CACHE_KEY, JSON.stringify({
+      warehouse_id: warehouseId,
+      ts: Date.now(),
+      data,
+    }))
+  } catch {
+    /* storage lleno o deshabilitado — cache silenciosa */
+  }
 }
 
 /**
- * Get inventory grouped by location (line).
+ * Forma canónica vacía (fallback de emergencia).
+ */
+function emptyInventoryShape(warehouseId) {
+  return {
+    warehouse_id: warehouseId,
+    warehouse_name: '',
+    pt_locations: [],
+    items: [],
+    totals: { products: 0, qty: 0, kg: 0, by_family: {}, by_location: {} },
+    by_family: {},
+    generated_at: new Date().toISOString(),
+    _source: 'empty',
+  }
+}
+
+/**
+ * Devuelve la forma canónica completa del inventario PT:
+ *   { warehouse_id, warehouse_name, pt_locations, items, totals, by_family, generated_at, _source }
+ *
+ * Estrategia de resiliencia:
+ *   1. Intenta fetch fresco al BFF.
+ *   2. En éxito: escribe cache + retorna con _source='live'.
+ *   3. En error: devuelve cache si existe (<24h) con _source='cache-stale' o
+ *      'cache-fresh' según edad. Si no hay cache, re-lanza el error.
+ *
+ * Roadmap offline: este wrapper es el único punto por donde pasa el inventario,
+ * así que cuando se agregue IndexedDB sólo se toca aquí.
+ */
+export async function getInventoryCanonical(warehouseId = DEFAULT_WAREHOUSE_ID) {
+  try {
+    const res = await api('GET', `/pwa-pt/inventory?warehouse_id=${warehouseId}`)
+    // El BFF siempre regresa la forma canónica. Validación defensiva:
+    if (res && Array.isArray(res.items)) {
+      const data = { ...res, _source: 'live' }
+      writeInventoryCache(warehouseId, data)
+      return data
+    }
+    // Shape inesperada → caer al cache
+    throw new Error('Inventory response shape invalid')
+  } catch (err) {
+    const cached = readInventoryCache(warehouseId)
+    if (cached) {
+      return {
+        ...cached.data,
+        _source: cached.fresh ? 'cache-fresh' : 'cache-stale',
+        _cache_age_ms: cached.age,
+      }
+    }
+    // Sin cache: devolvemos forma vacía para que la UI no crashee,
+    // anotando el error para logging.
+    console.warn('[ptService] getInventoryCanonical failed, no cache:', err?.message || err)
+    return { ...emptyInventoryShape(warehouseId), _source: 'error', _error: err?.message || String(err) }
+  }
+}
+
+/**
+ * Lista plana de productos PT para las pantallas que solo necesitan iterar.
+ * Cada item ya viene deduplicado, con weight_per_unit parseado y total_kg listo.
+ * Shape de cada item:
+ *   { product_id, product_name, product, category_id, category_name,
+ *     product_family, display_line, family_root_id, family_root_name,
+ *     weight_per_unit, quantity, total_kg, stock_locations: [...] }
+ *
+ * `product` se duplica de `product_name` para retrocompatibilidad con pantallas
+ * existentes; nuevas pantallas deben usar `product_name`.
+ */
+export async function getInventory(warehouseId = DEFAULT_WAREHOUSE_ID) {
+  const canonical = await getInventoryCanonical(warehouseId)
+  return (canonical.items || []).map((item) => ({
+    ...item,
+    product: item.product_name, // alias retrocompat
+  }))
+}
+
+/**
+ * Inventario agrupado por FAMILIA estructural (BARRA / ROLITO / OTRO)
+ * para pantallas que renderizan secciones por línea operativa.
+ *
+ * IMPORTANTE: la agrupación se hace por `product_family` (categoría
+ * estructural del producto) y NO por la ubicación física donde está el
+ * stock. La distribución física aparece sólo como metadato informativo.
+ *
+ * El shape de salida conserva la clave histórica `line` para no romper
+ * las pantallas que ya iteran por `group.line`, pero su valor ahora es
+ * la familia estructural (idéntica a `group.family`).
  */
 export async function getInventoryGrouped(warehouseId = DEFAULT_WAREHOUSE_ID) {
-  const items = await getInventory(warehouseId)
+  const canonical = await getInventoryCanonical(warehouseId)
   const groups = {}
-  for (const item of items) {
-    const key = item.line || 'OTRO'
-    if (!groups[key]) groups[key] = { line: key, location: item.location_name, items: [], total_qty: 0, total_kg: 0 }
-    groups[key].items.push(item)
-    groups[key].total_qty += item.quantity || 0
-    groups[key].total_kg += item.total_kg || 0
+  for (const item of canonical.items || []) {
+    const family = item.product_family || 'OTRO'
+    if (!groups[family]) {
+      groups[family] = {
+        family,
+        line: family,          // alias para pantallas existentes
+        location: '',          // nombre representativo de ubicación física
+        items: [],
+        total_qty: 0,
+        total_kg: 0,
+      }
+    }
+    groups[family].items.push({ ...item, product: item.product_name })
+    groups[family].total_qty += item.quantity || 0
+    groups[family].total_kg += item.total_kg || 0
+  }
+  // location label (ubicación física donde está la mayor parte del stock
+  // de esta familia — sólo para mostrar contexto, no para clasificar)
+  for (const g of Object.values(groups)) {
+    const locQty = {}
+    for (const it of g.items) {
+      for (const sl of it.stock_locations || []) {
+        locQty[sl.name] = (locQty[sl.name] || 0) + (sl.qty || 0)
+      }
+    }
+    const dominant = Object.entries(locQty).sort((a, b) => b[1] - a[1])[0]
+    g.location = dominant ? dominant[0] : ''
   }
   return Object.values(groups)
 }
@@ -120,29 +239,25 @@ export async function getDaySummary(warehouseId = DEFAULT_WAREHOUSE_ID) {
     backendSummary = null
   }
 
-  // Always fetch inventory + cedis locally to keep the hub grid populated
-  // (the backend summary may or may not include per-line breakdown)
-  const [inventory, cedisList] = await Promise.allSettled([
-    getInventory(warehouseId),
+  // Inventario canónico desde BFF + CEDIS. Ambos en Promise.allSettled para
+  // que una falla en CEDIS no impida pintar el hub.
+  const [invCanonical, cedisList] = await Promise.allSettled([
+    getInventoryCanonical(warehouseId),
     getCedisList(),
   ])
 
-  const inv = inventory.status === 'fulfilled' ? inventory.value : []
+  const canonical = invCanonical.status === 'fulfilled' ? invCanonical.value : emptyInventoryShape(warehouseId)
   const cedis = cedisList.status === 'fulfilled' ? cedisList.value : []
 
-  const totalQty = inv.reduce((s, i) => s + (i.quantity || 0), 0)
-  const totalKg = inv.reduce((s, i) => s + (i.total_kg || 0), 0)
-  const totalProducts = inv.length
-
-  // Group by line
-  const byLine = {}
-  for (const item of inv) {
-    const key = item.line || 'OTRO'
-    if (!byLine[key]) byLine[key] = { qty: 0, kg: 0, count: 0 }
-    byLine[key].qty += item.quantity || 0
-    byLine[key].kg += item.total_kg || 0
-    byLine[key].count += 1
-  }
+  // Totales y by_family vienen ya calculados por el BFF — no se reagregan aquí.
+  // by_family es la clasificación estructural (categoría del producto),
+  // NO la física (ubicación del stock). El hub muestra los totales por
+  // familia operativa ROLITO vs BARRA, no por ubicación.
+  const totalQty = canonical.totals?.qty || 0
+  const totalKg = canonical.totals?.kg || 0
+  const totalProducts = canonical.totals?.products || 0
+  const byFamily = canonical.by_family || canonical.totals?.by_family || {}
+  const byLocation = canonical.totals?.by_location || {}
 
   // Local inventory breakdown is authoritative for the hub KPIs;
   // backend summary provides the workflow counters (pending work, handover).
@@ -151,29 +266,52 @@ export async function getDaySummary(warehouseId = DEFAULT_WAREHOUSE_ID) {
   //   pending_posting_count  — ya recibido físicamente, falta postear a stock
   //   pending_receipt_count  — declarado por producción, falta llegar físicamente
   // El total `pending_receptions` se mantiene por compatibilidad: suma de ambos.
+  //
+  // Backend real field names (confirmado 2026-04-11 en vivo):
+  //   pending_posting_count, pending_receipt_count,
+  //   pending_handovers, transfers_today, transformations_today,
+  //   transformed_kg_total, warehouse_name, shift_count, date
   const pendingPosting = Number(backendSummary?.pending_posting_count || 0)
   const pendingReceipt = Number(backendSummary?.pending_receipt_count || 0)
   const pendingReceptionsTotal = pendingPosting + pendingReceipt ||
     Number(backendSummary?.pending_receptions || 0)
 
+  const pendingTransfers = Number(
+    backendSummary?.pending_transfers ?? backendSummary?.transfers_today ?? 0
+  )
+  const pendingTransformations = Number(
+    backendSummary?.pending_transformations ?? backendSummary?.transformations_today ?? 0
+  )
+  const handoverCount = Number(backendSummary?.pending_handovers || 0)
+  const handoverPending = backendSummary?.shift_handover_pending != null
+    ? Boolean(backendSummary.shift_handover_pending)
+    : handoverCount > 0
+
   return {
-    date: new Date().toISOString().slice(0, 10),
+    date: backendSummary?.date || new Date().toISOString().slice(0, 10),
     warehouse_id: warehouseId,
+    warehouse_name: backendSummary?.warehouse_name || '',
     inventory: {
       total_products: totalProducts,
       total_qty: totalQty,
       total_kg: totalKg,
-      by_line: byLine,
+      by_family: byFamily,
+      by_location: byLocation,
     },
     cedis_available: cedis.length,
     pending_receptions: pendingReceptionsTotal,
     pending_posting: pendingPosting,
     pending_receipt: pendingReceipt,
-    pending_transformations: Number(backendSummary?.pending_transformations || 0),
-    pending_transfers: Number(backendSummary?.pending_transfers || 0),
-    shift_handover_pending: Boolean(backendSummary?.shift_handover_pending || false),
+    pending_transformations: pendingTransformations,
+    pending_transfers: pendingTransfers,
+    transformed_kg_total: Number(backendSummary?.transformed_kg_total || 0),
+    shift_count: Number(backendSummary?.shift_count || 0),
+    shift_handover_pending: handoverPending,
     shift_handover_id: backendSummary?.shift_handover_id || null,
     backend_summary: backendSummary || null,
+    // Propaga el origen del inventario (live|cache-fresh|cache-stale|error)
+    // para que el hub pueda mostrar un badge "datos en cache" si aplica.
+    inventory_source: canonical._source || 'unknown',
   }
 }
 
@@ -648,12 +786,6 @@ export async function getForecastRequests(warehouseId, employeeId) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/** Get product weight from known products list */
-function getProductWeight(productId) {
-  const found = KNOWN_PRODUCTS.find(p => p.id === productId)
-  return found ? found.weight : 1
-}
 
 /** Compute FIFO status for an in_date */
 export function getFIFOStatus(inDate) {

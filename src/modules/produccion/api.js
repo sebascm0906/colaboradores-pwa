@@ -103,11 +103,21 @@ export function createScrap(data) {
   return api('POST', '/pwa-prod/scrap-create', data)
 }
 
+// ── Opening State (continuidad entre turnos) ────────────────────────────────
+
+/** Obtener snapshot de apertura del turno: qué PT, materiales y estado
+ *  operativo recibe el turno entrante del turno saliente.
+ *  Backend crea el snapshot si no existe, o devuelve el existente.
+ *  Frontend solo consume y presenta — no recalcula nada. */
+export function getOpeningState(shiftId) {
+  return api('POST', '/api/production/shift/opening-state', { shift_id: shiftId })
+}
+
 // ── Cierre de turno ─────────────────────────────────────────────────────────
 
-/** Guardar cuadratura de bolsas en turno */
+/** Guardar cuadratura de bolsas en turno (endpoint canonico) */
 export function saveBagReconciliation(data) {
-  return api('POST', '/pwa-prod/bag-reconciliation', data)
+  return api('POST', '/api/production/shift/bag-reconciliation', data)
 }
 
 /** Cerrar turno (action_close o fallback a state=done) */
@@ -115,7 +125,17 @@ export function closeShift(data) {
   return api('POST', '/pwa-prod/shift-close', data)
 }
 
-// ── Barra: Harvest + Incidentes + Salt ──────────────────────────────────────
+// ── Barra: Tanques + Slots + Harvest + Incidentes + Salt ────────────────────
+
+/** Listar tanques de salmuera (gf.production.machine, machine_type='tanque_salmuera') */
+export function getTanks() {
+  return api('GET', '/pwa-prod/tanks')
+}
+
+/** Listar slots de un tanque (mapa de canastillas + tank meta) */
+export function getTankSlots(machineId) {
+  return api('GET', `/pwa-prod/slots?machine_id=${machineId}`)
+}
 
 /** Cosecha de slot de salmuera — POST /api/ice/slot/harvest */
 export function harvestSlot(data) {

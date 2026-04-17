@@ -19,6 +19,13 @@ import {
   CYCLE_STATES,
   fmtTime,
 } from './rolitoService'
+import {
+  validateRolitoKg,
+  ROLITO_KG_MIN,
+  ROLITO_KG_MAX,
+  ROLITO_KG_TARGET,
+} from './productionRules'
+import { validateSupervisorPin } from '../shared/supervisorAuth'
 
 export default function ScreenCicloRolito() {
   const { session } = useSession()
@@ -36,6 +43,13 @@ export default function ScreenCicloRolito() {
   const [kgDumped, setKgDumped] = useState(String(EXPECTED_KG_PER_CYCLE))
   const [tick, setTick] = useState(0)
   const timerRef = useRef(null)
+  // Override supervisor (PIN / validacion) para kg fuera de rango
+  const [supervisorOverride, setSupervisorOverride] = useState(false)
+  const [overrideSupervisorId, setOverrideSupervisorId] = useState(null)
+  const [overridePin, setOverridePin] = useState('')
+  const [overrideReason, setOverrideReason] = useState('')
+  const [showOverrideForm, setShowOverrideForm] = useState(false)
+  const [validatingPin, setValidatingPin] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -106,18 +120,63 @@ export default function ScreenCicloRolito() {
   // ── STEP 3: End Defrost + Dump ────────────────────────────────────────────
   async function handleMarkDump() {
     const kg = parseFloat(kgDumped)
-    if (!kg || kg <= 0) { setError('Ingresa los kg producidos (mayor a 0)'); return }
+    const validation = validateRolitoKg(kg, { target: activeCycle?.kg_expected })
+
+    // Backend es la unica autoridad de rechazo. Frontend solo rechaza kg<=0
+    // (donde el backend tambien rechaza via _check_kg_dumped_positive).
+    // Fuera de rango es warning visible, pero el operador puede confirmar.
+    if (!validation.ok) {
+      setError(validation.reason)
+      return
+    }
     if (!activeCycle?.id) return
+
     setSaving(true)
     setError('')
     try {
-      await markDump(activeCycle.id, kg)
-      setSuccess(`Ciclo completado: ${kg} kg`)
+      // Si hay override, incluir en el payload como marca de excepcion.
+      // Se envia el id del supervisor validado por backend (trazabilidad).
+      const extraData = supervisorOverride
+        ? {
+            supervisor_override: true,
+            override_reason: overrideReason || '',
+            supervisor_employee_id: overrideSupervisorId || undefined,
+          }
+        : undefined
+      await markDump(activeCycle.id, kg, extraData)
+      const overrideMsg = supervisorOverride ? ' (validado por supervisor)' : ''
+      setSuccess(`Ciclo completado: ${kg} kg${overrideMsg}`)
       setTimeout(() => navigate('/produccion/empaque'), 1500)
     } catch (e) {
       setError(e.message || 'Error al registrar descarga')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function applyOverride() {
+    // Validacion contra backend real — /api/production/validate-pin
+    // (no se acepta ningun PIN local: si backend rechaza, se bloquea).
+    if (!overrideReason || overrideReason.trim().length < 5) {
+      setError('Razon obligatoria (minimo 5 caracteres)')
+      return
+    }
+    setValidatingPin(true)
+    setError('')
+    try {
+      const res = await validateSupervisorPin(overridePin)
+      if (!res?.ok) {
+        setError(res?.error || 'PIN incorrecto')
+        return
+      }
+      setOverrideSupervisorId(res.employee_id || null)
+      setSupervisorOverride(true)
+      setShowOverrideForm(false)
+      setOverridePin('')
+    } catch (e) {
+      setError(e?.message || 'Error validando PIN')
+    } finally {
+      setValidatingPin(false)
     }
   }
 
@@ -323,7 +382,7 @@ export default function ScreenCicloRolito() {
                 {/* Kg input */}
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>KG PRODUCIDOS</p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <button onClick={() => setKgDumped(v => String(Math.max(0, (parseInt(v) || 0) - 50)))}
+                  <button onClick={() => setKgDumped(v => String(Math.max(0, (parseFloat(v) || 0) - 50)))}
                     style={{
                       width: 48, height: 48, borderRadius: TOKENS.radius.md,
                       background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
@@ -341,7 +400,7 @@ export default function ScreenCicloRolito() {
                       textAlign: 'center', letterSpacing: '-0.03em',
                     }}
                   />
-                  <button onClick={() => setKgDumped(v => String((parseInt(v) || 0) + 50))}
+                  <button onClick={() => setKgDumped(v => String((parseFloat(v) || 0) + 50))}
                     style={{
                       width: 48, height: 48, borderRadius: TOKENS.radius.md,
                       background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
@@ -349,23 +408,122 @@ export default function ScreenCicloRolito() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>+</button>
                 </div>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, textAlign: 'center', marginBottom: 16 }}>
-                  Esperado: {EXPECTED_KG_PER_CYCLE} kg por ciclo
-                </p>
+                {(() => {
+                  const target = Number(activeCycle?.kg_expected) > 0 ? Number(activeCycle.kg_expected) : ROLITO_KG_TARGET
+                  const min = Number(activeCycle?.kg_expected) > 0 ? Math.round(target * 0.85 * 10) / 10 : ROLITO_KG_MIN
+                  const max = Number(activeCycle?.kg_expected) > 0 ? Math.round(target * 1.20) : ROLITO_KG_MAX
+                  return (
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, textAlign: 'center', marginBottom: 8 }}>
+                      Esperado: {target} kg · rango operativo {min}–{max} kg
+                    </p>
+                  )
+                })()}
+
+                {/* Validacion Rolito kg en vivo */}
+                {(() => {
+                  const v = validateRolitoKg(parseFloat(kgDumped), { target: activeCycle?.kg_expected })
+                  if (v.level === 'ok') return null
+                  const bg = v.level === 'error' ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)'
+                  const border = v.level === 'error' ? 'rgba(239,68,68,0.30)' : 'rgba(245,158,11,0.30)'
+                  const color = v.level === 'error' ? TOKENS.colors.error : TOKENS.colors.warning
+                  return (
+                    <div style={{
+                      padding: 10, borderRadius: TOKENS.radius.md, marginBottom: 12,
+                      background: bg, border: `1px solid ${border}`,
+                    }}>
+                      <p style={{ ...typo.caption, color, margin: 0, fontWeight: 600, textAlign: 'center' }}>
+                        {v.reason}
+                      </p>
+                    </div>
+                  )
+                })()}
+
+                {supervisorOverride && (
+                  <div style={{
+                    padding: 10, borderRadius: TOKENS.radius.md, marginBottom: 12,
+                    background: 'rgba(43,143,224,0.10)', border: '1px solid rgba(43,143,224,0.30)',
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: 0, fontWeight: 600, textAlign: 'center' }}>
+                      ✓ Validado por supervisor — motivo: {overrideReason}
+                    </p>
+                  </div>
+                )}
+
+                {/* Formulario override supervisor */}
+                {showOverrideForm && !supervisorOverride && (
+                  <div style={{
+                    padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 12,
+                    background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)',
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, marginBottom: 8, fontWeight: 700 }}>
+                      Fuera de rango — requiere validacion supervisor
+                    </p>
+                    <input
+                      type="password" inputMode="numeric"
+                      value={overridePin}
+                      onChange={e => setOverridePin(e.target.value)}
+                      placeholder="PIN supervisor"
+                      style={{
+                        width: '100%', padding: '10px', borderRadius: TOKENS.radius.sm, marginBottom: 8,
+                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                        color: 'white', fontSize: 14, outline: 'none',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={e => setOverrideReason(e.target.value)}
+                      placeholder="Motivo (obligatorio)"
+                      style={{
+                        width: '100%', padding: '10px', borderRadius: TOKENS.radius.sm, marginBottom: 8,
+                        background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                        color: 'white', fontSize: 14, outline: 'none',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => { setShowOverrideForm(false); setOverridePin(''); setOverrideReason('') }}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm,
+                          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                          color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600,
+                        }}
+                      >Cancelar</button>
+                      <button
+                        onClick={applyOverride}
+                        disabled={validatingPin}
+                        style={{
+                          flex: 2, padding: '10px', borderRadius: TOKENS.radius.sm,
+                          background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                          color: 'white', fontSize: 13, fontWeight: 700,
+                          opacity: validatingPin ? 0.6 : 1,
+                        }}
+                      >{validatingPin ? 'Validando...' : 'Validar'}</button>
+                    </div>
+                  </div>
+                )}
 
                 <button
                   onClick={handleMarkDump}
-                  disabled={saving || !kgDumped || parseFloat(kgDumped) <= 0}
-                  style={{
-                    width: '100%', padding: '18px', borderRadius: TOKENS.radius.lg,
-                    background: (kgDumped && parseFloat(kgDumped) > 0)
-                      ? 'linear-gradient(90deg, #15803d, #22c55e)'
-                      : TOKENS.colors.surface,
-                    color: (kgDumped && parseFloat(kgDumped) > 0) ? 'white' : TOKENS.colors.textLow,
-                    fontSize: 16, fontWeight: 700,
-                    boxShadow: (kgDumped && parseFloat(kgDumped) > 0) ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
-                    opacity: saving ? 0.6 : 1,
-                  }}
+                  disabled={(() => {
+                    if (saving) return true
+                    if (!kgDumped || parseFloat(kgDumped) <= 0) return true
+                    const v = validateRolitoKg(parseFloat(kgDumped), { target: activeCycle?.kg_expected })
+                    if (!v.ok && !supervisorOverride) return true
+                    return false
+                  })()}
+                  style={(() => {
+                    const v = validateRolitoKg(parseFloat(kgDumped), { target: activeCycle?.kg_expected })
+                    const allowed = kgDumped && parseFloat(kgDumped) > 0 && (v.ok || supervisorOverride)
+                    return {
+                      width: '100%', padding: '18px', borderRadius: TOKENS.radius.lg,
+                      background: allowed ? 'linear-gradient(90deg, #15803d, #22c55e)' : TOKENS.colors.surface,
+                      color: allowed ? 'white' : TOKENS.colors.textLow,
+                      fontSize: 16, fontWeight: 700,
+                      boxShadow: allowed ? '0 10px 24px rgba(34,197,94,0.25)' : 'none',
+                      opacity: saving ? 0.6 : 1,
+                    }
+                  })()}
                 >
                   {saving ? 'Guardando...' : 'CONFIRMAR DESCARGA'}
                 </button>

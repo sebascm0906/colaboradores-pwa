@@ -70,26 +70,16 @@ export default function ScreenHandoverPT() {
         setMode(MODES.ENTREGAR)
       }
 
-      // Inventory → entregar lines (dedupe by product_id; PT has multiple
-      // locations per product, so aggregate)
-      const byProduct = {}
-      for (const item of invData) {
-        const pid = item.product_id?.[0] || item.product_id || item.id
-        const name = item.product || item.product_name || ''
-        if (!byProduct[pid]) {
-          byProduct[pid] = {
-            product_id: pid,
-            product: name,
-            qty_system: 0,
-            qty_declared: 0,
-            weight: item.weight_per_unit || 1,
-            note: '',
-          }
-        }
-        byProduct[pid].qty_system += item.quantity || 0
-        byProduct[pid].qty_declared += item.quantity || 0
-      }
-      setEntregarLines(Object.values(byProduct))
+      // Inventory → entregar lines. El BFF ya dedup por product_id y excluye
+      // MP, así que la pantalla sólo mapea al shape que consume el form.
+      setEntregarLines(invData.map((item) => ({
+        product_id: item.product_id,
+        product: item.product_name,
+        qty_system: Number(item.quantity) || 0,
+        qty_declared: Number(item.quantity) || 0,
+        weight: Number(item.weight_per_unit) || 1,
+        note: '',
+      })))
     } catch (e) {
       if (e.message !== 'no_session') setError('Error al cargar datos')
     } finally { setLoadingInit(false) }
