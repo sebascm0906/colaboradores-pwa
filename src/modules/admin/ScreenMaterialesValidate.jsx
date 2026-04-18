@@ -1,4 +1,4 @@
-// ScreenMaterialesValidate.jsx — Inbox auxiliar admin · validar / rechazar / disputar
+// ScreenMaterialesValidate.jsx — Inbox gerente de sucursal · validar / rechazar / disputar
 // ───────────────────────────────────────────────────────────────────────────
 // POST /api/production/materials/settlement/list  (inbox por planta/turno)
 // POST /api/production/materials/settlement/validate  (action: validate|reject|dispute)
@@ -21,8 +21,8 @@ import { logScreenError } from '../shared/logScreenError'
 
 // Validar materiales del almacenista es responsabilidad del GERENTE, no del auxiliar admin.
 // Segregación de funciones: quien procesa gastos diarios no debe aprobar inventarios.
-// Backend debe validar también.
-const ALLOWED_ROLES = ['auxiliar_admin']
+// Backend debe validar también (2026-04-18 — ajuste funcional confirmado).
+const ALLOWED_ROLES = ['gerente_sucursal', 'direccion_general']
 const INBOX_STATES = ['reported', 'disputed', 'rejected']
 
 export default function ScreenMaterialesValidate() {
@@ -126,7 +126,7 @@ export default function ScreenMaterialesValidate() {
         <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 16px', textAlign: 'center' }}>
           <p style={{ ...typo.title, color: TOKENS.colors.error }}>Sin permiso</p>
           <p style={{ ...typo.body, color: TOKENS.colors.textMuted, marginTop: 8 }}>
-            Esta pantalla es solo para auxiliar admin de materiales.
+            La validación de materiales es exclusiva de gerente de sucursal / dirección.
           </p>
           <button onClick={() => navigate('/admin')} style={{
             marginTop: 16, padding: '10px 20px', borderRadius: TOKENS.radius.pill,

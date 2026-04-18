@@ -21,7 +21,10 @@ import {
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from '../almacen-pt/ptService'
 import { logScreenError } from '../shared/logScreenError'
 
-const ALLOWED_ROLES = ['auxiliar_admin', 'gerente_sucursal', 'gerente', 'supervisor']
+// Resolver rechazo de materiales es flujo dependiente de "validar materiales".
+// Alineado con ScreenMaterialesValidate: solo gerente / dirección.
+// auxiliar_admin queda excluido (segregación de funciones — 2026-04-18).
+const ALLOWED_ROLES = ['gerente_sucursal', 'direccion_general']
 
 export default function ScreenMaterialesResolverRejected() {
   const { session } = useSession()

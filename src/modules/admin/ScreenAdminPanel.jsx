@@ -78,7 +78,7 @@ function MobileAdminHub() {
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
     { id: 'salida_rolito',    label: 'Salida a Rolito',    desc: 'Entregar material al turno',  route: '/almacen-pt/materiales/crear', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
-    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['auxiliar_admin'] },
+    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
   ]
   const visibleActions = ACTIONS.filter(a => !a.roles || a.roles.includes(role))
 

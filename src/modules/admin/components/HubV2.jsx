@@ -7,8 +7,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
+import { useSession } from '../../../App'
 import { getDashboardData } from '../adminService'
-import { NAV_ITEMS } from './AdminShell'
+import { NAV_ITEMS, navItemsForRole } from './AdminShell'
 
 const POLL_MS = 60_000
 
@@ -16,10 +17,18 @@ const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))
 
 export default function HubV2() {
   const { warehouseId, companyId, companyLabel } = useAdmin()
+  const { session } = useSession()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
+
+  // Atajos visibles: mismo filtro por rol que el sidenav — si no se filtra aquí,
+  // auxiliar_admin vería "Validar materiales", "Aprobar gastos", etc. (bug 2026-04-18)
+  const visibleNavItems = useMemo(
+    () => navItemsForRole(session?.role || '').filter(i => i.id !== 'hub'),
+    [session?.role],
+  )
 
   useEffect(() => {
     let alive = true
@@ -135,7 +144,7 @@ export default function HubV2() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: 12,
       }}>
-        {NAV_ITEMS.filter(i => i.id !== 'hub').map(item => {
+        {visibleNavItems.map(item => {
           const locked = item.status === 'pending_backend'
           return (
             <button
