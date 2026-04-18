@@ -102,11 +102,9 @@ export default function ScreenMaterialesCrearIssue() {
     setLoadingCatalog(true)
     setError('')
     try {
-      // NOTA: el backend real ignora/rompe el filtro por plant_id (devuelve 0 ítems),
-      // y no usa line_type como campo — los catálogos tienen booleanos
-      // applies_to_rolito / applies_to_barras. Pedimos el catálogo completo
-      // y filtramos en cliente por familia de la línea seleccionada.
-      const res = await getMaterialCatalog({ activeOnly: true })
+      // El backend requiere plant_id para devolver el catálogo.
+      // Seguimos filtrando en cliente por la familia operativa de la línea.
+      const res = await getMaterialCatalog({ plantId, activeOnly: true })
       const all = Array.isArray(res.items) ? res.items : []
       const fam = derivedLineType // 'BARRA' | 'ROLITO' | ''
       const filtered = all.filter(m => {
