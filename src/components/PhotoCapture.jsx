@@ -1,48 +1,56 @@
-// ─── PhotoCapture — componente placeholder para adjuntar evidencia fotográfica
-// Funcional hoy (lee File → base64 en memoria), pero preparado para
-// integrarse con endpoint de backend cuando Sebastián lo exponga.
+// ─── PhotoCapture — captura y sube evidencia fotográfica ─────────────────────
 //
-// Uso:
+// Uso básico (solo preview, sin upload):
+//   <PhotoCapture value={base64} onChange={setBase64} />
+//
+// Uso con upload a backend:
 //   <PhotoCapture
-//     value={photoBase64}
-//     onChange={setPhotoBase64}
-//     label="Foto del producto dañado"
+//     value={base64}
+//     onChange={setBase64}
+//     onUploadComplete={({ attachment_id, url }) => setAttachmentId(attachment_id)}
+//     linkedModel="hr.expense"
+//     linkedId={expenseId}
+//     label="Comprobante"
 //     required
 //   />
 //
-// IMPORTANTE: hoy solo guarda el base64 localmente. Cuando se agregue el
-// endpoint POST /pwa/evidence/upload, este componente llamará ahí y
-// devolverá { attachment_id, url } en lugar de base64 inline.
+// Si se pasan `onUploadComplete` + `linkedModel`, el componente llama a
+// POST /pwa/evidence/upload automáticamente tras seleccionar la foto.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useRef, useState } from 'react'
 import { TOKENS } from '../tokens'
+import { api } from '../lib/api'
 
 export default function PhotoCapture({
   value,
   onChange,
+  onUploadComplete,   // ({ attachment_id, url }) — llamado tras subir al backend
+  linkedModel,        // 'hr.expense' | 'gf.cash.closing' | etc.
+  linkedId,           // res_id para ligar el attachment
   label = 'Adjuntar foto',
   required = false,
-  maxSizeKB = 2048, // 2MB default
+  maxSizeKB = 2048,
   disabled = false,
 }) {
   const inputRef = useRef(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploadDone, setUploadDone] = useState(false)
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
 
     setError('')
+    setUploadDone(false)
 
-    // Validación tamaño
     if (file.size > maxSizeKB * 1024) {
       setError(`La foto debe ser menor a ${maxSizeKB / 1024}MB`)
       e.target.value = ''
       return
     }
 
-    // Validación tipo
     if (!file.type.startsWith('image/')) {
       setError('Solo se permiten imágenes')
       e.target.value = ''
@@ -52,8 +60,31 @@ export default function PhotoCapture({
     setLoading(true)
     try {
       const base64 = await fileToBase64(file)
+
+      // Siempre actualizar preview local
       onChange?.(base64)
-      // TODO(backend): POST /pwa/evidence/upload {file: base64} → devolver attachment_id
+
+      // Si hay handler de upload, subir al backend
+      if (onUploadComplete) {
+        try {
+          const result = await api('POST', '/pwa/evidence/upload', {
+            filename:     file.name || 'foto.jpg',
+            data:         base64.split(',')[1] ?? base64,  // strip data:image/...;base64,
+            mime_type:    file.type,
+            linked_model: linkedModel || undefined,
+            linked_id:    linkedId    || undefined,
+          })
+          const payload = result?.data ?? result ?? {}
+          if (payload.attachment_id) {
+            setUploadDone(true)
+            onUploadComplete({ attachment_id: payload.attachment_id, url: payload.url })
+          } else {
+            setError('La foto se tomó pero no se pudo guardar en servidor.')
+          }
+        } catch (uploadErr) {
+          setError('No se pudo subir la foto al servidor. Intenta de nuevo.')
+        }
+      }
     } catch (err) {
       setError('No se pudo procesar la foto')
     } finally {
@@ -65,7 +96,7 @@ export default function PhotoCapture({
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
+      reader.onload  = () => resolve(reader.result)
       reader.onerror = () => reject(new Error('FileReader error'))
       reader.readAsDataURL(file)
     })
@@ -73,7 +104,9 @@ export default function PhotoCapture({
 
   function clearPhoto() {
     onChange?.(null)
+    onUploadComplete?.({ attachment_id: null, url: null })
     setError('')
+    setUploadDone(false)
   }
 
   const hasPhoto = !!value
@@ -101,13 +134,22 @@ export default function PhotoCapture({
           position: 'relative',
           borderRadius: TOKENS.radius.md,
           overflow: 'hidden',
-          border: `1px solid ${TOKENS.colors.border}`,
+          border: `1px solid ${uploadDone ? TOKENS.colors.success || '#22c55e' : TOKENS.colors.border}`,
         }}>
           <img
             src={value}
             alt="Evidencia"
             style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
           />
+          {uploadDone && (
+            <div style={{
+              position: 'absolute', top: 8, left: 8,
+              background: '#22c55e', color: 'white',
+              borderRadius: 4, padding: '2px 8px', fontSize: 11, fontWeight: 600,
+            }}>
+              ✓ Guardada
+            </div>
+          )}
           <button
             type="button"
             onClick={clearPhoto}
@@ -140,7 +182,7 @@ export default function PhotoCapture({
           }}
         >
           <span style={{ fontSize: 18 }}>{loading ? '⏳' : '📷'}</span>
-          <span>{loading ? 'Procesando...' : 'Tomar foto / Seleccionar'}</span>
+          <span>{loading ? (onUploadComplete ? 'Subiendo...' : 'Procesando...') : 'Tomar foto / Seleccionar'}</span>
         </button>
       )}
 

@@ -46,7 +46,7 @@ function MobileRequisiciones() {
   const companies = useMemo(() => getCompaniesForSucursal(session?.sucursal), [session?.sucursal])
 
   // Form state
-  const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || 34)
+  const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || null)
   const [title, setTitle] = useState('')
   const [lines, setLines] = useState([{ product_name: '', qty: 1 }])
   const [notes, setNotes] = useState('')

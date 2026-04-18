@@ -22,7 +22,7 @@ export default function GastosScreenBase({
 
   const companies = useMemo(() => getCompaniesForSucursal(session?.sucursal), [session?.sucursal])
 
-  const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || 34)
+  const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || null)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))

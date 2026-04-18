@@ -74,7 +74,7 @@ function MobileHistorialGastos() {
 
   const companies = useMemo(() => getCompaniesForSucursal(session?.sucursal), [session?.sucursal])
   const today = useMemo(() => getLocalISODate(), [])
-  const initialCompanyId = session?.company_id || companies[0]?.id || 34
+  const initialCompanyId = session?.company_id || companies[0]?.id || null
 
   const [draftFilters, setDraftFilters] = useState({
     companyId: initialCompanyId,
