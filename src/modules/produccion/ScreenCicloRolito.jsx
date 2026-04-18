@@ -36,6 +36,7 @@ export default function ScreenCicloRolito() {
   const [shift, setShift] = useState(null)
   const [cycles, setCycles] = useState([])
   const [activeCycle, setActiveCycle] = useState(null)
+  const [bagMaterials, setBagMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -58,6 +59,7 @@ export default function ScreenCicloRolito() {
       setShift(result.shift)
       setCycles(result.cycles || [])
       setActiveCycle(getActiveCycle(result.cycles))
+      setBagMaterials(result.bagMaterials || [])
     } catch (e) {
       setError('No se pudo cargar el turno')
     } finally {
@@ -78,6 +80,7 @@ export default function ScreenCicloRolito() {
   }, [activeCycle])
 
   const progress = getCycleProgress(activeCycle)
+  const totalBagsAvailable = bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
 
   // Determine current step
   let step = 'start' // no active cycle → start new
@@ -266,18 +269,35 @@ export default function ScreenCicloRolito() {
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginBottom: 20 }}>
                   Se registra la hora actual como inicio
                 </p>
+                <div style={{
+                  padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 16,
+                  background: totalBagsAvailable > 0 ? 'rgba(34,197,94,0.08)' : 'rgba(245,158,11,0.08)',
+                  border: `1px solid ${totalBagsAvailable > 0 ? 'rgba(34,197,94,0.25)' : 'rgba(245,158,11,0.25)'}`,
+                }}>
+                  <p style={{ ...typo.caption, margin: 0, fontWeight: 700, color: totalBagsAvailable > 0 ? TOKENS.colors.success : TOKENS.colors.warning }}>
+                    {totalBagsAvailable > 0
+                      ? `${totalBagsAvailable} bolsas disponibles para producir`
+                      : 'No hay bolsas disponibles en el turno'}
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                    {totalBagsAvailable > 0
+                      ? 'Ya puedes iniciar el siguiente ciclo'
+                      : 'Recibe y valida bolsa antes de iniciar produccion'}
+                  </p>
+                </div>
                 <button
                   onClick={handleStartFreeze}
-                  disabled={saving}
+                  disabled={saving || totalBagsAvailable <= 0}
                   style={{
                     width: '100%', padding: '18px', borderRadius: TOKENS.radius.lg,
-                    background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
-                    color: 'white', fontSize: 18, fontWeight: 700,
-                    boxShadow: '0 10px 24px rgba(21,73,155,0.30)',
+                    background: totalBagsAvailable > 0 ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+                    color: totalBagsAvailable > 0 ? 'white' : TOKENS.colors.textLow,
+                    fontSize: 18, fontWeight: 700,
+                    boxShadow: totalBagsAvailable > 0 ? '0 10px 24px rgba(21,73,155,0.30)' : 'none',
                     opacity: saving ? 0.6 : 1,
                   }}
                 >
-                  {saving ? 'Iniciando...' : 'SI, EMPEZO AHORA'}
+                  {saving ? 'Iniciando...' : totalBagsAvailable > 0 ? 'SI, EMPEZO AHORA' : 'SIN BOLSA DISPONIBLE'}
                 </button>
               </div>
             )}

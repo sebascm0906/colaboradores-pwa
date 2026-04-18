@@ -21,6 +21,7 @@ import {
   closeShift as apiCloseShift,
 } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
+import { getMaterialIssues } from '../almacen-pt/materialsService'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,30 @@ export const FALLBACK_PRODUCTS = [
   { id: 761, name: 'Rolito 5.5 KG', weight: 5.5 },
   { id: 760, name: 'Rolito 3.8 KG', weight: 3.8 },
 ]
+
+export function computeAvailableBagMaterials(issues, packingEntries) {
+  const validIssues = (issues || []).filter(it => {
+    const state = String(it?.settlement_state || it?.state || '').toLowerCase()
+    return ['validated', 'reported', 'disputed', 'draft', 'issued'].includes(state)
+  })
+  let packedBagsLeft = (packingEntries || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+
+  return validIssues.map(it => {
+    const issued = Number(it.qty_issued || 0)
+    const consumed = Math.min(issued, packedBagsLeft)
+    const remaining = Math.max(0, issued - consumed)
+    packedBagsLeft = Math.max(0, packedBagsLeft - issued)
+    return {
+      id: it.id || it.issue_id || it.material_id,
+      name: it.product_name || it.material_name || 'Material',
+      issued,
+      consumed,
+      remaining,
+      state: it.settlement_state || it.state || '',
+      materialId: it.material_id || null,
+    }
+  })
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,21 +103,24 @@ export function minutesBetween(start, end) {
  */
 export async function getShiftOverview() {
   const shift = await getMyShift()
-  if (!shift?.id) return { shift: null, cycles: [], packing: [], checklist: null, kpis: null }
+  if (!shift?.id) return { shift: null, cycles: [], packing: [], checklist: null, kpis: null, bagMaterials: [] }
 
-  const [cyclesRes, packingRes, checklistRes] = await Promise.allSettled([
+  const [cyclesRes, packingRes, checklistRes, materialsRes] = await Promise.allSettled([
     getCycles(shift.id),
     getPackingEntries(shift.id),
     getChecklist(shift.id).catch(() => null),
+    getMaterialIssues({ shiftId: shift.id, lineId: 2 }).catch(() => ({ items: [] })),
   ])
 
   const cycles = cyclesRes.status === 'fulfilled' ? (cyclesRes.value || []) : []
   const packing = packingRes.status === 'fulfilled' ? (packingRes.value || []) : []
   const checklist = checklistRes.status === 'fulfilled' ? checklistRes.value : null
+  const materialIssues = materialsRes.status === 'fulfilled' ? (materialsRes.value?.items || []) : []
+  const bagMaterials = computeAvailableBagMaterials(materialIssues, packing)
 
   const kpis = computeKPIs(shift, cycles, packing)
 
-  return { shift, cycles, packing, checklist, kpis }
+  return { shift, cycles, packing, checklist, kpis, bagMaterials }
 }
 
 // ── LIVE: Cycle Analysis ─────────────────────────────────────────────────────
@@ -180,7 +208,7 @@ export function getCycleProgress(cycle) {
  * Determines the "what's next" action for the operator.
  * Returns { action, label, description, route, urgency }
  */
-export function getNextAction(shift, cycles, checklist, packing = []) {
+export function getNextAction(shift, cycles, checklist, packing = [], bagMaterials = []) {
   if (!shift) return { action: 'no_shift', label: 'Sin turno', description: 'No hay turno activo', route: null, urgency: 'blocked' }
 
   // 1. Checklist not done → push to checklist
@@ -189,6 +217,7 @@ export function getNextAction(shift, cycles, checklist, packing = []) {
   }
 
   const active = getActiveCycle(cycles)
+  const totalBagsAvailable = bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
 
   // 2. Active cycle freezing → wait
   if (active?.state === 'freezing') {
@@ -221,6 +250,15 @@ export function getNextAction(shift, cycles, checklist, packing = []) {
   }
 
   // 5. No active cycle → start one
+  if (totalBagsAvailable <= 0) {
+    return {
+      action: 'need_materials',
+      label: 'Espera bolsa',
+      description: 'No hay bolsa disponible en el turno para iniciar produccion',
+      route: '/almacen-pt/materiales',
+      urgency: 'required',
+    }
+  }
   return { action: 'start_cycle', label: 'Iniciar ciclo', description: 'No hay ciclo en curso, empieza uno nuevo', route: '/produccion/ciclo', urgency: 'action' }
 }
 

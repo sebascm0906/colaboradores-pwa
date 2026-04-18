@@ -77,13 +77,14 @@ export default function ScreenTurnoRolito() {
     return () => clearInterval(iv)
   }, [loadData])
 
-  const { shift, cycles, checklist, kpis, packing } = data
+  const { shift, cycles, checklist, kpis, packing, bagMaterials } = data
   const activeCycle = getActiveCycle(cycles)
   const lastDumped = getLastDumpedCycle(cycles)
   const progress = getCycleProgress(activeCycle)
-  const nextAction = getNextAction(shift, cycles, checklist, packing)
+  const nextAction = getNextAction(shift, cycles, checklist, packing, bagMaterials)
   const diagnostics = getCycleDiagnostics(lastDumped) || getCycleDiagnostics(activeCycle)
   const stateInfo = SHIFT_STATES[shift?.state] || SHIFT_STATES.draft
+  const totalBagsAvailable = (bagMaterials || []).reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
 
   return (
     <div style={{
@@ -351,8 +352,8 @@ export default function ScreenTurnoRolito() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <ActionButton label="Producir" icon={'\u23F1'} color={TOKENS.colors.blue2}
                 onClick={() => navigate('/produccion/ciclo')} typo={typo}
-                disabled={!!activeCycle}
-                disabledMsg={activeCycle ? 'Hay producción activa' : ''} />
+                disabled={!!activeCycle || totalBagsAvailable <= 0}
+                disabledMsg={activeCycle ? 'Hay producción activa' : 'No hay bolsa disponible'} />
               <ActionButton label="Materiales" icon={'\uD83D\uDCE6'} color={TOKENS.colors.warning}
                 onClick={() => navigate('/almacen-pt/materiales', { state: { backTo: '/produccion' } })} typo={typo} />
               <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS.colors.success}

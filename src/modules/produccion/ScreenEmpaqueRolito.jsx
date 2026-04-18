@@ -14,6 +14,7 @@ import {
   getProducts,
   registerPacking,
   FALLBACK_PRODUCTS,
+  computeAvailableBagMaterials,
 } from './rolitoService'
 import { getPackingEntries } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
@@ -82,29 +83,6 @@ function filterPackingProductsByIssues(products, issues) {
   })
 
   return filtered.length ? filtered : products
-}
-
-function computeAvailableBagMaterials(issues, entries) {
-  const validIssues = (issues || []).filter(it => {
-    const state = String(it?.settlement_state || it?.state || '').toLowerCase()
-    return ['validated', 'reported', 'disputed', 'draft', 'issued'].includes(state)
-  })
-  let packedBagsLeft = (entries || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
-
-  return validIssues.map(it => {
-    const issued = Number(it.qty_issued || 0)
-    const consumed = Math.min(issued, packedBagsLeft)
-    const remaining = Math.max(0, issued - consumed)
-    packedBagsLeft = Math.max(0, packedBagsLeft - issued)
-    return {
-      id: it.id || it.issue_id || it.material_id,
-      name: it.product_name || it.material_name || 'Material',
-      issued,
-      consumed,
-      remaining,
-      state: it.settlement_state || it.state || '',
-    }
-  })
 }
 
 export default function ScreenEmpaqueRolito() {
