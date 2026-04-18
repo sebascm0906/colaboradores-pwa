@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { safeNumber } from '../../lib/safeNumber'
 import { getReturns, acceptReturn } from './entregasService'
 import { ScreenShell, StatusBadge } from './components'
 
@@ -15,8 +16,8 @@ export default function ScreenDevolucionesV2() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
-  const warehouseId = session?.warehouse_id || 89
-  const employeeId = session?.employee_id || 0
+  const warehouseId = Number(session?.warehouse_id || 0) || null
+  const employeeId = Number(session?.employee_id || 0) || null
 
   const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -261,7 +262,7 @@ export default function ScreenDevolucionesV2() {
                                     type="number"
                                     inputMode="decimal"
                                     value={edit.received_qty}
-                                    onChange={e => updateLineEdit(ret.id, 'received_qty', parseFloat(e.target.value) || 0)}
+                                    onChange={e => updateLineEdit(ret.id, 'received_qty', safeNumber(e.target.value, { min: 0 }))}
                                     style={{
                                       width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm,
                                       background: 'rgba(43,143,224,0.08)', border: `1px solid ${hasDiff ? TOKENS.colors.warning : 'rgba(43,143,224,0.15)'}`,

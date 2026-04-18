@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { softWarehouse } from '../../lib/sessionGuards'
 import { getDaySummary, computeStepStatuses, STEP_STATUS } from './entregasService'
 import { ScreenShell, StepTimeline } from './components'
+import SessionErrorState from '../../components/SessionErrorState'
 
 const STEPS = [
   { id: 'aceptarTurno', label: 'Aceptar turno', icon: '\u{1F504}', route: '/entregas/aceptar-turno' },
@@ -68,7 +70,7 @@ export default function ScreenHubDia() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const warehouseId = session?.warehouse_id || 89
+  const warehouseId = softWarehouse(session)
   const warehouseName = session?.warehouse_name || 'Almacen'
 
   useEffect(() => {
@@ -78,6 +80,7 @@ export default function ScreenHubDia() {
   }, [])
 
   const loadData = useCallback(async () => {
+    if (!warehouseId) { setLoading(false); return }
     setLoading(true)
     setError('')
     try {
@@ -91,6 +94,16 @@ export default function ScreenHubDia() {
   }, [warehouseId])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Guard: si no hay warehouse, mostrar pantalla de error claro.
+  if (!warehouseId) {
+    return (
+      <SessionErrorState
+        error={{ missing: 'warehouse_id', userMessage: 'Tu usuario no tiene almacén asignado. Vuelve a iniciar sesión o contacta a tu gerente.' }}
+        backTo="/"
+      />
+    )
+  }
 
   const statuses = summary ? computeStepStatuses(summary) : {}
 

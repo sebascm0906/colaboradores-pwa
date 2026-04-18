@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingPallets, getReadyPallets, acceptPallet, rejectPallet } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
+import SessionErrorState from '../../components/SessionErrorState'
 
 export default function ScreenRecibirPT() {
   const { session } = useSession()
@@ -24,7 +26,7 @@ export default function ScreenRecibirPT() {
   // Toast
   const [toast, setToast] = useState(null)
 
-  const warehouseId = session?.warehouse_id || 89
+  const warehouseId = softWarehouse(session)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -33,6 +35,7 @@ export default function ScreenRecibirPT() {
   }, [])
 
   const loadData = useCallback(async () => {
+    if (!warehouseId) { setLoading(false); return }
     setLoading(true)
     setError('')
     try {
@@ -50,6 +53,10 @@ export default function ScreenRecibirPT() {
   }, [warehouseId])
 
   useEffect(() => { loadData() }, [loadData])
+
+  if (!warehouseId) {
+    return <SessionErrorState error={{ missing: 'warehouse_id' }} backTo="/entregas" />
+  }
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type })

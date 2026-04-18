@@ -13,6 +13,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
+import AuthBanner from '../../../components/AuthBanner'
+import { useToast } from '../../../components/Toast'
+import { safeNumber } from '../../../lib/safeNumber'
 import {
   getCashClosing,
   getCashClosingHistory,
@@ -23,6 +26,17 @@ import {
   CASH_DENOMINATIONS,
   BACKEND_CAPS,
 } from '../adminService'
+
+// ── Umbrales de diferencia (validación UI — backend valida definitivo) ──────
+// $0-100:    cierre libre
+// $100-1000: requiere nota obligatoria
+// $1000+:    requiere nota + autorización gerente (UI solo informa; backend define)
+// $10000+:   requiere autorización dirección
+export const CIERRE_THRESHOLDS = {
+  NOTE_REQUIRED: 100,
+  MANAGER_AUTH: 1000,
+  DIRECTOR_AUTH: 10000,
+}
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -129,12 +143,46 @@ export default function AdminCierreForm() {
     : (difference > 0 ? 'Sobrante' : 'Faltante')
 
   const locked = closedState === 'closed' || submitting
-  const canSubmit = BACKEND_CAPS.cashClosingWrite && !locked && openingFund !== '' && physicalTotal > 0
+
+  // ── Validación de umbrales de diferencia ─────────────────────────────────
+  // Nivel de autorización requerido según |diferencia|:
+  //   - 'ok':          $0-100  → cierre libre
+  //   - 'note':        >$100   → nota obligatoria
+  //   - 'manager':     >$1000  → nota + marcar "requiere autorización gerente"
+  //   - 'director':    >$10000 → marcar "requiere autorización dirección"
+  const absDiff = Math.abs(difference)
+  const authLevel = absDiff > CIERRE_THRESHOLDS.DIRECTOR_AUTH ? 'director'
+                  : absDiff > CIERRE_THRESHOLDS.MANAGER_AUTH  ? 'manager'
+                  : absDiff > CIERRE_THRESHOLDS.NOTE_REQUIRED ? 'note'
+                  : 'ok'
+
+  const noteRequired = authLevel !== 'ok'
+  const hasValidNote = noteRequired ? notes.trim().length >= 10 : true
+
+  const openingFundValid = safeNumber.isValid(openingFund) && safeNumber(openingFund) >= 0
+
+  // canSubmit: todos los gates de UI (backend valida definitivo)
+  const canSubmit =
+    BACKEND_CAPS.cashClosingWrite &&
+    !locked &&
+    openingFundValid &&
+    physicalTotal > 0 &&
+    hasValidNote
+
+  // Motivo por el cual NO se puede enviar (para mostrar al usuario)
+  const blockReason = !BACKEND_CAPS.cashClosingWrite
+    ? 'El backend de cierre no está disponible en este ambiente.'
+    : locked ? 'El día ya fue cerrado o se está procesando.'
+    : !openingFundValid ? 'Ingresa el fondo inicial (número ≥ 0).'
+    : physicalTotal <= 0 ? 'Registra al menos una denominación contada.'
+    : noteRequired && !hasValidNote
+      ? `La diferencia de ${fmt(absDiff)} requiere una nota de al menos 10 caracteres.`
+    : ''
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   function updateCount(key, raw) {
-    const n = Number(raw)
-    setCounts(prev => ({ ...prev, [key]: Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0 }))
+    const n = safeNumber(raw, { fallback: 0, min: 0, precision: 0, allowNegative: false })
+    setCounts(prev => ({ ...prev, [key]: n }))
   }
 
   async function doClose() {
@@ -384,16 +432,29 @@ export default function AdminCierreForm() {
             </div>
           </div>
 
-          <label style={{ fontSize: 11, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
-            Notas (opcional)
+          <label style={{
+            fontSize: 11, color: noteRequired ? TOKENS.colors.warning : TOKENS.colors.textMuted,
+            display: 'block', marginBottom: 4,
+          }}>
+            Notas {noteRequired ? <span style={{ color: TOKENS.colors.error }}>* obligatorias</span> : '(opcional)'}
+            {noteRequired && (
+              <span style={{ fontSize: 10, color: TOKENS.colors.textLow, marginLeft: 8 }}>
+                ({notes.trim().length}/10 mínimo)
+              </span>
+            )}
           </label>
           <textarea
-            rows={2}
+            rows={3}
             value={notes}
             onChange={e => setNotes(e.target.value)}
             disabled={locked}
-            placeholder="Observaciones del día…"
-            style={{ ...inputStyle, resize: 'vertical', opacity: locked ? 0.6 : 1 }}
+            placeholder={noteRequired
+              ? `Explica la diferencia de ${fmt(absDiff)} (mínimo 10 caracteres)`
+              : 'Observaciones del día…'}
+            style={{
+              ...inputStyle, resize: 'vertical', opacity: locked ? 0.6 : 1,
+              borderColor: (noteRequired && !hasValidNote) ? TOKENS.colors.warning : TOKENS.colors.border,
+            }}
           />
         </div>
 
@@ -461,9 +522,46 @@ export default function AdminCierreForm() {
                 </p>
               </div>
 
+              {/* Banner de autorización según nivel de diferencia */}
+              {authLevel === 'director' && (
+                <AuthBanner
+                  level="director"
+                  title="Diferencia crítica detectada"
+                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de dirección (${fmt(CIERRE_THRESHOLDS.DIRECTOR_AUTH)}).`}
+                  details="Al enviar, se notificará a dirección. No proceder sin autorización."
+                />
+              )}
+              {authLevel === 'manager' && (
+                <AuthBanner
+                  level="manager"
+                  title="Diferencia requiere revisión"
+                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de gerente (${fmt(CIERRE_THRESHOLDS.MANAGER_AUTH)}).`}
+                  details="Al enviar, se notificará al gerente de sucursal."
+                />
+              )}
+              {authLevel === 'note' && (
+                <AuthBanner
+                  level="info"
+                  title="Nota obligatoria"
+                  reason={`Diferencia de ${fmt(absDiff)} requiere justificación escrita.`}
+                />
+              )}
+
               {employeeName && (
                 <p style={{ fontSize: 11, color: TOKENS.colors.textLow, margin: 0, textAlign: 'center' }}>
                   Responsable: <strong style={{ color: TOKENS.colors.textSoft }}>{employeeName}</strong>
+                </p>
+              )}
+
+              {/* Mensaje de bloqueo si no puede enviar */}
+              {!canSubmit && !locked && blockReason && (
+                <p style={{
+                  fontSize: 11, color: TOKENS.colors.warning, margin: 0, textAlign: 'center',
+                  padding: '8px 10px', background: `${TOKENS.colors.warning}10`,
+                  border: `1px solid ${TOKENS.colors.warning}30`,
+                  borderRadius: TOKENS.radius.sm,
+                }}>
+                  {blockReason}
                 </p>
               )}
 

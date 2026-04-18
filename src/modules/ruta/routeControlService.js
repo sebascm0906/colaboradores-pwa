@@ -305,20 +305,22 @@ export function validateCorte(inventoryView) {
     return { valid: false, errors, warnings }
   }
 
-  // Check each line — remaining (loaded - delivered - returned - scrap) should be 0
+  // Regla estricta: inventario final DEBE cuadrar a 0.
+  // Tanto faltantes como sobrantes bloquean el corte — un sobrante inexplicado
+  // puede significar producto no registrado en entrega o error en carga.
   for (const line of inventoryView.lines) {
     const remaining = line.remaining
     if (remaining > 0) {
-      errors.push(`${line.product}: ${remaining} unidades sin justificar`)
+      errors.push(`${line.product}: ${remaining} unidades faltantes sin justificar`)
     } else if (remaining < 0) {
-      warnings.push(`${line.product}: ${Math.abs(remaining)} unidades de mas (revisa datos)`)
+      errors.push(`${line.product}: ${Math.abs(remaining)} unidades de más (revisar carga/entregas)`)
     }
   }
 
-  // Total difference
+  // Total difference — también bloquea el cierre
   const totalDiff = inventoryView.totals.difference
   if (totalDiff !== 0) {
-    warnings.push(`Diferencia total: ${totalDiff > 0 ? '+' : ''}${totalDiff} unidades`)
+    errors.push(`Diferencia total: ${totalDiff > 0 ? '+' : ''}${totalDiff} unidades — debe ser 0`)
   }
 
   return { valid: errors.length === 0, errors, warnings }

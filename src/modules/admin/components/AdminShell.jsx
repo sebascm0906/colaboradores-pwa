@@ -11,21 +11,35 @@ import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
+import { useSession } from '../../../App'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
-// Navegación lateral del rol. Mantener sincronizado con HubV2.NAV_ITEMS.
+// Navegación lateral. Cada ítem declara qué roles pueden verlo.
+// - auxiliar_admin: solo funciones operativas del día a día.
+// - gerente_sucursal: adicional aprobaciones, liquidaciones, materiales.
+// - (futuro) contador: cierre, historial, materia prima.
+//
+// Regla: si un rol no está en `roles`, el ítem se oculta de la UI.
+// Backend debe validar también (seguridad real no puede depender del front).
 export const NAV_ITEMS = [
-  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    status: 'live' },
-  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                status: 'live' },
-  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      status: 'live' },
-  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             status: 'live' },
-  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   status: 'live' },
-  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      status: 'live' },
-  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      status: 'live' },
-  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             status: 'live' },
-  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', status: 'live' },
+  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  // ── Restringidos a gerente (segregación de funciones) ────────────────────
+  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal'], status: 'live' },
+  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal'], status: 'live' },
+  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['gerente_sucursal'], status: 'live' },
 ]
+
+/** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
+export function navItemsForRole(role) {
+  if (!role) return []
+  return NAV_ITEMS.filter(item => item.roles.includes(role))
+}
 
 export default function AdminShell({
   activeBlock = 'hub',
@@ -35,9 +49,16 @@ export default function AdminShell({
 }) {
   const navigate = useNavigate()
   const { sucursal, employeeName } = useAdmin()
+  const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isDesktop = sw >= 1024
+
+  // Filtrar módulos según rol del usuario
+  const visibleNavItems = useMemo(
+    () => navItemsForRole(session?.role || ''),
+    [session?.role],
+  )
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -142,7 +163,7 @@ export default function AdminShell({
               MÓDULOS
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {NAV_ITEMS.map(item => {
+              {visibleNavItems.map(item => {
                 const active = item.id === activeBlock
                 const locked = item.status === 'pending_backend'
                 return (

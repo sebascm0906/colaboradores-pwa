@@ -61,11 +61,12 @@ export default function ScreenIncidencias() {
     setError('')
     setSuccess('')
     try {
+      // company_id viene del contexto de sesión; el backend usa el de la empresa
+      // del usuario autenticado si no se envía explícito. No hardcodear 34.
       await createIncident({
         incident_type: incidentType,
         severity,
         name: description.trim(),
-        company_id: 34,
       })
       setSuccess('Incidencia reportada')
       setIncidentType('')

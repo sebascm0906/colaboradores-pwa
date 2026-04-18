@@ -10,6 +10,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
+import AuthBanner from '../../../components/AuthBanner'
+import { useToast } from '../../../components/Toast'
+import { safeNumber } from '../../../lib/safeNumber'
 import {
   getPosProducts,
   searchCustomers,
@@ -19,6 +22,12 @@ import {
 import { logScreenError } from '../../shared/logScreenError'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+// Umbrales de venta (UI — backend debe re-validar)
+export const POS_THRESHOLDS = {
+  MANAGER_AUTH: 5000,   // > $5000: requiere autorización gerente
+  DIRECTOR_AUTH: 50000, // > $50000: requiere autorización dirección
+}
 
 function stockOf(p) {
   return Number(p?.stock ?? p?.qty_available ?? 0)
@@ -41,6 +50,8 @@ export default function AdminPosForm() {
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [searchingCustomer, setSearchingCustomer] = useState(false)
   const [payConfirm, setPayConfirm] = useState(null) // 'cash' | 'card' | null
+  const [cardRef, setCardRef] = useState('')          // folio obligatorio si card
+  const toast = useToast()
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -160,6 +171,16 @@ export default function AdminPosForm() {
   // ── Cobro ─────────────────────────────────────────────────────────────────
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
+
+    // Validación: folio de terminal obligatorio en pagos con tarjeta
+    if (payConfirm === 'card') {
+      const ref = cardRef.trim()
+      if (ref.length < 4) {
+        toast.error('Ingresa el folio de la terminal (mínimo 4 caracteres)')
+        return
+      }
+    }
+
     setSubmitting(true)
     setError('')
     try {
@@ -169,6 +190,8 @@ export default function AdminPosForm() {
         sucursal_code: sucursal || undefined,
         partner_id: customer.id,
         payment_method: payConfirm,
+        // Folio terminal: requerido backend cuando payment_method='card'
+        payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
         lines: cart.map(c => ({
           product_id: c.product_id,
           qty: c.qty,
@@ -178,6 +201,7 @@ export default function AdminPosForm() {
       const data = result?.data ?? result
       const orderId = data?.order_id || data?.id
       if (orderId) {
+        toast.success('Venta registrada')
         navigate(`/admin/ticket/${orderId}`, { state: { order_id: orderId } })
       } else {
         setError('Venta creada pero sin folio')
@@ -187,6 +211,7 @@ export default function AdminPosForm() {
     } finally {
       setSubmitting(false)
       setPayConfirm(null)
+      setCardRef('')
     }
   }
 
@@ -537,17 +562,58 @@ export default function AdminPosForm() {
 
           {/* Acciones de cobro */}
           {payConfirm ? (
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <p style={{
                 fontSize: 11, color: TOKENS.colors.textSoft,
-                textAlign: 'center', margin: '0 0 8px',
+                textAlign: 'center', margin: 0,
               }}>
                 Confirmar pago con <strong>{payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}</strong> — {fmt(total)}
               </p>
+
+              {/* Banner de autorización según monto */}
+              {total > POS_THRESHOLDS.DIRECTOR_AUTH && (
+                <AuthBanner
+                  level="director"
+                  title="Venta excepcional"
+                  reason={`Monto de ${fmt(total)} requiere autorización de dirección.`}
+                />
+              )}
+              {total > POS_THRESHOLDS.MANAGER_AUTH && total <= POS_THRESHOLDS.DIRECTOR_AUTH && (
+                <AuthBanner
+                  level="manager"
+                  title="Venta con monto alto"
+                  reason={`Monto de ${fmt(total)} requiere autorización del gerente de sucursal.`}
+                />
+              )}
+
+              {/* Folio obligatorio para pagos con tarjeta */}
+              {payConfirm === 'card' && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: TOKENS.colors.warning }}>
+                    FOLIO DE LA TERMINAL *
+                  </label>
+                  <input
+                    type="text"
+                    value={cardRef}
+                    onChange={e => setCardRef(e.target.value)}
+                    placeholder="Ej: 0012345"
+                    autoFocus
+                    maxLength={32}
+                    style={{
+                      ...inputStyle, marginTop: 4,
+                      borderColor: cardRef.trim().length >= 4 ? TOKENS.colors.border : TOKENS.colors.warning,
+                    }}
+                  />
+                  <p style={{ fontSize: 10, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
+                    Copia el folio exacto del comprobante de la terminal (mín. 4 caracteres).
+                  </p>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
-                  onClick={() => setPayConfirm(null)}
+                  onClick={() => { setPayConfirm(null); setCardRef('') }}
                   disabled={submitting}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
@@ -561,11 +627,12 @@ export default function AdminPosForm() {
                 <button
                   type="button"
                   onClick={confirmPay}
-                  disabled={submitting}
+                  disabled={submitting || (payConfirm === 'card' && cardRef.trim().length < 4)}
                   style={{
                     flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
                     background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
-                    opacity: submitting ? 0.6 : 1, cursor: submitting ? 'wait' : 'pointer',
+                    opacity: (submitting || (payConfirm === 'card' && cardRef.trim().length < 4)) ? 0.5 : 1,
+                    cursor: submitting ? 'wait' : 'pointer',
                     fontSize: 13, fontWeight: 700, color: 'white',
                     fontFamily: "'DM Sans', sans-serif",
                   }}

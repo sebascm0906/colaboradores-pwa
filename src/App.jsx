@@ -1,6 +1,7 @@
 import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
+import { ToastProvider } from './components/Toast'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -56,13 +57,7 @@ const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPr
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
 const ScreenMaterialesValidate = lazy(() => import('./modules/admin/ScreenMaterialesValidate'))
 const ScreenMaterialesResolverRejected = lazy(() => import('./modules/admin/ScreenMaterialesResolverRejected'))
-// Entregas V1 (kept for reference, replaced by V2)
-const ScreenEntregas        = lazy(() => import('./modules/entregas/ScreenEntregas'))
-const ScreenValidarTicket   = lazy(() => import('./modules/entregas/ScreenValidarTicket'))
-const ScreenPreparaCarga    = lazy(() => import('./modules/entregas/ScreenPreparaCarga'))
-const ScreenInventarioCedis = lazy(() => import('./modules/entregas/ScreenInventarioCedis'))
-const ScreenDevoluciones    = lazy(() => import('./modules/entregas/ScreenDevoluciones'))
-// Entregas V2
+// Entregas V2 (V1 eliminado 2026-04-17)
 const ScreenHubDia          = lazy(() => import('./modules/entregas/ScreenHubDia'))
 const ScreenRecibirPT       = lazy(() => import('./modules/entregas/ScreenRecibirPT'))
 const ScreenCargaUnidades   = lazy(() => import('./modules/entregas/ScreenCargaUnidades'))
@@ -70,8 +65,8 @@ const ScreenOperacionDia    = lazy(() => import('./modules/entregas/ScreenOperac
 const ScreenDevolucionesV2  = lazy(() => import('./modules/entregas/ScreenDevolucionesV2'))
 const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'))
 const ScreenCierreTurno     = lazy(() => import('./modules/entregas/ScreenCierreTurno'))
-// Ruta V2
-const ScreenMiRuta          = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
+// Ruta V2 — V1 eliminado 2026-04-17
+const ScreenMiRutaV2        = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
 const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
 const ScreenAceptarCarga    = lazy(() => import('./modules/ruta/ScreenAceptarCarga'))
 const ScreenIncidencias     = lazy(() => import('./modules/ruta/ScreenIncidencias'))
@@ -82,12 +77,12 @@ const ScreenInventarioRuta  = lazy(() => import('./modules/ruta/ScreenInventario
 const ScreenCorteRuta       = lazy(() => import('./modules/ruta/ScreenCorteRuta'))
 const ScreenLiquidacion     = lazy(() => import('./modules/ruta/ScreenLiquidacion'))
 const ScreenCierreRuta      = lazy(() => import('./modules/ruta/ScreenCierreRuta'))
-// Supervisor Ventas
-const ScreenSupervisorVentas = lazy(() => import('./modules/supervisor-ventas/ScreenSupervisorVentas'))
+// Supervisor Ventas V2 — V1 (ScreenSupervisorVentas, ScreenVendedores) eliminado 2026-04-17
 const ScreenDashboardVentas  = lazy(() => import('./modules/supervisor-ventas/ScreenDashboardVentas'))
 const ScreenPronostico       = lazy(() => import('./modules/supervisor-ventas/ScreenPronostico'))
-const ScreenVendedores       = lazy(() => import('./modules/supervisor-ventas/ScreenVendedores'))
 const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/ScreenMetasVendedores'))
+const ScreenTareasSupervisor = lazy(() => import('./modules/supervisor-ventas/ScreenTareasSupervisor'))
+const ScreenNotasCliente     = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
 const ScreenControlComercial    = lazy(() => import('./modules/supervisor-ventas/ScreenControlComercial'))
 const ScreenDetalleVendedor    = lazy(() => import('./modules/supervisor-ventas/ScreenDetalleVendedor'))
 const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSinVisitar'))
@@ -214,6 +209,7 @@ export default function App() {
 
   return (
     <SessionContext.Provider value={{ session, login, logout, updateSession }}>
+      <ToastProvider>
       <BrowserRouter>
         <ErrorBoundary>
         <Suspense fallback={<PageLoader />}>
@@ -278,19 +274,19 @@ export default function App() {
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
             {/* Entregas V2 — flujo guiado */}
             <Route path="/entregas" element={<PrivateRoute><ScreenHubDia /></PrivateRoute>} />
-            <Route path="/entregas/aceptar-turno" element={<PrivateRoute><ScreenCierreTurno /></PrivateRoute>} />
             <Route path="/entregas/recibir-pt" element={<PrivateRoute><ScreenRecibirPT /></PrivateRoute>} />
             <Route path="/entregas/carga" element={<PrivateRoute><ScreenCargaUnidades /></PrivateRoute>} />
             <Route path="/entregas/operacion" element={<PrivateRoute><ScreenOperacionDia /></PrivateRoute>} />
             <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevolucionesV2 /></PrivateRoute>} />
             <Route path="/entregas/merma" element={<PrivateRoute><ScreenMermaEntregas /></PrivateRoute>} />
             <Route path="/entregas/cierre-turno" element={<PrivateRoute><ScreenCierreTurno /></PrivateRoute>} />
-            {/* Entregas V1 — rutas legacy (redirect a V2) */}
+            {/* Legacy route aliases — eliminado V1 2026-04-17 */}
+            <Route path="/entregas/aceptar-turno" element={<Navigate to="/entregas/cierre-turno" replace />} />
             <Route path="/entregas/validar" element={<Navigate to="/entregas/operacion" replace />} />
             <Route path="/entregas/inventario" element={<Navigate to="/entregas/operacion" replace />} />
 
             {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
-            <Route path="/ruta" element={<PrivateRoute><ScreenMiRuta /></PrivateRoute>} />
+            <Route path="/ruta" element={<PrivateRoute><ScreenMiRutaV2 /></PrivateRoute>} />
             <Route path="/ruta/checklist" element={<PrivateRoute><ScreenChecklistUnidad /></PrivateRoute>} />
             <Route path="/ruta/carga" element={<PrivateRoute><ScreenAceptarCarga /></PrivateRoute>} />
             <Route path="/ruta/incidencias" element={<PrivateRoute><ScreenIncidencias /></PrivateRoute>} />
@@ -312,6 +308,8 @@ export default function App() {
             <Route path="/equipo/dashboard" element={<PrivateRoute><ScreenDashboardVentas /></PrivateRoute>} />
             <Route path="/equipo/pronostico" element={<PrivateRoute><ScreenPronostico /></PrivateRoute>} />
             <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
+            <Route path="/equipo/tareas" element={<PrivateRoute><ScreenTareasSupervisor /></PrivateRoute>} />
+            <Route path="/equipo/notas" element={<PrivateRoute><ScreenNotasCliente /></PrivateRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
@@ -337,6 +335,7 @@ export default function App() {
         </Suspense>
         </ErrorBoundary>
       </BrowserRouter>
+      </ToastProvider>
     </SessionContext.Provider>
   )
 }

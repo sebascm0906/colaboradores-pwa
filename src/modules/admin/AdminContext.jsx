@@ -2,9 +2,13 @@
 // Provee los filtros globales (razón social, sucursal, almacén) que todas las
 // pantallas del rol consumen. Persiste company_id en session para que api.js
 // lo lea en headers en cada request al backend.
+//
+// Guards de sesión: si falta warehouse_id o company_id, la app muestra error
+// explícito (ver SessionErrorState) en lugar de trabajar con IDs hardcodeados.
 import { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react'
 import { useSession } from '../../App'
 import { COMPANY_LABELS, getCompaniesForSucursal } from '../../tokens'
+import { softWarehouse, softEmployee } from '../../lib/sessionGuards'
 import { bootCapabilities } from './adminService'
 
 const AdminContext = createContext(null)
@@ -19,8 +23,10 @@ export function AdminProvider({ children }) {
   const { session, updateSession } = useSession()
 
   const sucursal = session?.sucursal || ''
-  const warehouseId = session?.warehouse_id || 89
-  const employeeId = session?.employee_id || null
+  // Soft guards: si no hay warehouse/employee, lo dejamos null para que las
+  // pantallas validen y muestren mensaje de error claro al usuario.
+  const warehouseId = softWarehouse(session)
+  const employeeId = softEmployee(session)
   const employeeName = session?.name || ''
 
   const availableCompanies = useMemo(
@@ -29,12 +35,14 @@ export function AdminProvider({ children }) {
   )
 
   // company_id inicial: el de sesión si es válido, sino el primero disponible
+  // para la sucursal. Si la sucursal no tiene companies mapeadas, quedamos en
+  // null (la UI consumidora muestra SessionErrorState).
   const initialCompanyId = useMemo(() => {
-    const fromSession = session?.company_id
-    if (fromSession && availableCompanies.some(c => c.id === fromSession)) {
+    const fromSession = Number(session?.company_id || 0)
+    if (fromSession > 0 && availableCompanies.some(c => c.id === fromSession)) {
       return fromSession
     }
-    return availableCompanies[0]?.id || 34
+    return availableCompanies[0]?.id || null
   }, [session?.company_id, availableCompanies])
 
   const [companyId, setCompanyIdInternal] = useState(initialCompanyId)

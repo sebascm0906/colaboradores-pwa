@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { safeNumber } from '../../lib/safeNumber'
 import { getCedisInventory, createScrap, getScrapHistory } from './entregasService'
 import { ScreenShell, ConfirmDialog } from './components'
 import { logScreenError } from '../shared/logScreenError'
@@ -22,8 +23,8 @@ export default function ScreenMerma() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
-  const warehouseId = session?.warehouse_id || 89
-  const employeeId = session?.employee_id || 0
+  const warehouseId = Number(session?.warehouse_id || 0) || null
+  const employeeId = Number(session?.employee_id || 0) || null
 
   // ── Inventory for product selector ────────────────────────────────────────
   const [inventory, setInventory] = useState([])
@@ -246,7 +247,7 @@ export default function ScreenMerma() {
                   type="number"
                   inputMode="decimal"
                   value={qty}
-                  onChange={e => setQty(parseFloat(e.target.value) || 0)}
+                  onChange={e => setQty(safeNumber(e.target.value, { min: 0 }))}
                   style={{
                     flex: 1, height: 48, padding: '0 12px', textAlign: 'center',
                     background: 'rgba(255,255,255,0.05)',

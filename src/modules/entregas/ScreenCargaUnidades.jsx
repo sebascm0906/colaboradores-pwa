@@ -46,7 +46,7 @@ export default function ScreenCargaUnidades() {
   // Toast
   const [toast, setToast] = useState(null)
 
-  const warehouseId = session?.warehouse_id || 89
+  const warehouseId = Number(session?.warehouse_id || 0) || null
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { safeNumber } from '../../lib/safeNumber'
 import {
   getCedisInventory, getPendingHandover,
   createShiftHandover, acceptShiftHandover,
@@ -18,8 +19,8 @@ export default function ScreenCierreTurno() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
-  const warehouseId = session?.warehouse_id || 89
-  const employeeId = session?.employee_id || 0
+  const warehouseId = Number(session?.warehouse_id || 0) || null
+  const employeeId = Number(session?.employee_id || 0) || null
   const employeeName = session?.name || ''
 
   // ── Shared state ──────────────────────────────────────────────────────────
@@ -331,7 +332,7 @@ export default function ScreenCierreTurno() {
                                 type="number"
                                 inputMode="decimal"
                                 value={line.qty_accepted}
-                                onChange={e => updateAcceptLine(i, 'qty_accepted', parseFloat(e.target.value) || 0)}
+                                onChange={e => updateAcceptLine(i, 'qty_accepted', safeNumber(e.target.value, { min: 0 }))}
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
                                   background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',
@@ -474,7 +475,7 @@ export default function ScreenCierreTurno() {
                                 type="number"
                                 inputMode="decimal"
                                 value={line.qty_declared}
-                                onChange={e => updateEntregarLine(i, 'qty_declared', parseFloat(e.target.value) || 0)}
+                                onChange={e => updateEntregarLine(i, 'qty_declared', safeNumber(e.target.value, { min: 0 }))}
                                 style={{
                                   width: '100%', padding: '6px 8px', borderRadius: TOKENS.radius.sm,
                                   background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.15)',

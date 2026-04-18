@@ -1,6 +1,18 @@
-// ScreenMiRuta.jsx — V2 Hub Guiado Jefe de Ruta
-// Flujo de 6 estaciones con semaforo de pasos.
-// Concepto: App de DISCIPLINA OPERATIVA, no de ventas.
+// ScreenMiRutaV2.jsx — Hub Guiado del Jefe de Ruta (VENDEDOR)
+//
+// IMPORTANTE: El "Jefe de Ruta" en GFSC es el VENDEDOR que opera UNA ruta.
+// No es un supervisor multi-ruta (para eso está /equipo del supervisor_ventas).
+//
+// Flujo de su día: 6 estaciones en orden
+//   1. Checklist de unidad + aceptar carga + KM salida
+//   2. Control de ruta (entregas en Kold Field)
+//   3. Inventario (visibilidad de lo cargado vs entregado)
+//   4. Corte (cuadre forzoso a 0)
+//   5. Liquidación (cuadre de dinero)
+//   6. Cierre de ruta
+//
+// Concepto: App de DISCIPLINA OPERATIVA. La ejecución real (visitas, ventas,
+// cobros) sucede en Kold Field (app externa). Esta PWA controla y valida.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -18,7 +30,7 @@ import {
   fmtPct,
 } from './routeControlService'
 
-export default function ScreenMiRuta() {
+export default function ScreenMiRutaV2() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)

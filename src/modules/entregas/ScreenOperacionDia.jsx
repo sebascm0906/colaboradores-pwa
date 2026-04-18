@@ -16,7 +16,7 @@ export default function ScreenOperacionDia() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
-  const warehouseId = session?.warehouse_id || 89
+  const warehouseId = Number(session?.warehouse_id || 0) || null
 
   // ── Shared state ──────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(TABS.TICKETS)

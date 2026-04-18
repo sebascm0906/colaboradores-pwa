@@ -19,7 +19,10 @@ import {
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from '../almacen-pt/ptService'
 import { logScreenError } from '../shared/logScreenError'
 
-const ALLOWED_ROLES = ['auxiliar_admin', 'gerente_sucursal', 'gerente', 'supervisor']
+// Validar materiales del almacenista es responsabilidad del GERENTE, no del auxiliar admin.
+// Segregación de funciones: quien procesa gastos diarios no debe aprobar inventarios.
+// Backend debe validar también.
+const ALLOWED_ROLES = ['gerente_sucursal']
 const INBOX_STATES = ['reported', 'disputed', 'rejected']
 
 export default function ScreenMaterialesValidate() {
