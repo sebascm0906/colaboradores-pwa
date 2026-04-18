@@ -17,6 +17,7 @@ import {
   BACKEND_CAPS,
 } from '../adminService'
 import { attachExpense } from '../api'
+import { api } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
@@ -140,6 +141,37 @@ export default function AdminGastosForm() {
     setError('')
     setSuccess('')
     try {
+      // Si hay attachment: subir PRIMERO a /pwa/evidence/upload para tener
+      // el attachment_id antes de crear el gasto (guía §2c). Backend rechaza
+      // expense-create si monto > threshold y no viene attachment_id.
+      let uploadedAttachmentId = null
+      let uploadError = null
+      if (attachment && BACKEND_CAPS.evidenceUpload) {
+        try {
+          const payload = await fileToPayload(attachment)
+          const uploadRes = await api('POST', '/pwa/evidence/upload', {
+            filename:    payload.filename,
+            file_base64: payload.base64,
+            mime_type:   payload.mime,
+            linked_model: 'hr.expense', // backend lo vinculará al expense tras crear
+          })
+          const uploaded = uploadRes?.data ?? uploadRes ?? {}
+          uploadedAttachmentId = uploaded.attachment_id || null
+          if (!uploadedAttachmentId) {
+            uploadError = 'No se pudo subir el comprobante (backend no devolvió attachment_id)'
+          }
+        } catch (upErr) {
+          uploadError = upErr?.message || 'Error subiendo comprobante'
+        }
+      }
+
+      // Si monto requiere attachment y la subida falló → no crear gasto
+      if (requiresAttach && !uploadedAttachmentId) {
+        setError(uploadError || 'Sube el comprobante antes de enviar el gasto.')
+        setSubmitting(false)
+        return
+      }
+
       const res = await createExpense({
         name: name.trim(),
         unit_amount: Number(amount),
@@ -153,20 +185,23 @@ export default function AdminGastosForm() {
         warehouse_id: warehouseId || undefined,
         sucursal_code: sucursal || undefined,
         analytic_distribution: analyticDistribution,
+        // Attachment pre-subido (guía §2c). Backend lo vincula al expense.
+        attachment_id: uploadedAttachmentId || undefined,
       })
 
-      // Sprint 4: subir adjunto si hay uno y el backend lo soporta
+      // Fallback legacy: si el evidence/upload no funcionó pero expense-attach
+      // sí, intentamos adjuntar por separado. Solo para montos bajos donde
+      // el attachment es opcional pero el usuario lo subió.
       const created = res?.data ?? res
       const expenseId = created?.id ?? created?.expense_id ?? created?.data?.id
-      let attachedMsg = ''
-      if (attachment && BACKEND_CAPS.expenseAttachments && expenseId) {
+      let attachedMsg = uploadedAttachmentId ? ' (con comprobante)' : ''
+      if (attachment && !uploadedAttachmentId && BACKEND_CAPS.expenseAttachments && expenseId) {
         try {
           const payload = await fileToPayload(attachment)
           await attachExpense({ expenseId, ...payload })
-          attachedMsg = ' (con comprobante)'
+          attachedMsg = ' (con comprobante · legacy)'
         } catch (attachErr) {
-          // No bloquear el flujo — el gasto ya existe
-          attachedMsg = ` (gasto creado, error al subir comprobante: ${attachErr.message || 'desconocido'})`
+          attachedMsg = ` (gasto creado, comprobante falló: ${attachErr.message || 'desconocido'})`
         }
       }
 

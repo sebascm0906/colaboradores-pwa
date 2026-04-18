@@ -109,15 +109,20 @@ export default function ScreenLiquidacion() {
     if (!plan?.id || submitting) return
     setSubmitting(true)
     try {
+      // Backend SIEMPRE responde HTTP 200. NO usar catch para ok:false.
+      //   Caso diferencia:  { ok:false, code:'difference_warning', data:{total_collected, total_expected, difference} }
+      //   Caso éxito:       { ok:true,  data:{...} }
       const res = await confirmLiquidacion(plan.id, { notes, force })
       const payload = res?.data ?? res ?? {}
 
       // Si backend warning, abrimos modal de override
       if (res?.ok === false && res?.code === 'difference_warning') {
-        setWarningOpen({
-          collected: Number(payload.total_collected ?? totalCollected),
-          expected:  Number(payload.total_expected  ?? totalExpected),
-        })
+        const collected = Number(payload.total_collected ?? totalCollected)
+        const expected  = Number(payload.total_expected  ?? totalExpected)
+        const backendDiff = Number.isFinite(Number(payload.difference))
+          ? Number(payload.difference)
+          : (collected - expected)
+        setWarningOpen({ collected, expected, difference: backendDiff })
         return
       }
 
@@ -396,7 +401,7 @@ export default function ScreenLiquidacion() {
                     Diferencia:
                   </span>
                   <span style={{ ...typo.caption, fontWeight: 700, color: TOKENS.colors.warning }}>
-                    {fmtMoney(warningOpen.collected - warningOpen.expected)}
+                    {fmtMoney(warningOpen.difference)}
                   </span>
                 </div>
               </div>

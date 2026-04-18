@@ -1439,10 +1439,12 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Evidencia fotográfica centralizada (guía §7) ───────────────────────────
+  // Backend espera `file_base64` (no `data`). Aceptamos ambas claves del
+  // lado cliente pero siempre enviamos `file_base64` al controller Odoo.
   if (cleanPath === '/pwa/evidence/upload' && method === 'POST') {
     return odooJson('/pwa/evidence/upload', {
       filename:     body?.filename || 'evidencia.jpg',
-      data:         body?.data || '',
+      file_base64:  body?.file_base64 ?? body?.data ?? '',
       mime_type:    body?.mime_type || 'image/jpeg',
       linked_model: body?.linked_model || undefined,
       linked_id:    body?.linked_id ? Number(body.linked_id) : undefined,

@@ -67,19 +67,27 @@ export default function PhotoCapture({
       // Si hay handler de upload, subir al backend
       if (onUploadComplete) {
         try {
+          // Backend espera `file_base64` (no `data`). Quitamos el prefijo
+          // data:image/...;base64, si viene incluido en el dataURL.
+          const cleanBase64 = typeof base64 === 'string' && base64.includes(',')
+            ? base64.split(',', 2)[1]
+            : base64
+
           const result = await api('POST', '/pwa/evidence/upload', {
             filename:     file.name || 'foto.jpg',
-            data:         base64.split(',')[1] ?? base64,  // strip data:image/...;base64,
+            file_base64:  cleanBase64,
             mime_type:    file.type,
             linked_model: linkedModel || undefined,
             linked_id:    linkedId    || undefined,
           })
+          // Backend responde { ok, data: { attachment_id, url } }
           const payload = result?.data ?? result ?? {}
-          if (payload.attachment_id) {
+          const attachmentId = payload.attachment_id
+          if (attachmentId) {
             setUploadDone(true)
-            onUploadComplete({ attachment_id: payload.attachment_id, url: payload.url })
+            onUploadComplete({ attachment_id: attachmentId, url: payload.url || null })
           } else {
-            setError('La foto se tomó pero no se pudo guardar en servidor.')
+            setError('La foto se tomó pero el backend no devolvió attachment_id.')
           }
         } catch (uploadErr) {
           setError('No se pudo subir la foto al servidor. Intenta de nuevo.')

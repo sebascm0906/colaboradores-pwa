@@ -56,17 +56,40 @@ function GastosAprobarInner() {
 
   useEffect(() => { load() }, [load])
 
+  /**
+   * Extrae el expense actualizado del response. Backend responde:
+   *   { ok: true, data: { ...expense completo con x_approval_state } }
+   * Si viene ese `data`, actualizamos UI localmente en lugar de recargar lista,
+   * y sacamos del inbox items que ya no estén `pending` (approved/rejected).
+   */
+  function applyResponse(res, fallbackExpense, successMsg) {
+    const payload = res?.data ?? res ?? {}
+    // El backend debe confirmar la acción devolviendo el expense.
+    // Si aprueba, x_approval_state debe cambiar a 'approved' (y salir del inbox pending).
+    const newState = payload.x_approval_state || payload.approval_state
+    if (res?.ok === false || res?.error) {
+      toast.error(res?.error || res?.message || 'Acción rechazada por el backend')
+      return false
+    }
+    toast.success(successMsg)
+    // Optimista: el item deja el inbox (pending) en cuanto cambia de state
+    setItems(prev => prev.filter(it => Number(it.id) !== Number(fallbackExpense.id)))
+    // Log útil para debugging: confirma el state que devolvió backend
+    if (newState && newState !== 'pending') {
+      // ok esperado; no recargamos lista
+    } else {
+      // Si backend NO devolvió el state esperado, recarga para reconciliar
+      load()
+    }
+    return true
+  }
+
   async function doApprove(exp) {
     if (processing) return
     setProcessing(exp.id)
     try {
       const res = await approveExpense(exp.id)
-      if (res?.ok === false || res?.error) {
-        toast.error(res?.error || res?.message || 'No se pudo aprobar')
-      } else {
-        toast.success(`Gasto "${exp.name || exp.description}" aprobado`)
-        await load()
-      }
+      applyResponse(res, exp, `Gasto "${exp.name || exp.description || '#' + exp.id}" aprobado`)
     } catch (e) {
       logScreenError('ScreenGastosAprobar', 'approve', e)
       toast.error(e?.message || 'Error al aprobar')
@@ -86,13 +109,10 @@ function GastosAprobarInner() {
     setProcessing(exp.id)
     try {
       const res = await rejectExpense(exp.id, rejectReason.trim())
-      if (res?.ok === false || res?.error) {
-        toast.error(res?.error || res?.message || 'No se pudo rechazar')
-      } else {
-        toast.success(`Gasto rechazado`)
+      const ok = applyResponse(res, exp, 'Gasto rechazado')
+      if (ok) {
         setRejectDialog(null)
         setRejectReason('')
-        await load()
       }
     } catch (e) {
       logScreenError('ScreenGastosAprobar', 'reject', e)

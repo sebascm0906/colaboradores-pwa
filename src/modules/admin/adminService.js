@@ -90,8 +90,19 @@ export const BACKEND_CAPS = {
 export function applyCapabilities(caps) {
   if (!caps || typeof caps !== 'object') return BACKEND_CAPS
   for (const key of Object.keys(BACKEND_CAPS)) {
-    if (Object.prototype.hasOwnProperty.call(caps, key)) {
-      BACKEND_CAPS[key] = Boolean(caps[key])
+    if (!Object.prototype.hasOwnProperty.call(caps, key)) continue
+    const incoming = caps[key]
+    const currentType = typeof BACKEND_CAPS[key]
+    // Preservar el tipo del default — los umbrales (Number) y flags (Boolean)
+    // ahora conviven en BACKEND_CAPS. Convertir siempre a Boolean rompía los
+    // umbrales (ej: cashClosingDiffManager: 100 → true).
+    if (currentType === 'number') {
+      const n = Number(incoming)
+      if (Number.isFinite(n)) BACKEND_CAPS[key] = n
+    } else if (currentType === 'string') {
+      BACKEND_CAPS[key] = String(incoming)
+    } else {
+      BACKEND_CAPS[key] = Boolean(incoming)
     }
   }
   return BACKEND_CAPS

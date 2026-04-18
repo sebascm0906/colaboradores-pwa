@@ -16,25 +16,28 @@ import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
 // Navegación lateral. Cada ítem declara qué roles pueden verlo.
-// - auxiliar_admin: solo funciones operativas del día a día.
-// - gerente_sucursal: adicional aprobaciones, liquidaciones, materiales.
-// - (futuro) contador: cierre, historial, materia prima.
+// Mapping alineado con el backend (guía de pruebas 2026-04-18):
+//   auxiliar_admin    → captura del día: caja, POS, gastos, requisiciones, cierre
+//   gerente_sucursal  → además: aprobar gastos, liquidaciones, materia prima
+//   direccion_general → acceso completo (supervisa todo)
 //
 // Regla: si un rol no está en `roles`, el ítem se oculta de la UI.
-// Backend debe validar también (seguridad real no puede depender del front).
+// Backend valida permisos en DB — este filtrado es solo UX.
 export const NAV_ITEMS = [
-  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  // ── Restringidos a gerente (segregación de funciones) ────────────────────
-  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
-  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['auxiliar_admin'], status: 'live' },
+  { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
+  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  // ── Restringidos a gerente / dirección ──────────────────────────────────
+  { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  // Validar materiales: lo opera el auxiliar admin según la implementación actual
+  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['auxiliar_admin', 'direccion_general'], status: 'live' },
 ]
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */

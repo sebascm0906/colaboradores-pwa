@@ -1,18 +1,27 @@
 // ─── Notas de Coaching — backend real ────────────────────────────────────────
 // Endpoints: /pwa-supv/notes (GET), /notes/create, /notes/delete
-// Normalización note_id→id y create_date→created_at para no tocar la UI.
+// Normalización al shape canónico que consume la UI:
+//   note_id      → id
+//   create_date  → created_at
+//   body         → body  (el backend usa `body`, NO `content`)
+//   (alias)      → content  [defensivo: cualquier UI legacy que lea .content también funciona]
 // ─────────────────────────────────────────────────────────────────────────────
 import { api } from '../../lib/api'
 
 export const IS_STUB = false
 
-/** Normaliza la respuesta del backend al shape que espera la UI. */
+/** Normaliza la respuesta del backend al shape que espera la UI.
+ *  Garantiza que `body` siempre esté presente y expone `content` como alias. */
 function normalizeNote(n) {
   if (!n) return n
+  // Backend envía `body`. Aceptamos también `content` por si cambia en el futuro.
+  const body = n.body ?? n.content ?? ''
   return {
     ...n,
     id:         n.note_id     ?? n.id,
     created_at: n.create_date ?? n.created_at ?? null,
+    body,
+    content:    body, // alias defensivo — UI puede leer cualquiera de los dos
   }
 }
 
