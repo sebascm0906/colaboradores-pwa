@@ -353,6 +353,8 @@ export default function ScreenTurnoRolito() {
                 onClick={() => navigate('/produccion/ciclo')} typo={typo}
                 disabled={!!activeCycle}
                 disabledMsg={activeCycle ? 'Hay producción activa' : ''} />
+              <ActionButton label="Materiales" icon={'\uD83D\uDCE6'} color={TOKENS.colors.warning}
+                onClick={() => navigate('/almacen-pt/materiales')} typo={typo} />
               <ActionButton label="Empaque" icon={'\uD83D\uDCE6'} color={TOKENS.colors.success}
                 onClick={() => navigate('/produccion/empaque')} typo={typo} />
               <ActionButton label="Reportar problema" icon={'\u26A0'} color={TOKENS.colors.warning}
