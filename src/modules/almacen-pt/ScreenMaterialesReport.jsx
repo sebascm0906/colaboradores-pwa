@@ -35,6 +35,7 @@ export default function ScreenMaterialesReport() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales', session?.role)
+  const plantId = session?.warehouse_id || 76
 
   const [notes, setNotes] = useState('')
   const submittingRef = useRef(false)
@@ -52,7 +53,7 @@ export default function ScreenMaterialesReport() {
     setLoading(true)
     setError('')
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(plantId)
       if (!s?.id) { setError('Sin turno activo.'); setLoading(false); return }
       setShiftId(s.id)
       if (!issue && issueId) {

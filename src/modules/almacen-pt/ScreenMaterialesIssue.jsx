@@ -45,7 +45,7 @@ export default function ScreenMaterialesIssue() {
     setLoading(true)
     setError('')
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(plantId)
       setShift(s)
       if (!s?.id) {
         setError('No hay turno activo.')
