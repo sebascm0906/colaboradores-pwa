@@ -6,11 +6,12 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
 import { getMaterialsReconcile, colorForSeverity, colorForState, stateLabel } from './materialsService'
+import { resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -22,9 +23,11 @@ const STATE_ORDER = [
 export default function ScreenMaterialesReconcile() {
   const { session } = useSession()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt')
 
   const [shift, setShift] = useState(null)
   const [data, setData] = useState({
@@ -82,7 +85,7 @@ export default function ScreenMaterialesReconcile() {
       <GlobalStyles />
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/almacen-pt')} style={iconBtn}>
+          <button onClick={() => navigate(backTo)} style={iconBtn}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>

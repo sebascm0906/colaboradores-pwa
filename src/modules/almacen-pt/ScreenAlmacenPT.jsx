@@ -99,6 +99,7 @@ export default function ScreenAlmacenPT() {
       id: 'materiales-crear', label: 'Entregar material',
       desc: 'Bodeguero entrega insumo al turno',
       route: '/almacen-pt/materiales/crear',
+      state: { backTo: '/almacen-pt' },
       color: TOKENS.colors.warning,
       icon: 'inbox',
     },
@@ -106,6 +107,7 @@ export default function ScreenAlmacenPT() {
       id: 'materiales', label: 'Materiales del turno',
       desc: 'Bolsas, empaques e insumos entregados',
       route: '/almacen-pt/materiales',
+      state: { backTo: '/almacen-pt' },
       color: TOKENS.colors.blue3,
       icon: 'box',
     },
@@ -113,6 +115,7 @@ export default function ScreenAlmacenPT() {
       id: 'materiales-reconcile', label: 'Reconciliar materiales',
       desc: 'Cuadre de consumo vs sobrante',
       route: '/almacen-pt/materiales/reconciliar',
+      state: { backTo: '/almacen-pt' },
       color: TOKENS.colors.blue2,
       icon: 'check',
     },
@@ -277,7 +280,12 @@ export default function ScreenAlmacenPT() {
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 10 }}>OPERACIONES</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {ACTIONS.map(a => (
-                <ActionCard key={a.id} action={a} typo={typo} onClick={() => navigate(a.route)} />
+                <ActionCard
+                  key={a.id}
+                  action={a}
+                  typo={typo}
+                  onClick={() => navigate(a.route, a.state ? { state: a.state } : undefined)}
+                />
               ))}
             </div>
 

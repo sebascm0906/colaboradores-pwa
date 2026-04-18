@@ -32,7 +32,7 @@ export const NAV_ITEMS = [
   // ── Restringidos a gerente (segregación de funciones) ────────────────────
   { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal'], status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', roles: ['gerente_sucursal'], status: 'live' },
+  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['gerente_sucursal'], status: 'live' },
   { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['gerente_sucursal'], status: 'live' },
 ]
 
@@ -74,7 +74,7 @@ export default function AdminShell({
 
   function handleNav(item) {
     if (item.status === 'pending_backend' || !item.route) return
-    navigate(item.route)
+    navigate(item.route, item.routeState ? { state: item.routeState } : undefined)
   }
 
   return (

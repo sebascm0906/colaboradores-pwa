@@ -16,6 +16,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
 import { getMaterialIssues, reportMaterial, stateLabel, lineOf } from './materialsService'
+import { resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -33,6 +34,7 @@ export default function ScreenMaterialesReport() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales')
 
   const [notes, setNotes] = useState('')
   const submittingRef = useRef(false)
@@ -91,7 +93,7 @@ export default function ScreenMaterialesReport() {
         notes: notes.trim(),
       })
       setSuccess('Reporte enviado. Auxiliar admin validará.')
-      setTimeout(() => navigate('/almacen-pt/materiales'), 900)
+      setTimeout(() => navigate(backTo, { replace: true }), 900)
     } catch (e) {
       logScreenError('ScreenMaterialesReport', 'handleSave', e)
       setError(e?.message || 'No se pudo enviar el reporte.')
@@ -106,7 +108,7 @@ export default function ScreenMaterialesReport() {
       <GlobalStyles />
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/almacen-pt/materiales')} style={iconBtn}>
+          <button onClick={() => navigate(backTo)} style={iconBtn}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>

@@ -6,11 +6,12 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
 import { getMaterialIssues, stateLabel, lineOf } from './materialsService'
+import { buildMaterialesNavState, resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -27,9 +28,11 @@ function colorForState(state) {
 export default function ScreenMaterialesIssue() {
   const { session } = useSession()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt')
 
   const [shift, setShift] = useState(null)
   const [items, setItems] = useState([])
@@ -77,11 +80,13 @@ export default function ScreenMaterialesIssue() {
     <div style={pageStyle}>
       <GlobalStyles />
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
-        <Header title="Materiales del turno" subtitle={shift?.id ? `Turno #${shift.id}` : ''} onBack={() => navigate('/almacen-pt')} onReload={loadData} typo={typo} />
+        <Header title="Materiales del turno" subtitle={shift?.id ? `Turno #${shift.id}` : ''} onBack={() => navigate(backTo)} onReload={loadData} typo={typo} />
 
         {shift?.id && (
           <button
-            onClick={() => navigate('/almacen-pt/materiales/crear')}
+            onClick={() => navigate('/almacen-pt/materiales/crear', {
+              state: buildMaterialesNavState(location.state, '/almacen-pt/materiales'),
+            })}
             style={{
               width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.lg,
               background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
@@ -121,7 +126,9 @@ export default function ScreenMaterialesIssue() {
                   return (
                   <button
                     key={it.id || it.issue_id}
-                    onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${it.id || it.issue_id}`, { state: { issue: it } })}
+                    onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${it.id || it.issue_id}`, {
+                      state: buildMaterialesNavState({ ...location.state, issue: it }, '/almacen-pt/materiales'),
+                    })}
                     style={{ ...rowStyle, opacity: canReport ? 1 : 0.7, cursor: canReport ? 'pointer' : 'default' }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -227,4 +234,3 @@ const iconBtn = {
   background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 }
-
