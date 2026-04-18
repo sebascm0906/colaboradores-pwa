@@ -3121,22 +3121,47 @@ async function directSupervision(method, path, body) {
     // Autoridad: /api/production/shift/current (Odoo validado 2026-04-14).
     // Este endpoint prioriza state='in_progress' + start_time y soporta
     // turnos nocturnos (sin filtro fecha=hoy). NO duplicar logica aqui.
+    const requestedWarehouseId = Number(query.get('warehouse_id') || 0) || 0
     const resp = await odooHttp('GET', '/api/production/shift/current', {})
     const data = resp?.data || {}
-    if (!resp?.ok || !data.shift_id) return null
+    let shiftId = Number(data.shift_id || 0) || 0
+    let shiftWarehouseId = Number(data.warehouse_id || 0) || 0
+
+    // Fallback por almacén explícito: útil para usuarios administrativos que
+    // necesitan operar sobre un turno de producción fuera de su sesión base.
+    if ((!resp?.ok || !shiftId || (requestedWarehouseId && shiftWarehouseId && shiftWarehouseId !== requestedWarehouseId)) && requestedWarehouseId) {
+      const fallbackRes = await readModelSorted('gf.production.shift', {
+        fields: ['id', 'name', 'state', 'plant_warehouse_id'],
+        domain: [
+          ['state', 'in', ['draft', 'in_progress']],
+          ['plant_warehouse_id', '=', requestedWarehouseId],
+        ],
+        sort_column: 'id',
+        sort_desc: true,
+        limit: 1,
+        sudo: 1,
+      })
+      const fallback = pickFirstResponse(fallbackRes)
+      if (fallback?.id) {
+        shiftId = Number(fallback.id || 0) || 0
+        shiftWarehouseId = Number(fallback.plant_warehouse_id?.[0] || requestedWarehouseId || 0) || 0
+      }
+    }
+
+    if (!shiftId) return null
     // Enriquecer con metricas del dashboard (misma fuente que consume el hub
     // para KPIs y open_maintenance_requests). Shape compatible con callers
     // legacy que esperan campos como total_kg_produced.
     let dash = {}
     try {
-      const dashResp = await odooHttp('GET', '/api/production/dashboard', { shift_id: data.shift_id })
+      const dashResp = await odooHttp('GET', '/api/production/dashboard', { shift_id: shiftId })
       dash = dashResp?.data || {}
     } catch (_) { /* non-blocking */ }
     return {
-      id: data.shift_id,
+      id: shiftId,
       name: data.name || dash.name || '',
       state: data.state || dash.state || '',
-      warehouse_id: data.warehouse_id || 0,
+      warehouse_id: shiftWarehouseId || requestedWarehouseId || 0,
       // Metricas (desde dashboard; backend las calcula)
       total_kg_produced: dash.total_kg_produced ?? null,
       total_kg_packed: dash.total_kg_packed ?? null,

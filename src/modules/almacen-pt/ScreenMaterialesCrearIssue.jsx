@@ -63,7 +63,7 @@ export default function ScreenMaterialesCrearIssue() {
     setLoadingBoot(true)
     setError('')
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(plantId)
       setShift(s)
       if (!s?.id) { setError('Sin turno activo.'); setLoadingBoot(false); return }
       const ls = await api('GET', `/api/production/lines?plant_id=${plantId}`)

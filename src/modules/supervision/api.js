@@ -22,7 +22,10 @@ export function getShiftOperators(shiftId) { return api('GET', `/pwa-sup/operato
 // getActiveShift: el BFF `/pwa-sup/active-shift` delega a `/api/production/
 // shift/current` (autoridad Odoo, soporta turnos nocturnos) y lo enriquece
 // con `/api/production/dashboard` para KPIs y `open_maintenance_requests`.
-export function getActiveShift() { return api('GET', '/pwa-sup/active-shift') }
+export function getActiveShift(warehouseId) {
+  const qs = warehouseId ? `?warehouse_id=${Number(warehouseId)}` : ''
+  return api('GET', `/pwa-sup/active-shift${qs}`)
+}
 export function createShift(data) { return api('POST', '/pwa-sup/shift-create', data) }
 
 // ── Paros (sin reemplazo REST aun) ──────────────────────────────────────────
