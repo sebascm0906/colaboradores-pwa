@@ -70,14 +70,17 @@ function MobileAdminHub() {
     return () => { alive = false }
   }, [warehouseId])
 
+  const role = session?.role || ''
   const ACTIONS = [
     { id: 'pos',              label: 'POS Mostrador',      desc: 'Punto de venta mostrador',   route: '/admin/pos',              color: TOKENS.colors.success, badge: salesCount || null },
     { id: 'gastos',           label: 'Gastos',             desc: 'Registrar gastos del día',   route: '/admin/gastos',           color: TOKENS.colors.warning, badge: expensesCount || null },
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
-    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning },
+    { id: 'salida_rolito',    label: 'Salida a Rolito',    desc: 'Entregar material al turno',  route: '/almacen-pt/materiales/crear', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
+    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['auxiliar_admin'] },
   ]
+  const visibleActions = ACTIONS.filter(a => !a.roles || a.roles.includes(role))
 
   return (
     <div style={{
@@ -114,7 +117,7 @@ function MobileAdminHub() {
           <>
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 24, marginBottom: 12 }}>ACCIONES</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {ACTIONS.map(a => (
+              {visibleActions.map(a => (
                 <MobileActionCard key={a.id} action={a} typo={typo} onClick={() => navigate(a.route)} />
               ))}
             </div>

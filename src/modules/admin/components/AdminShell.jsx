@@ -33,8 +33,8 @@ export const NAV_ITEMS = [
   // ── Restringidos a gerente (segregación de funciones) ────────────────────
   { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal'], status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['gerente_sucursal'], status: 'live' },
-  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['gerente_sucursal'], status: 'live' },
+  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['auxiliar_admin'], status: 'live' },
 ]
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
