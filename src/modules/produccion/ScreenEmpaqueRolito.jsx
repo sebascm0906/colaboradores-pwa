@@ -46,12 +46,30 @@ function extractKgHints(value) {
   return matches.map(m => Number(m[1])).filter(n => Number.isFinite(n) && n > 0)
 }
 
+function extractBrandHints(value) {
+  const text = normalizeName(value)
+  return ['kold', 'laurita', 'rolito', 'gourmet', 'cilindro', 'cubo']
+    .filter(token => text.includes(token))
+}
+
 function filterPackingProductsByIssues(products, issues) {
   const validIssues = (issues || []).filter(it => {
     const state = String(it?.settlement_state || it?.state || '').toLowerCase()
     return state !== 'rejected' && state !== 'cancelled' && state !== 'abandoned'
   })
   if (!validIssues.length) return products
+
+  const strict = (products || []).filter(p => validIssues.some(it => {
+    const productName = normalizeName(p.name)
+    const productWeight = Number(p.weight || p.kg_per_bag || 0)
+    const issueName = it.product_name || it.material_name || ''
+    const issueWeights = extractKgHints(issueName)
+    const issueBrands = extractBrandHints(issueName)
+    const weightMatch = issueWeights.some(w => Math.abs(w - productWeight) <= 0.25)
+    const brandMatch = !issueBrands.length || issueBrands.some(b => productName.includes(b))
+    return weightMatch && brandMatch
+  }))
+  if (strict.length) return strict
 
   const issueNames = validIssues.map(it => normalizeName(it.product_name || it.material_name || ''))
   const issueWeights = validIssues.flatMap(it => extractKgHints(it.product_name || it.material_name || ''))
@@ -66,6 +84,29 @@ function filterPackingProductsByIssues(products, issues) {
   return filtered.length ? filtered : products
 }
 
+function computeAvailableBagMaterials(issues, entries) {
+  const validIssues = (issues || []).filter(it => {
+    const state = String(it?.settlement_state || it?.state || '').toLowerCase()
+    return ['validated', 'reported', 'disputed', 'draft', 'issued'].includes(state)
+  })
+  let packedBagsLeft = (entries || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+
+  return validIssues.map(it => {
+    const issued = Number(it.qty_issued || 0)
+    const consumed = Math.min(issued, packedBagsLeft)
+    const remaining = Math.max(0, issued - consumed)
+    packedBagsLeft = Math.max(0, packedBagsLeft - issued)
+    return {
+      id: it.id || it.issue_id || it.material_id,
+      name: it.product_name || it.material_name || 'Material',
+      issued,
+      consumed,
+      remaining,
+      state: it.settlement_state || it.state || '',
+    }
+  })
+}
+
 export default function ScreenEmpaqueRolito() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
@@ -75,6 +116,7 @@ export default function ScreenEmpaqueRolito() {
   const [products, setProducts] = useState(FALLBACK_PRODUCTS)
   const [entries, setEntries] = useState([])
   const [cycles, setCycles] = useState([])
+  const [bagIssues, setBagIssues] = useState([])
   const [selectedCycleId, setSelectedCycleId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -102,8 +144,10 @@ export default function ScreenEmpaqueRolito() {
           getMaterialIssues({ shiftId: overview.shift.id, lineId: 2 }).catch(() => ({ items: [] })),
         ])
         setEntries(ents || [])
+        setBagIssues(issues?.items || [])
         setProducts(filterPackingProductsByIssues(prods, issues?.items || []))
       } else {
+        setBagIssues([])
         setProducts(prods)
       }
 
@@ -120,6 +164,10 @@ export default function ScreenEmpaqueRolito() {
   }, [])
 
   const unpackedCycles = useMemo(() => getUnpackedCycles(cycles, entries), [cycles, entries])
+  const availableBagMaterials = useMemo(
+    () => computeAvailableBagMaterials(bagIssues, entries),
+    [bagIssues, entries]
+  )
   const selectedCycle = useMemo(
     () => cycles.find(c => c.id === selectedCycleId) || null,
     [cycles, selectedCycleId]
@@ -220,6 +268,32 @@ export default function ScreenEmpaqueRolito() {
               </p>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 2 }}>{entries.length} registros</p>
             </div>
+
+            {availableBagMaterials.length > 0 && (
+              <div>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>BOLSAS DISPONIBLES</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {availableBagMaterials.map(item => (
+                    <div key={item.id} style={{
+                      padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>
+                          {item.name}
+                        </span>
+                        <span style={{ ...typo.body, color: item.remaining > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted, fontWeight: 700 }}>
+                          {item.remaining} disp.
+                        </span>
+                      </div>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                        Recibidas {item.issued} · Usadas {item.consumed}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Cycle selector — obligatorio */}
             <div>
