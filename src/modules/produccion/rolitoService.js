@@ -20,6 +20,7 @@ import {
   saveBagReconciliation as apiSaveBagReconciliation,
   closeShift as apiCloseShift,
 } from './api'
+import { computePackingCoherence } from '../shared/packingCoherence'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -179,7 +180,7 @@ export function getCycleProgress(cycle) {
  * Determines the "what's next" action for the operator.
  * Returns { action, label, description, route, urgency }
  */
-export function getNextAction(shift, cycles, checklist) {
+export function getNextAction(shift, cycles, checklist, packing = []) {
   if (!shift) return { action: 'no_shift', label: 'Sin turno', description: 'No hay turno activo', route: null, urgency: 'blocked' }
 
   // 1. Checklist not done → push to checklist
@@ -210,10 +211,12 @@ export function getNextAction(shift, cycles, checklist) {
   // 4. Last cycle dumped but no packing yet → push to packing
   const lastDumped = getLastDumpedCycle(cycles)
   if (lastDumped) {
-    // Check if there are packing entries after this cycle's dump time
-    // For now we check if cycle has kg_packed = 0 or if packing_entry_ids is empty
-    if (!lastDumped.kg_packed && lastDumped.kg_dumped > 0) {
-      return { action: 'packing', label: 'Registrar empaque', description: `Ciclo ${lastDumped.cycle_number}: ${lastDumped.kg_dumped} kg sin empacar`, route: '/produccion/empaque', urgency: 'required' }
+    const coherence = computePackingCoherence(cycles, packing)
+    const pendingCycle = coherence.perCycle.find(c => c.status === 'unpacked' || c.status === 'partial')
+    if (pendingCycle) {
+      const cycleLabel = pendingCycle.cycleNumber || lastDumped.cycle_number
+      const remainingKg = Math.max(0, Math.round(pendingCycle.diff || 0))
+      return { action: 'packing', label: 'Registrar empaque', description: `Ciclo ${cycleLabel}: ${remainingKg} kg pendientes`, route: '/produccion/empaque', urgency: 'required' }
     }
   }
 

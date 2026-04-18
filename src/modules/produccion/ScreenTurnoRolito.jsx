@@ -77,11 +77,11 @@ export default function ScreenTurnoRolito() {
     return () => clearInterval(iv)
   }, [loadData])
 
-  const { shift, cycles, checklist, kpis } = data
+  const { shift, cycles, checklist, kpis, packing } = data
   const activeCycle = getActiveCycle(cycles)
   const lastDumped = getLastDumpedCycle(cycles)
   const progress = getCycleProgress(activeCycle)
-  const nextAction = getNextAction(shift, cycles, checklist)
+  const nextAction = getNextAction(shift, cycles, checklist, packing)
   const diagnostics = getCycleDiagnostics(lastDumped) || getCycleDiagnostics(activeCycle)
   const stateInfo = SHIFT_STATES[shift?.state] || SHIFT_STATES.draft
 

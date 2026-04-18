@@ -11,20 +11,59 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import {
   getShiftOverview,
-  getLastDumpedCycle,
   getProducts,
   registerPacking,
   FALLBACK_PRODUCTS,
 } from './rolitoService'
 import { getPackingEntries } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
+import { getMaterialIssues } from '../almacen-pt/materialsService'
 
-// Lista de ciclos no empacados del turno (los que aun no tienen kg_packed)
-function getUnpackedCycles(cycles) {
-  if (!Array.isArray(cycles)) return []
-  return cycles
-    .filter(c => c.state === 'dumped' && (c.kg_dumped || 0) > 0)
+function getUnpackedCycles(cycles, entries) {
+  const coherence = computePackingCoherence(cycles, entries)
+  const pendingIds = new Set(
+    coherence.perCycle
+      .filter(c => c.status === 'unpacked' || c.status === 'partial')
+      .map(c => c.cycleId)
+  )
+  return (cycles || [])
+    .filter(c => pendingIds.has(c.id))
     .sort((a, b) => (b.cycle_number || 0) - (a.cycle_number || 0))
+}
+
+function normalizeName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function extractKgHints(value) {
+  const text = normalizeName(value)
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/g)]
+  return matches.map(m => Number(m[1])).filter(n => Number.isFinite(n) && n > 0)
+}
+
+function filterPackingProductsByIssues(products, issues) {
+  const validIssues = (issues || []).filter(it => {
+    const state = String(it?.settlement_state || it?.state || '').toLowerCase()
+    return state !== 'rejected' && state !== 'cancelled' && state !== 'abandoned'
+  })
+  if (!validIssues.length) return products
+
+  const issueNames = validIssues.map(it => normalizeName(it.product_name || it.material_name || ''))
+  const issueWeights = validIssues.flatMap(it => extractKgHints(it.product_name || it.material_name || ''))
+  const filtered = (products || []).filter(p => {
+    const productName = normalizeName(p.name)
+    const productWeight = Number(p.weight || p.kg_per_bag || 0)
+    const nameMatch = issueNames.some(name => name && (name.includes(productName) || productName.includes(name)))
+    const weightMatch = issueWeights.some(w => Math.abs(w - productWeight) <= 0.6)
+    return nameMatch || weightMatch
+  })
+
+  return filtered.length ? filtered : products
 }
 
 export default function ScreenEmpaqueRolito() {
@@ -54,18 +93,25 @@ export default function ScreenEmpaqueRolito() {
         getProducts(),
       ])
       setShift(overview.shift)
-      setProducts(prods)
       setEntries([])
       setCycles(overview.cycles || [])
 
       if (overview.shift?.id) {
-        const ents = await getPackingEntries(overview.shift.id).catch(() => [])
+        const [ents, issues] = await Promise.all([
+          getPackingEntries(overview.shift.id).catch(() => []),
+          getMaterialIssues({ shiftId: overview.shift.id, lineId: 2 }).catch(() => ({ items: [] })),
+        ])
         setEntries(ents || [])
+        setProducts(filterPackingProductsByIssues(prods, issues?.items || []))
+      } else {
+        setProducts(prods)
       }
 
-      // Preseleccionar el ultimo ciclo dumped (operador puede cambiar)
-      const lastDumped = getLastDumpedCycle(overview.cycles)
-      if (lastDumped?.id) setSelectedCycleId(prev => prev ?? lastDumped.id)
+      setSelectedCycleId(prev => {
+        if (prev && (overview.cycles || []).some(c => c.id === prev)) return prev
+        const pending = getUnpackedCycles(overview.cycles || [], overview.shift?.id ? (overview.packing || []) : [])
+        return pending[0]?.id || null
+      })
     } catch {
       setError('Error cargando datos')
     } finally {
@@ -73,7 +119,7 @@ export default function ScreenEmpaqueRolito() {
     }
   }, [])
 
-  const unpackedCycles = useMemo(() => getUnpackedCycles(cycles), [cycles])
+  const unpackedCycles = useMemo(() => getUnpackedCycles(cycles, entries), [cycles, entries])
   const selectedCycle = useMemo(
     () => cycles.find(c => c.id === selectedCycleId) || null,
     [cycles, selectedCycleId]
@@ -114,6 +160,9 @@ export default function ScreenEmpaqueRolito() {
       // Reload entries
       const ents = await getPackingEntries(shift.id).catch(() => [])
       setEntries(ents || [])
+      setSelectedProduct(null)
+      const pendingAfterSave = getUnpackedCycles(cycles, ents || [])
+      setSelectedCycleId(pendingAfterSave[0]?.id || null)
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
       setError(e.message || 'Error al registrar empaque')
