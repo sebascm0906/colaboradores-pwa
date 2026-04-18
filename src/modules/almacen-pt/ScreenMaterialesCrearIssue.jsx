@@ -37,7 +37,7 @@ export default function ScreenMaterialesCrearIssue() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
-  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales')
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales', session?.role)
 
   const [shift, setShift] = useState(null)
   const [lines, setLines] = useState([])

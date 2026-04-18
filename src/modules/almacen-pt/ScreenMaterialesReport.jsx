@@ -34,7 +34,7 @@ export default function ScreenMaterialesReport() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales')
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt/materiales', session?.role)
 
   const [notes, setNotes] = useState('')
   const submittingRef = useRef(false)

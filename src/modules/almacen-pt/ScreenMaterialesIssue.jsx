@@ -32,7 +32,7 @@ export default function ScreenMaterialesIssue() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
-  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt')
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt', session?.role)
 
   const [shift, setShift] = useState(null)
   const [items, setItems] = useState([])
@@ -85,7 +85,7 @@ export default function ScreenMaterialesIssue() {
         {shift?.id && (
           <button
             onClick={() => navigate('/almacen-pt/materiales/crear', {
-              state: buildMaterialesNavState(location.state, '/almacen-pt/materiales'),
+              state: buildMaterialesNavState(location.state, '/almacen-pt/materiales', session?.role),
             })}
             style={{
               width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.lg,
@@ -127,7 +127,7 @@ export default function ScreenMaterialesIssue() {
                   <button
                     key={it.id || it.issue_id}
                     onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${it.id || it.issue_id}`, {
-                      state: buildMaterialesNavState({ ...location.state, issue: it }, '/almacen-pt/materiales'),
+                      state: buildMaterialesNavState({ ...location.state, issue: it }, '/almacen-pt/materiales', session?.role),
                     })}
                     style={{ ...rowStyle, opacity: canReport ? 1 : 0.7, cursor: canReport ? 'pointer' : 'default' }}
                   >

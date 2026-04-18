@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildMaterialesNavState,
+  defaultMaterialesBackToForRole,
   resolveMaterialesBackTo,
 } from '../src/modules/almacen-pt/materialsNavigation.js'
 
@@ -24,6 +25,13 @@ test('resolveMaterialesBackTo ignores unsafe values', () => {
   )
 })
 
+test('resolveMaterialesBackTo falls back by role when state is missing', () => {
+  assert.equal(
+    resolveMaterialesBackTo(undefined, '/almacen-pt', 'operador_rolito'),
+    '/produccion',
+  )
+})
+
 test('buildMaterialesNavState preserves extra state and normalized back target', () => {
   assert.deepEqual(
     buildMaterialesNavState({ issue: { id: 17 }, backTo: '/admin' }, '/almacen-pt/materiales'),
@@ -36,4 +44,10 @@ test('buildMaterialesNavState injects fallback back target when caller omitted i
     buildMaterialesNavState({ issue: { id: 9 } }, '/almacen-pt/materiales'),
     { issue: { id: 9 }, backTo: '/almacen-pt/materiales' },
   )
+})
+
+test('defaultMaterialesBackToForRole maps production roles to their hub', () => {
+  assert.equal(defaultMaterialesBackToForRole('operador_barra'), '/produccion')
+  assert.equal(defaultMaterialesBackToForRole('operador_rolito'), '/produccion')
+  assert.equal(defaultMaterialesBackToForRole('supervisor_produccion'), '/supervision')
 })
