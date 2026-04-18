@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import AuthBanner from '../../../components/AuthBanner'
+import PhotoCapture from '../../../components/PhotoCapture'
 import { useToast } from '../../../components/Toast'
 import { safeNumber } from '../../../lib/safeNumber'
 import {
@@ -27,15 +28,22 @@ import {
   BACKEND_CAPS,
 } from '../adminService'
 
-// ── Umbrales de diferencia (validación UI — backend valida definitivo) ──────
-// $0-100:    cierre libre
-// $100-1000: requiere nota obligatoria
-// $1000+:    requiere nota + autorización gerente (UI solo informa; backend define)
-// $10000+:   requiere autorización dirección
-export const CIERRE_THRESHOLDS = {
-  NOTE_REQUIRED: 100,
-  MANAGER_AUTH: 1000,
-  DIRECTOR_AUTH: 10000,
+// ── Umbrales de diferencia (alineados con backend 2026-04-18) ───────────────
+// Se leen de BACKEND_CAPS al render; los defaults son los mismos que el
+// backend expone hoy en /pwa-admin/capabilities. Si se ajustan en backend,
+// la UI los toma automáticamente al boot.
+//
+// Regla backend:
+//   diff == 0                               → ruta feliz, puede cerrar sin foto/nota
+//   diff > 0 (cualquier valor)              → foto obligatoria
+//   |diff| > cashClosingDiffManager (100)   → requiere autorización gerente
+//   |diff| > cashClosingDiffDirector (1000) → requiere autorización dirección
+function resolveThresholds() {
+  return {
+    NOTE_REQUIRED:  Number(BACKEND_CAPS.cashClosingDiffNote     ?? 0),
+    MANAGER_AUTH:   Number(BACKEND_CAPS.cashClosingDiffManager  ?? 100),
+    DIRECTOR_AUTH:  Number(BACKEND_CAPS.cashClosingDiffDirector ?? 1000),
+  }
 }
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -64,6 +72,11 @@ export default function AdminCierreForm() {
   const [notes, setNotes] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [closedState, setClosedState] = useState(null) // state === 'closed' si ya se cerró
+
+  // Foto de evidencia (obligatoria si hay diferencia) — attachment_id viene
+  // de /pwa/evidence/upload y se envía al backend en el payload del cierre.
+  const [evidencePhoto, setEvidencePhoto] = useState(null)      // preview base64 local
+  const [evidenceAttachmentId, setEvidenceAttachmentId] = useState(null)
 
   // ── Carga del summary ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -144,22 +157,26 @@ export default function AdminCierreForm() {
 
   const locked = closedState === 'closed' || submitting
 
-  // ── Validación de umbrales de diferencia ─────────────────────────────────
-  // Nivel de autorización requerido según |diferencia|:
-  //   - 'ok':          $0-100  → cierre libre
-  //   - 'note':        >$100   → nota obligatoria
-  //   - 'manager':     >$1000  → nota + marcar "requiere autorización gerente"
-  //   - 'director':    >$10000 → marcar "requiere autorización dirección"
+  // ── Validación de umbrales de diferencia (backend-driven) ────────────────
+  // Los límites vienen de BACKEND_CAPS (leídos al boot desde /capabilities).
+  // Backend requiere foto SIEMPRE que haya diferencia (regla 1b de la guía).
+  const thresholds = useMemo(() => resolveThresholds(), [])
   const absDiff = Math.abs(difference)
-  const authLevel = absDiff > CIERRE_THRESHOLDS.DIRECTOR_AUTH ? 'director'
-                  : absDiff > CIERRE_THRESHOLDS.MANAGER_AUTH  ? 'manager'
-                  : absDiff > CIERRE_THRESHOLDS.NOTE_REQUIRED ? 'note'
+  const authLevel = absDiff > thresholds.DIRECTOR_AUTH ? 'director'
+                  : absDiff > thresholds.MANAGER_AUTH  ? 'manager'
+                  : absDiff > thresholds.NOTE_REQUIRED ? 'note'
                   : 'ok'
 
-  const noteRequired = authLevel !== 'ok'
+  // Con diferencia (absDiff > 0): foto + nota obligatoria (backend requiere ambos)
+  const hasDiff = absDiff > 0
+  const noteRequired = hasDiff
+  const photoRequired = hasDiff
   const hasValidNote = noteRequired ? notes.trim().length >= 10 : true
 
   const openingFundValid = safeNumber.isValid(openingFund) && safeNumber(openingFund) >= 0
+
+  // Foto obligatoria cuando hay diferencia (backend rechaza sin ella — regla 1b)
+  const hasValidPhoto = photoRequired ? !!evidenceAttachmentId : true
 
   // canSubmit: todos los gates de UI (backend valida definitivo)
   const canSubmit =
@@ -167,7 +184,8 @@ export default function AdminCierreForm() {
     !locked &&
     openingFundValid &&
     physicalTotal > 0 &&
-    hasValidNote
+    hasValidNote &&
+    hasValidPhoto
 
   // Motivo por el cual NO se puede enviar (para mostrar al usuario)
   const blockReason = !BACKEND_CAPS.cashClosingWrite
@@ -177,6 +195,8 @@ export default function AdminCierreForm() {
     : physicalTotal <= 0 ? 'Registra al menos una denominación contada.'
     : noteRequired && !hasValidNote
       ? `La diferencia de ${fmt(absDiff)} requiere una nota de al menos 10 caracteres.`
+    : photoRequired && !hasValidPhoto
+      ? `La diferencia de ${fmt(absDiff)} requiere adjuntar foto de evidencia.`
     : ''
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -198,9 +218,15 @@ export default function AdminCierreForm() {
       const res = await createCashClosing({
         companyId,
         warehouseId,
-        openingFund: Number(openingFund),
+        sucursal,
+        // Contrato backend nuevo (guía 1a/1b/1c): montos pre-computados + foto
+        expectedAmount: expectedTotal,
+        actualAmount:   physicalTotal,
+        attachmentId:   evidenceAttachmentId || undefined,
+        // Contrato clásico (compatible): denominaciones + fondo
+        openingFund:  Number(openingFund),
         denominations,
-        otherIncome: Number(otherIncome || 0),
+        otherIncome:  Number(otherIncome  || 0),
         otherExpense: Number(otherExpense || 0),
         notes,
         close: true,
@@ -456,6 +482,26 @@ export default function AdminCierreForm() {
               borderColor: (noteRequired && !hasValidNote) ? TOKENS.colors.warning : TOKENS.colors.border,
             }}
           />
+
+          {/* Foto de evidencia — obligatoria cuando hay diferencia */}
+          {photoRequired && (
+            <div style={{ marginTop: 14 }}>
+              <PhotoCapture
+                value={evidencePhoto}
+                onChange={setEvidencePhoto}
+                onUploadComplete={({ attachment_id }) => setEvidenceAttachmentId(attachment_id)}
+                linkedModel="gf.cash.closing"
+                label={`Foto de evidencia (${fmt(absDiff)} de diferencia)`}
+                required
+                disabled={locked}
+              />
+              {!hasValidPhoto && (
+                <p style={{ fontSize: 11, color: TOKENS.colors.warning, margin: '6px 0 0' }}>
+                  Adjunta una foto del arqueo para continuar.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Derecha: summary + comparativa + acción ── */}
@@ -527,7 +573,7 @@ export default function AdminCierreForm() {
                 <AuthBanner
                   level="director"
                   title="Diferencia crítica detectada"
-                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de dirección (${fmt(CIERRE_THRESHOLDS.DIRECTOR_AUTH)}).`}
+                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de dirección (${fmt(thresholds.DIRECTOR_AUTH)}).`}
                   details="Al enviar, se notificará a dirección. No proceder sin autorización."
                 />
               )}
@@ -535,7 +581,7 @@ export default function AdminCierreForm() {
                 <AuthBanner
                   level="manager"
                   title="Diferencia requiere revisión"
-                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de gerente (${fmt(CIERRE_THRESHOLDS.MANAGER_AUTH)}).`}
+                  reason={`Faltante/sobrante de ${fmt(absDiff)} excede umbral de gerente (${fmt(thresholds.MANAGER_AUTH)}).`}
                   details="Al enviar, se notificará al gerente de sucursal."
                 />
               )}

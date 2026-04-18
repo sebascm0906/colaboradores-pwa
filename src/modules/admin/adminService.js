@@ -21,6 +21,9 @@ import {
 // endpoints (Sebastián confirmó rollout 2026-04-10). Aun así, al boot pedimos
 // GET /pwa-admin/capabilities para detectar si el módulo aún no está instalado
 // en el ambiente actual y caer a modo seguro.
+//
+// Los umbrales (`*Threshold`, `*DiffNote`, etc.) los lee la UI del backend
+// en boot — si llega un valor nuevo, la UI se adapta sin deploy frontend.
 export const BACKEND_CAPS = {
   // Acepta analytic_distribution (dict Odoo 18) en expense-create
   expenseAnalytics: true,
@@ -32,7 +35,7 @@ export const BACKEND_CAPS = {
   serverSideCompanyFilter: true,
   // GET /pwa-admin/cash-closing (read-only summary)
   cashClosingRead: true,
-  // POST cierre formal (arqueo con denominaciones) — Sprint 3 live
+  // POST cierre formal — Sprint 3 live
   cashClosingWrite: true,
   // Wrappers /pwa-admin/liquidaciones/* sobre gf_logistics_ops — Sprint 3 live
   liquidaciones: true,
@@ -40,7 +43,6 @@ export const BACKEND_CAPS = {
   materiaPrima: true,
   // Búsqueda server-side /pwa-admin/products/search — Sprint 3 live
   productSearch: true,
-  // ── Sprint 4 (Sebastián 2026-04-10 — extras backend) ───────────────────
   // GET /pwa-admin/requisition-detail + POST /requisition-cancel
   requisitionDetail: true,
   // GET /pwa-admin/cash-closing/history + /detail
@@ -53,6 +55,34 @@ export const BACKEND_CAPS = {
   liquidacionesHistory: true,
   // GET /pwa-admin/materia-prima/moves (kardex por producto)
   mpKardex: true,
+
+  // ── Sprint 5 (Guía de pruebas 2026-04-18) ────────────────────────────────
+  // Flujo de aprobación de gastos (expense-approve/reject + pending list)
+  expenseApproval: true,
+  // Monto > threshold requiere foto + aprobación
+  expenseApprovalThreshold: 1000,
+  // Gastos > threshold deben llevar attachment obligatorio
+  expenseRequiresAttachment: true,
+  // sale-create valida payment_reference si payment_method='card'
+  saleCreate: true,
+  // Venta > threshold requiere autorización gerente (UI informa; backend decide)
+  saleCreateManagerThreshold: 5000,
+  // Umbrales cash closing (alineados con backend)
+  //   diff > cashClosingDiffNote    → nota obligatoria
+  //   diff > cashClosingDiffManager → requiere gerente
+  //   diff > cashClosingDiffDirector → requiere director
+  cashClosingDiffNote: 0,
+  cashClosingDiffManager: 100,
+  cashClosingDiffDirector: 1000,
+  // Evidencia fotográfica centralizada
+  evidenceUpload: true,
+  // Tareas y notas persistidas en backend
+  tasksEnabled: true,
+  notesEnabled: true,
+  // Clientes inactivos / recuperación
+  inactiveCustomers: true,
+  // Catálogo de incidentes de ruta
+  teamIncidents: true,
 }
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.
@@ -269,25 +299,46 @@ export const CASH_DENOMINATIONS = [
   { key: '0.5',  label: '$0.50',  value: 0.5 },
 ]
 
-/** Crea cierre de caja formal. Requiere BACKEND_CAPS.cashClosingWrite. */
+/** Crea cierre de caja formal.
+ *
+ *  Payload unificado que acepta ambas formas:
+ *    Forma A — clásica (con denominaciones + fondo):
+ *      { companyId, warehouseId, openingFund, denominations[], otherIncome, otherExpense, notes, close }
+ *    Forma B — contrato backend nuevo (2026-04-18):
+ *      { sucursal, expected_amount, actual_amount, notes, attachment_id }
+ *
+ *  Se envían ambos al backend: la API es retro-compatible y acepta
+ *  `expected_amount`/`actual_amount` como override cuando están presentes.
+ *  Esto permite migrar sin romper el flujo antiguo. */
 export async function createCashClosing(payload) {
   if (!BACKEND_CAPS.cashClosingWrite) {
     throw new Error('Cierre del día no disponible en este ambiente')
   }
   const clean = {
-    company_id: payload.companyId ?? payload.company_id,
+    // Identidad y contexto
+    company_id:   payload.companyId   ?? payload.company_id,
     warehouse_id: payload.warehouseId ?? payload.warehouse_id,
+    sucursal:     payload.sucursal    ?? undefined,
+
+    // Forma B — contrato nuevo (guía de pruebas 2026-04-18, sección 1)
+    expected_amount: payload.expectedAmount ?? payload.expected_amount,
+    actual_amount:   payload.actualAmount   ?? payload.actual_amount,
+    attachment_id:   payload.attachmentId   ?? payload.attachment_id ?? undefined,
+
+    // Forma A — clásica (denominaciones + fondo)
     opening_fund: Number(payload.openingFund ?? payload.opening_fund ?? 0),
     denominations: Array.isArray(payload.denominations)
       ? payload.denominations
           .filter(d => Number(d.count) > 0)
           .map(d => ({
             denomination: String(d.denomination ?? d.key),
-            count: Number(d.count),
+            count:        Number(d.count),
           }))
       : [],
-    other_income: Number(payload.otherIncome ?? payload.other_income ?? 0),
+    other_income:  Number(payload.otherIncome  ?? payload.other_income  ?? 0),
     other_expense: Number(payload.otherExpense ?? payload.other_expense ?? 0),
+
+    // Notas y cierre formal
     notes: payload.notes?.trim() || undefined,
     close: payload.close !== false,
   }

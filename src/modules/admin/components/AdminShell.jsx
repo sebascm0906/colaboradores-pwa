@@ -27,6 +27,7 @@ export const NAV_ITEMS = [
   { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
   { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
   { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
+  { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal'], status: 'live' },
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
   { id: 'cierre',       label: 'Cierre del día',   route: '/admin/cierre',             roles: ['auxiliar_admin', 'gerente_sucursal'], status: 'live' },
   // ── Restringidos a gerente (segregación de funciones) ────────────────────

@@ -51,6 +51,7 @@ const ScreenPOS             = lazy(() => import('./modules/admin/ScreenPOS'))
 const ScreenTicket          = lazy(() => import('./modules/admin/ScreenTicket'))
 const ScreenGastos          = lazy(() => import('./modules/admin/ScreenGastos'))
 const ScreenGastosHistorial = lazy(() => import('./modules/admin/ScreenGastosHistorial'))
+const ScreenGastosAprobar   = lazy(() => import('./modules/admin/ScreenGastosAprobar'))
 const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
 const ScreenLiquidaciones   = lazy(() => import('./modules/admin/ScreenLiquidaciones'))
 const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPrima'))
@@ -81,8 +82,9 @@ const ScreenCierreRuta      = lazy(() => import('./modules/ruta/ScreenCierreRuta
 const ScreenDashboardVentas  = lazy(() => import('./modules/supervisor-ventas/ScreenDashboardVentas'))
 const ScreenPronostico       = lazy(() => import('./modules/supervisor-ventas/ScreenPronostico'))
 const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/ScreenMetasVendedores'))
-const ScreenTareasSupervisor = lazy(() => import('./modules/supervisor-ventas/ScreenTareasSupervisor'))
-const ScreenNotasCliente     = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
+const ScreenTareasSupervisor     = lazy(() => import('./modules/supervisor-ventas/ScreenTareasSupervisor'))
+const ScreenNotasCliente         = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
+const ScreenClientesRecuperacion = lazy(() => import('./modules/supervisor-ventas/ScreenClientesRecuperacion'))
 const ScreenControlComercial    = lazy(() => import('./modules/supervisor-ventas/ScreenControlComercial'))
 const ScreenDetalleVendedor    = lazy(() => import('./modules/supervisor-ventas/ScreenDetalleVendedor'))
 const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSinVisitar'))
@@ -146,8 +148,18 @@ class ErrorBoundary extends Component {
   static getDerivedStateFromError(error) {
     return { hasError: true, error }
   }
+  componentDidCatch(error, info) {
+    // Expose last crash for debugging. Safe in prod (no PII).
+    try {
+      window.__gfLastError = {
+        name: error?.name, message: error?.message, stack: error?.stack,
+        componentStack: info?.componentStack,
+      }
+    } catch { /* no-op */ }
+  }
   render() {
     if (this.state.hasError) {
+      const msg = this.state.error?.message || ''
       return (
         <div style={{
           minHeight: '100dvh', background: '#030811',
@@ -162,9 +174,17 @@ class ErrorBoundary extends Component {
           <p style={{ color: 'rgba(255,255,255,0.82)', fontSize: 16, fontWeight: 600, margin: 0 }}>
             Algo salió mal
           </p>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 300 }}>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 420 }}>
             Ocurrió un error al cargar esta pantalla. Intenta de nuevo.
           </p>
+          {msg && (
+            <p style={{
+              color: 'rgba(239,68,68,0.7)', fontSize: 11, margin: 0,
+              textAlign: 'center', maxWidth: 420, fontFamily: 'monospace',
+            }}>
+              {msg}
+            </p>
+          )}
           <button
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/'; }}
             style={{
@@ -264,6 +284,7 @@ export default function App() {
             <Route path="/admin/ticket/:orderId" element={<PrivateRoute><ScreenTicket /></PrivateRoute>} />
             <Route path="/admin/gastos" element={<PrivateRoute><ScreenGastos /></PrivateRoute>} />
             <Route path="/admin/gastos-historial" element={<PrivateRoute><ScreenGastosHistorial /></PrivateRoute>} />
+            <Route path="/admin/gastos/aprobar" element={<PrivateRoute><ScreenGastosAprobar /></PrivateRoute>} />
             <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
             <Route path="/admin/liquidaciones" element={<PrivateRoute><ScreenLiquidaciones /></PrivateRoute>} />
             <Route path="/admin/materia-prima" element={<PrivateRoute><ScreenMateriaPrima /></PrivateRoute>} />
@@ -310,6 +331,7 @@ export default function App() {
             <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
             <Route path="/equipo/tareas" element={<PrivateRoute><ScreenTareasSupervisor /></PrivateRoute>} />
             <Route path="/equipo/notas" element={<PrivateRoute><ScreenNotasCliente /></PrivateRoute>} />
+            <Route path="/equipo/recuperacion" element={<PrivateRoute><ScreenClientesRecuperacion /></PrivateRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />

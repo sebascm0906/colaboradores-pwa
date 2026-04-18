@@ -284,3 +284,53 @@ export function searchProducts(filters = {}) {
   const qs = toQuery({ q, scope, limit, categ_id: categId })
   return api('GET', `/pwa-admin/products/search${qs}`)
 }
+
+// ── Aprobación de gastos (B2 — 2026-04-18) ──────────────────────────────────
+
+/** Lista de gastos pendientes de aprobación (solo ve gerente/director).
+ *  Backend: GET /pwa-admin/expenses-pending-approval?company_id=&limit=&offset=
+ *  Retorna hr.expense con x_approval_state='pending' del company_id. */
+export function getExpensesPendingApproval(filters = {}) {
+  const mapped = {
+    company_id:   filters.companyId   ?? filters.company_id,
+    warehouse_id: filters.warehouseId ?? filters.warehouse_id,
+    limit:        filters.limit,
+    offset:       filters.offset,
+  }
+  return api('GET', `/pwa-admin/expenses-pending-approval${toQuery(mapped)}`)
+}
+
+/** Aprueba un gasto pendiente. Backend registra al aprobador en chatter. */
+export function approveExpense(expenseId) {
+  return api('POST', '/pwa-admin/expense-approve', { expense_id: Number(expenseId) })
+}
+
+/** Rechaza un gasto con motivo. Guardado en x_rejection_reason + chatter. */
+export function rejectExpense(expenseId, reason) {
+  return api('POST', '/pwa-admin/expense-reject', {
+    expense_id: Number(expenseId),
+    reason: String(reason || '').trim(),
+  })
+}
+
+// ── Clientes (supv) — Inactivos y Recuperación (A3) ─────────────────────────
+
+/** Clientes sin orden en los últimos N días (backend: 60 por default). */
+export function getInactiveCustomers(filters = {}) {
+  const mapped = {
+    company_id: filters.companyId ?? filters.company_id,
+    limit:      filters.limit,
+    offset:     filters.offset,
+  }
+  return api('GET', `/pwa-supv/customers/inactive${toQuery(mapped)}`)
+}
+
+/** Clientes marcados needs_recovery_plan=true por el backend. */
+export function getRecoveryCustomers(filters = {}) {
+  const mapped = {
+    company_id: filters.companyId ?? filters.company_id,
+    limit:      filters.limit,
+    offset:     filters.offset,
+  }
+  return api('GET', `/pwa-supv/customers/recovery${toQuery(mapped)}`)
+}

@@ -124,6 +124,18 @@ export default function AdminGastosForm() {
       return
     }
 
+    // Validación de foto obligatoria cuando el monto supera el umbral
+    // (guía de pruebas sección 2b — backend rechaza sin attachment).
+    const amountNum = Number(amount)
+    const threshold = Number(BACKEND_CAPS.expenseApprovalThreshold ?? 1000)
+    const requiresAttach =
+      BACKEND_CAPS.expenseRequiresAttachment &&
+      amountNum > threshold
+    if (requiresAttach && !attachment) {
+      setError(`Gastos mayores a $${threshold.toLocaleString('es-MX')} requieren adjuntar comprobante.`)
+      return
+    }
+
     setSubmitting(true)
     setError('')
     setSuccess('')

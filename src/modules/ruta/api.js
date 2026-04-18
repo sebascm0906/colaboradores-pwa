@@ -111,3 +111,46 @@ export function closeRoute(planId, departureKm, arrivalKm) {
     arrival_km: arrivalKm,
   })
 }
+
+// ── Liquidación confirmar (gf_logistics_ops, endpoint real 4a/4b) ────────────
+
+/** Confirma la liquidación del plan. Backend valida que total_collected = total_expected.
+ *  Si hay diferencia y `force` != true, retorna { ok:false, code:'difference_warning',
+ *  data: { total_collected, total_expected, ... } } para que la UI pida override.
+ *  Llamar de nuevo con `force=true` para persistir pese a diferencia.
+ *  Endpoint real: POST /gf/logistics/api/employee/liquidacion/confirm */
+export function confirmLiquidacion(planId, { notes = '', force = false } = {}) {
+  return api('POST', '/gf/logistics/api/employee/liquidacion/confirm', {
+    plan_id: Number(planId),
+    notes:   String(notes || '').trim(),
+    force:   Boolean(force),
+  })
+}
+
+// ── Incidencias del equipo (A2 — catálogo 7 tipos) ──────────────────────────
+
+/** Lista de incidencias del equipo para una fecha dada.
+ *  Endpoint: GET /pwa-ruta/team-incidents?date=YYYY-MM-DD
+ *  Filtro opcional: ?route_ids=1,2,3 para supervisores/gerentes. */
+export function getTeamIncidents({ date, routeIds } = {}) {
+  const qs = new URLSearchParams()
+  if (date) qs.set('date', date)
+  if (Array.isArray(routeIds) && routeIds.length > 0) {
+    qs.set('route_ids', routeIds.join(','))
+  }
+  return api('GET', `/pwa-ruta/team-incidents${qs.toString() ? `?${qs}` : ''}`)
+}
+
+// ── Tipos de incidencias (catálogo del backend) ──────────────────────────────
+
+/** Catálogo fijo del backend — 7 tipos según spec A2.
+ *  Mantener sincronizado con gf_logistics_ops selection. */
+export const INCIDENT_TYPE_CATALOG = [
+  { id: 'retraso_ruta',         label: 'Retraso en ruta' },
+  { id: 'falta_producto',       label: 'Falta de producto' },
+  { id: 'sobrante_producto',    label: 'Sobrante de producto' },
+  { id: 'devolucion_fuera',     label: 'Devolución fuera de rango' },
+  { id: 'falla_mecanica',       label: 'Falla mecánica' },
+  { id: 'cliente_no_atendido',  label: 'Cliente no atendido' },
+  { id: 'cobro_no_realizado',   label: 'Cobro no realizado' },
+]

@@ -537,6 +537,7 @@ async function directGerente(method, path) {
 
 async function directAdmin(method, path, body) {
   const cleanPath = path.split('?')[0]
+  const query = new URLSearchParams(path.split('?')[1] || '')
   const warehouseId = getWarehouseId()
   const companyId = getCompanyId()
   const [todayStart, todayEnd] = todayRange()
@@ -1410,6 +1411,42 @@ async function directAdmin(method, path, body) {
       weight: Number(p.weight || 0),
     }))
     return { ok: true, data: { items, count: items.length } }
+  }
+
+  // ── Sprint 5: Aprobación de gastos (guía §2d/2e/2f) ────────────────────────
+  // Passthrough al controller de Odoo. Backend valida permiso por flag del empleado.
+
+  if (cleanPath === '/pwa-admin/expenses-pending-approval' && method === 'GET') {
+    return odooJson('/pwa-admin/expenses-pending-approval', {
+      company_id:   Number(query.get('company_id'))   || companyId || undefined,
+      warehouse_id: Number(query.get('warehouse_id')) || warehouseId || undefined,
+      limit:        Number(query.get('limit'))        || undefined,
+      offset:       Number(query.get('offset'))       || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-admin/expense-approve' && method === 'POST') {
+    return odooJson('/pwa-admin/expense-approve', {
+      expense_id: Number(body?.expense_id || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-admin/expense-reject' && method === 'POST') {
+    return odooJson('/pwa-admin/expense-reject', {
+      expense_id: Number(body?.expense_id || 0),
+      reason:     String(body?.reason || '').trim(),
+    })
+  }
+
+  // ── Evidencia fotográfica centralizada (guía §7) ───────────────────────────
+  if (cleanPath === '/pwa/evidence/upload' && method === 'POST') {
+    return odooJson('/pwa/evidence/upload', {
+      filename:     body?.filename || 'evidencia.jpg',
+      data:         body?.data || '',
+      mime_type:    body?.mime_type || 'image/jpeg',
+      linked_model: body?.linked_model || undefined,
+      linked_id:    body?.linked_id ? Number(body.linked_id) : undefined,
+    })
   }
 
   return NO_DIRECT
@@ -2989,6 +3026,24 @@ async function directRuta(method, path, body) {
     })
   }
 
+  // ── Sprint 5: Liquidación confirm con force (guía §4) ─────────────────────
+  // Endpoint real del backend: /gf/logistics/api/employee/liquidacion/confirm
+  if (cleanPath === '/gf/logistics/api/employee/liquidacion/confirm' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/liquidacion/confirm', {
+      plan_id: Number(body?.plan_id || 0),
+      notes:   String(body?.notes || '').trim(),
+      force:   Boolean(body?.force),
+    })
+  }
+
+  // ── Sprint 5: Catálogo de incidencias del equipo (guía §5) ────────────────
+  if (cleanPath === '/pwa-ruta/team-incidents' && method === 'GET') {
+    return odooJson('/pwa-ruta/team-incidents', {
+      date:      query.get('date') || undefined,
+      route_ids: query.get('route_ids') || undefined,
+    })
+  }
+
   return NO_DIRECT
 }
 
@@ -4543,6 +4598,89 @@ async function directSupervisorVentas(method, path, body) {
       progress: Number(row.progress_pct || 0),
       effectiveness: Number(row.delivery_effectiveness_pct || 0),
     }))
+  }
+
+  // ── Sprint 5: Tareas del supervisor (guía §8) ─────────────────────────────
+  // Passthrough a controllers Odoo. Backend valida permiso is_supervisor_ventas.
+
+  if (cleanPath === '/pwa-supv/tasks' && method === 'GET') {
+    return odooJson('/pwa-supv/tasks', {
+      company_id:  Number(query.get('company_id'))  || companyId || undefined,
+      assignee_id: Number(query.get('assignee_id')) || undefined,
+      state:       query.get('state')    || undefined,
+      priority:    query.get('priority') || undefined,
+      limit:       Number(query.get('limit')) || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/tasks/create' && method === 'POST') {
+    return odooJson('/pwa-supv/tasks/create', {
+      title:       String(body?.title || '').trim(),
+      description: body?.description || undefined,
+      assignee_id: Number(body?.assignee_id || 0),
+      priority:    body?.priority || 'medium',
+      due_date:    body?.due_date || undefined,
+      partner_id:  body?.partner_id ? Number(body.partner_id) : undefined,
+      company_id:  companyId || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/tasks/update' && method === 'POST') {
+    return odooJson('/pwa-supv/tasks/update', {
+      task_id: Number(body?.task_id || 0),
+      patch:   body?.patch || {},
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/tasks/complete' && method === 'POST') {
+    return odooJson('/pwa-supv/tasks/complete', {
+      task_id:          Number(body?.task_id || 0),
+      completion_notes: String(body?.completion_notes || '').trim(),
+    })
+  }
+
+  // ── Sprint 5: Notas de coaching (guía §8d) ────────────────────────────────
+
+  if (cleanPath === '/pwa-supv/notes' && method === 'GET') {
+    return odooJson('/pwa-supv/notes', {
+      subject_type: query.get('subject_type') || undefined,
+      subject_id:   Number(query.get('subject_id')) || undefined,
+      company_id:   companyId || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/notes/create' && method === 'POST') {
+    return odooJson('/pwa-supv/notes/create', {
+      body:         String(body?.body || '').trim(),
+      subject_type: body?.subject_type || undefined,
+      subject_id:   body?.subject_id ? Number(body.subject_id) : undefined,
+      author_id:    body?.author_id ? Number(body.author_id) : undefined,
+      company_id:   companyId || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/notes/delete' && method === 'POST') {
+    return odooJson('/pwa-supv/notes/delete', {
+      note_id: Number(body?.note_id || 0),
+    })
+  }
+
+  // ── Sprint 5: Clientes inactivos / recuperación (guía §6) ─────────────────
+
+  if (cleanPath === '/pwa-supv/customers/inactive' && method === 'GET') {
+    return odooJson('/pwa-supv/customers/inactive', {
+      company_id: Number(query.get('company_id')) || companyId || undefined,
+      limit:      Number(query.get('limit'))      || undefined,
+      offset:     Number(query.get('offset'))     || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customers/recovery' && method === 'GET') {
+    return odooJson('/pwa-supv/customers/recovery', {
+      company_id: Number(query.get('company_id')) || companyId || undefined,
+      limit:      Number(query.get('limit'))      || undefined,
+      offset:     Number(query.get('offset'))     || undefined,
+    })
   }
 
   return NO_DIRECT

@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan } from './api'
+import { useToast } from '../../components/Toast'
+import { safeNumber } from '../../lib/safeNumber'
+import { getMyRoutePlan, confirmLiquidacion } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import {
   fetchLiquidacion,
@@ -33,6 +35,9 @@ export default function ScreenLiquidacion() {
   const [notes, setNotes] = useState('')
   const [confirmed, setConfirmed] = useState(false)
   const [backendSource, setBackendSource] = useState(false) // true if data from backend
+  const [submitting, setSubmitting] = useState(false)
+  const [warningOpen, setWarningOpen] = useState(null) // { collected, expected }
+  const toast = useToast()
 
   useEffect(() => { loadData() }, [])
 
@@ -76,12 +81,12 @@ export default function ScreenLiquidacion() {
     setLoading(false)
   }
 
-  const cashExp = parseFloat(cashExpected) || 0
-  const cashCol = parseFloat(cashCollected) || 0
-  const creditExp = parseFloat(creditExpected) || 0
-  const creditCol = parseFloat(creditCollected) || 0
-  const transferExp = parseFloat(transferExpected) || 0
-  const transferCol = parseFloat(transferCollected) || 0
+  const cashExp = safeNumber(cashExpected)
+  const cashCol = safeNumber(cashCollected)
+  const creditExp = safeNumber(creditExpected)
+  const creditCol = safeNumber(creditCollected)
+  const transferExp = safeNumber(transferExpected)
+  const transferCol = safeNumber(transferCollected)
   const cashDiff = cashCol - cashExp
   const creditDiff = creditCol - creditExp
   const transferDiff = transferCol - transferExp
@@ -92,24 +97,54 @@ export default function ScreenLiquidacion() {
   const hasDifference = Math.abs(totalDiff) > 0.01
   const canConfirm = (cashExp > 0 || creditExp > 0 || cashCol > 0 || creditCol > 0)
 
-  function handleConfirm() {
-    if (!plan?.id) return
-    const data = {
-      cashExpected: cashExp,
-      cashCollected: cashCol,
-      creditExpected: creditExp,
-      creditCollected: creditCol,
-      transferExpected: transferExp,
-      transferCollected: transferCol,
-      cashDiff,
-      creditDiff,
-      transferDiff,
-      totalDiff,
-      notes,
+  /**
+   * Confirmación en 2 pasos contra backend real:
+   *   1er intento: force=false. Si diff == 0 → confirmado.
+   *   Si diff != 0 → backend responde {code:'difference_warning'}, abrimos modal.
+   *   2do intento (tras confirmación explícita): force=true → persiste.
+   *
+   * Endpoint: POST /gf/logistics/api/employee/liquidacion/confirm
+   */
+  async function handleConfirm({ force = false } = {}) {
+    if (!plan?.id || submitting) return
+    setSubmitting(true)
+    try {
+      const res = await confirmLiquidacion(plan.id, { notes, force })
+      const payload = res?.data ?? res ?? {}
+
+      // Si backend warning, abrimos modal de override
+      if (res?.ok === false && res?.code === 'difference_warning') {
+        setWarningOpen({
+          collected: Number(payload.total_collected ?? totalCollected),
+          expected:  Number(payload.total_expected  ?? totalExpected),
+        })
+        return
+      }
+
+      if (res?.ok === false || res?.error) {
+        const msg = res?.message || res?.error || 'Error al confirmar liquidación'
+        toast.error(msg)
+        return
+      }
+
+      // Éxito — guardamos localStorage solo como cache para UI
+      const snapshot = {
+        cashExpected: cashExp, cashCollected: cashCol,
+        creditExpected: creditExp, creditCollected: creditCol,
+        transferExpected: transferExp, transferCollected: transferCol,
+        cashDiff, creditDiff, transferDiff, totalDiff, notes,
+      }
+      saveLiquidacionLocal(plan.id, snapshot)
+      saveCierreState(plan.id, { liquidacionDone: true, liquidacionAt: new Date().toISOString() })
+      setConfirmed(true)
+      setWarningOpen(null)
+      toast.success(payload.message || 'Liquidación confirmada')
+    } catch (e) {
+      logScreenError('ScreenLiquidacion', 'handleConfirm', e)
+      toast.error(e?.message || 'No se pudo confirmar la liquidación')
+    } finally {
+      setSubmitting(false)
     }
-    saveLiquidacionLocal(plan.id, data)
-    saveCierreState(plan.id, { liquidacionDone: true, liquidacionAt: new Date().toISOString() })
-    setConfirmed(true)
   }
 
   return (
@@ -297,8 +332,8 @@ export default function ScreenLiquidacion() {
 
             {/* Confirm */}
             <button
-              onClick={handleConfirm}
-              disabled={!canConfirm || (hasDifference && !notes.trim())}
+              onClick={() => handleConfirm()}
+              disabled={!canConfirm || (hasDifference && !notes.trim()) || submitting}
               style={{
                 width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.lg,
                 background: canConfirm && (!hasDifference || notes.trim())
@@ -309,11 +344,89 @@ export default function ScreenLiquidacion() {
                 opacity: canConfirm && (!hasDifference || notes.trim()) ? 1 : 0.5,
               }}
             >
-              {hasDifference ? 'Confirmar con diferencia' : 'Confirmar Liquidacion'}
+              {submitting ? 'Procesando…' : (hasDifference ? 'Confirmar con diferencia' : 'Confirmar Liquidacion')}
             </button>
 
             <div style={{ height: 32 }} />
           </>
+        )}
+
+        {/* Modal de override cuando el backend responde difference_warning */}
+        {warningOpen && (
+          <div
+            onClick={() => !submitting && setWarningOpen(null)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 1000, padding: 16,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: 380, width: '100%',
+                padding: 20, borderRadius: TOKENS.radius.xl,
+                background: TOKENS.colors.surface,
+                border: `1px solid ${TOKENS.colors.border}`,
+              }}
+            >
+              <p style={{ ...typo.title, margin: '0 0 8px', color: TOKENS.colors.warning }}>
+                Diferencia detectada por backend
+              </p>
+              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 12px' }}>
+                El sistema calculó una diferencia entre lo cobrado y lo esperado. Revisa los montos antes de forzar el cierre.
+              </p>
+              <div style={{
+                padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 14,
+                background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cobrado:</span>
+                  <span style={{ ...typo.caption, fontWeight: 700 }}>{fmtMoney(warningOpen.collected)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Esperado:</span>
+                  <span style={{ ...typo.caption, fontWeight: 700 }}>{fmtMoney(warningOpen.expected)}</span>
+                </div>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', paddingTop: 6,
+                  borderTop: `1px solid ${TOKENS.colors.border}`, marginTop: 6,
+                }}>
+                  <span style={{ ...typo.caption, fontWeight: 700, color: TOKENS.colors.warning }}>
+                    Diferencia:
+                  </span>
+                  <span style={{ ...typo.caption, fontWeight: 700, color: TOKENS.colors.warning }}>
+                    {fmtMoney(warningOpen.collected - warningOpen.expected)}
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setWarningOpen(null)}
+                  disabled={submitting}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleConfirm({ force: true })}
+                  disabled={submitting}
+                  style={{
+                    flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
+                    background: 'linear-gradient(135deg,#991b1b,#dc2626)',
+                    color: 'white', fontSize: 13, fontWeight: 700,
+                    opacity: submitting ? 0.6 : 1,
+                  }}
+                >
+                  {submitting ? 'Forzando…' : 'Forzar cierre'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
