@@ -38,10 +38,11 @@ export default function SessionErrorState({ error, onRetry, backTo = '/' }) {
           <button
             onClick={onRetry}
             style={{
-              border: 'none', cursor: 'pointer', padding: '12px 24px',
+              cursor: 'pointer', padding: '12px 24px',
               borderRadius: TOKENS.radius.pill,
-              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-              color: TOKENS.colors.text, fontSize: 13, fontWeight: 600,
+              background: TOKENS.colors.surface,
+              border: `1px solid ${TOKENS.colors.border}`,
+              color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
               fontFamily: 'inherit',
             }}
           >

@@ -308,7 +308,7 @@ export default function ScreenReconciliacionPT() {
                 />
                 {ptReceivedKg && !manualKgValid && (
                   <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>
-                    Ingresa un numero valido (>= 0)
+                    Ingresa un numero valido (&gt;= 0)
                   </p>
                 )}
               </div>

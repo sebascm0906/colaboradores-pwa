@@ -271,7 +271,7 @@ export default function ScreenEnergia() {
                   </button>
                 </div>
               )}
-            </div>}
+            </div>
           </>
         )}
         <div style={{ height: 32 }} />
