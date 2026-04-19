@@ -1,5 +1,8 @@
 import {
   buildCycleExpectedTiming,
+  minutesFromMachineDefrost,
+  minutesFromMachineFreeze,
+  withExpectedTimingFields,
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming'
 
@@ -159,6 +162,46 @@ async function modelHasField(model, fieldName) {
     modelFieldSupportCache.set(cacheKey, false)
     return false
   }
+}
+
+async function enrichCyclesWithMachineTiming(cycles = []) {
+  const list = Array.isArray(cycles) ? cycles : []
+  const machineIds = [...new Set(
+    list
+      .map((cycle) => Array.isArray(cycle?.machine_id) ? cycle.machine_id[0] : cycle?.machine_id)
+      .map((machineId) => Number(machineId || 0))
+      .filter(Boolean)
+  )]
+
+  if (!machineIds.length) return list
+
+  const machineRows = await readModelSorted('gf.production.machine', {
+    fields: ['id', 'freeze_hours', 'expected_freeze_min', 'expected_defrost_min'],
+    domain: [['id', 'in', machineIds]],
+    sort_column: 'id',
+    sort_desc: false,
+    limit: machineIds.length,
+    sudo: 1,
+  })
+
+  const machineMap = new Map(
+    pickListResponse(machineRows).map((machine) => [Number(machine.id || 0), machine])
+  )
+
+  return list.map((cycle) => {
+    const machineId = Number(Array.isArray(cycle?.machine_id) ? cycle.machine_id[0] : cycle?.machine_id || 0)
+    const machine = machineMap.get(machineId)
+    if (!machine) return cycle
+    return {
+      ...cycle,
+      expected_freeze_min: Number(cycle?.expected_freeze_min || 0) > 0
+        ? Number(cycle.expected_freeze_min)
+        : minutesFromMachineFreeze(machine),
+      expected_defrost_min: Number(cycle?.expected_defrost_min || 0) > 0
+        ? Number(cycle.expected_defrost_min)
+        : minutesFromMachineDefrost(machine),
+    }
+  })
 }
 
 // Normalize a gf.production.machine record (tank) for the PWA Barras UI.
@@ -1789,10 +1832,12 @@ async function directProduction(method, path, body) {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
     const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
     const result = await readModelSorted('gf.evaporator.cycle', {
-      fields: withExpectedFreezeField(
+      fields: withExpectedTimingFields(
         ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'kg_deviation_pct', 'alert_level', 'cycle_number'],
         supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
       ),
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
@@ -1800,7 +1845,7 @@ async function directProduction(method, path, body) {
       limit: 100,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return enrichCyclesWithMachineTiming(pickListResponse(result))
   }
 
   if (cleanPath === '/pwa-prod/cycle-create' && method === 'POST') {
@@ -1808,6 +1853,7 @@ async function directProduction(method, path, body) {
     const machineId = Number(body?.machine_id || 0) || 2
     if (!shiftId) throw new Error('shift_id required')
     const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
 
     // Count existing cycles for this shift to compute cycle_number
     const existing = await readModelSorted('gf.evaporator.cycle', {
@@ -1821,7 +1867,7 @@ async function directProduction(method, path, body) {
     const lastNum = Number(pickFirstResponse(existing)?.cycle_number || 0)
     const cycleNumber = lastNum + 1
     const machineRes = await readModel('gf.production.machine', {
-      fields: ['id', 'freeze_hours'],
+      fields: ['id', 'freeze_hours', 'expected_freeze_min', 'expected_defrost_min'],
       domain: [['id', '=', machineId]],
       limit: 1,
       sudo: 1,
@@ -1834,7 +1880,7 @@ async function directProduction(method, path, body) {
       state: 'freezing',
       // Prefer client-provided timestamp (client local tz to match UI display); fall back to UTC server-now.
       freeze_start: body?.freeze_start || odooNow(),
-      ...buildCycleExpectedTiming(machine, supportsExpectedFreezeMin),
+      ...buildCycleExpectedTiming(machine, supportsExpectedFreezeMin, supportsExpectedDefrostMin),
     }
 
     let created
@@ -1868,9 +1914,10 @@ async function directProduction(method, path, body) {
     const newId = Number(created?.id || 0)
     // Read back so the caller has the full cycle record
     const rec = await readModelSorted('gf.evaporator.cycle', {
-      fields: withExpectedFreezeField(
+      fields: withExpectedTimingFields(
         ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
         supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
       ),
       domain: [['id', '=', newId]],
       sort_column: 'id',
@@ -1878,13 +1925,14 @@ async function directProduction(method, path, body) {
       limit: 1,
       sudo: 1,
     })
-    return pickFirstResponse(rec) || { id: newId, state: 'freezing', cycle_number: cycleNumber }
+    return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: newId, state: 'freezing', cycle_number: cycleNumber, machine_id: machineId }]))[0]
   }
 
   if (cleanPath === '/pwa-prod/cycle-update' && method === 'POST') {
     const cycleId = Number(body?.cycle_id || 0)
     if (!cycleId) throw new Error('cycle_id required')
     const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
     const updates = { ...(body || {}) }
     delete updates.cycle_id
 
@@ -1961,9 +2009,10 @@ async function directProduction(method, path, body) {
 
     // Read-back so caller has fresh state
     const rec = await readModelSorted('gf.evaporator.cycle', {
-      fields: withExpectedFreezeField(
+      fields: withExpectedTimingFields(
         ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
         supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
       ),
       domain: [['id', '=', cycleId]],
       sort_column: 'id',
@@ -1971,7 +2020,7 @@ async function directProduction(method, path, body) {
       limit: 1,
       sudo: 1,
     })
-    return pickFirstResponse(rec) || { id: cycleId }
+    return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: cycleId }]))[0]
   }
 
   if (cleanPath === '/pwa-prod/packing-products' && method === 'GET') {
