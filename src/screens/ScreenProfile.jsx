@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
 import { apiGet as _apiGet, apiPost as _apiPost, apiPatch as _apiPatch } from "../lib/api";
+import { runLogout } from "../lib/logout";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -141,7 +142,6 @@ const NAV_ITEMS = [
 
 function BottomNav({ sw }) {
   const navigate = useNavigate();
-  const { logout } = useSession();
   const ROUTES = { home: "/", kpis: "/kpis", encuestas: "/surveys", logros: "/badges", badges: "/badges", perfil: "/profile" };
   const navH = sw < 340 ? 58 : 64;
   const itemW = sw < 340 ? 48 : 58;
@@ -389,35 +389,6 @@ function InfoRow({ label, value, icon, editable = false, onEdit, isEditing = fal
 /* ============================================================================
    DIALOGS
 ============================================================================ */
-function LogoutDialog({ onConfirm, onCancel, sw }) {
-  const [visible, setVisible] = useState(false);
-  const typo = getTypo(sw);
-
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 20);
-    return () => clearTimeout(t);
-  }, []);
-
-  const handleCancel = () => { setVisible(false); setTimeout(onCancel, 200); };
-  const handleConfirm = () => { setVisible(false); setTimeout(onConfirm, 200); };
-
-  return (
-    <div onClick={handleCancel} style={{ position:"absolute", inset:0, zIndex:20, background:`rgba(3,8,17,${visible ? 0.78 : 0})`, transition:"background 200ms ease", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width:"100%", maxWidth:320, background:"linear-gradient(180deg, #07162b, #04101f)", borderRadius:TOKENS.radius.xl, border:`1px solid ${TOKENS.colors.borderBlue}`, padding:24, boxShadow:`${TOKENS.shadow.lg}, 0 0 40px rgba(43,143,224,0.10)`, transform:visible?"scale(1)":"scale(0.88)", opacity:visible?1:0, transition:`transform 280ms cubic-bezier(0.34,1.56,0.64,1), opacity 200ms ease`, textAlign:"center" }}>
-        <div style={{ fontSize:40, marginBottom:12 }}>👋</div>
-        <div style={{ ...typo.h2, color:TOKENS.colors.text, marginBottom:8 }}>¿Cerrar sesión?</div>
-        <div style={{ ...typo.caption, color:TOKENS.colors.textMuted, lineHeight:1.55, marginBottom:22 }}>
-          Tendrás que volver a ingresar con tu PIN y barcode.
-        </div>
-        <div style={{ display:"flex", gap:10 }}>
-          <button onClick={handleCancel} style={{ flex:1, height:44, borderRadius:TOKENS.radius.md, background:"rgba(255,255,255,0.06)", border:`1px solid ${TOKENS.colors.border}`, color:TOKENS.colors.textMuted, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Cancelar</button>
-          <button onClick={handleConfirm} style={{ flex:1, height:44, borderRadius:TOKENS.radius.md, background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.30)`, color:TOKENS.colors.error, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Salir</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EditPhotoSheet({ onClose, sw, employee, onPhotoUpdated }) {
   const [visible, setVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -575,6 +546,8 @@ function SkeletonInfoCard() {
 function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [winW, setWinW] = useState(window.innerWidth);
   const [winH, setWinH] = useState(window.innerHeight);
+  const navigate = useNavigate();
+  const { logout } = useSession();
   useEffect(() => {
     const handler = () => { setWinW(window.innerWidth); setWinH(window.innerHeight); };
     window.addEventListener('resize', handler);
@@ -593,9 +566,8 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
   const [phoneSaved, setPhoneSaved]     = useState(false);
   const [phoneError, setPhoneError]     = useState("");
   const [saveError, setSaveError]       = useState("");
-  const [showLogout, setShowLogout]     = useState(false);
   const [showEditPhoto, setShowEditPhoto] = useState(false);
-  const [logoutDone, setLogoutDone]     = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const navH = sw < 340 ? 58 : 64;
   const navBot = 10;
@@ -669,16 +641,17 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
     setSaveError("");
   };
 
-  const handleLogoutConfirm = () => {
-    setShowLogout(false);
-    // POST real a W17 → limpia token en Odoo + localStorage
-    apiPost("/pwa-logout", {})
-      .catch(() => {}) // fire-and-forget, limpiar igual
-      .finally(() => {
-        localStorage.removeItem("gf_session"); // limpia localStorage
-        logout();         // limpia SessionContext en memoria
-        navigate("/login", { replace: true });
-      });
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    await runLogout({
+      remoteLogout: () => apiPost("/pwa-logout", {}),
+      clearSession: () => {
+        localStorage.removeItem("gf_session");
+        logout();
+      },
+      navigateToLogin: () => navigate("/login", { replace: true }),
+    });
   };
 
   const infoRows = employee ? [
@@ -789,15 +762,16 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
 
             <FadeIn delay={220}>
               <button
-                onClick={() => setShowLogout(true)}
-                style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.22)`, color:TOKENS.colors.error, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:TOKENS.shadow.soft, transition:`all ${TOKENS.motion.fast}` }}
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                style={{ width:"100%", height:48, borderRadius:TOKENS.radius.md, background:TOKENS.colors.errorSoft, border:`1px solid rgba(239,68,68,0.22)`, color:TOKENS.colors.error, fontSize:14, fontWeight:700, cursor:isLoggingOut ? "wait" : "pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:TOKENS.shadow.soft, transition:`all ${TOKENS.motion.fast}`, opacity:isLoggingOut ? 0.7 : 1 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                   <polyline points="16 17 21 12 16 7"/>
                   <line x1="21" y1="12" x2="9" y2="12"/>
                 </svg>
-                Cerrar sesión
+                {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
               </button>
             </FadeIn>
 
@@ -813,23 +787,7 @@ function PerfilScreen({ sw: propSw, sh: propSh }) {
       </div>
 
       {/* DIALOGS — fuera del scroll container */}
-      {showLogout && <LogoutDialog onConfirm={handleLogoutConfirm} onCancel={() => setShowLogout(false)} sw={sw} />}
       {showEditPhoto && <EditPhotoSheet onClose={() => setShowEditPhoto(false)} sw={sw} employee={employee} onPhotoUpdated={(img) => setEmployee(prev => ({ ...prev, image_128: img }))} />}
-
-      {/* LOGOUT DONE — overlay absoluto correcto */}
-      {logoutDone && (
-        <div style={{ position:"absolute", inset:0, background:TOKENS.colors.bg0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", zIndex:30, gap:14 }}>
-          <div style={{ fontSize:48 }}>👋</div>
-          <div style={{ ...typo.h2, color:TOKENS.colors.text }}>¡Hasta pronto!</div>
-          <div style={{ ...typo.caption, color:TOKENS.colors.textMuted }}>Sesión cerrada correctamente</div>
-          <button
-            onClick={() => { setLogoutDone(false); navigate("/login", { replace: true }); }}
-            style={{ marginTop:12, padding:"10px 24px", borderRadius:TOKENS.radius.pill, background:"rgba(43,143,224,0.12)", border:`1px solid ${TOKENS.colors.borderBlue}`, color:TOKENS.colors.blue3, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
-          >
-            Volver al inicio
-          </button>
-        </div>
-      )}
 
       <BottomNav sw={sw} />
     </div>
@@ -888,7 +846,7 @@ export function MultiDevicePerfilPreview() {
           Pantalla 6 — Mi Perfil
         </div>
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:8 }}>
-          Avatar editable · Datos hr.employee · Vacaciones · Celular inline edit · isValidPhone · Logout confirm
+          Avatar editable · Datos hr.employee · Vacaciones · Celular inline edit · isValidPhone · Logout directo
         </div>
       </div>
 

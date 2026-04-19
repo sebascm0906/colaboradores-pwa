@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
+import { resolveSupervisionWarehouseId } from '../supervision/shiftContext'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import {
   getHandoverLocal,
@@ -41,6 +42,7 @@ export default function ScreenHandoverTurno() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [snapshot, setSnapshot] = useState(null)
   const [form, setForm] = useState(INITIAL_FORM)
@@ -62,7 +64,7 @@ export default function ScreenHandoverTurno() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         const [{ snapshot: snap }, incs] = await Promise.all([

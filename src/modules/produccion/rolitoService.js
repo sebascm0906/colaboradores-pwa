@@ -22,12 +22,16 @@ import {
 } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
 import { getMaterialIssues } from '../almacen-pt/materialsService'
+import {
+  DEFAULT_EXPECTED_DEFROST_MIN,
+  DEFAULT_EXPECTED_FREEZE_MIN,
+} from './cycleTiming'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 export const MACHINE_ID_EVAPORADOR = 2
-export const EXPECTED_FREEZE_MIN = 25
-export const EXPECTED_DEFROST_MIN = 5
+export const EXPECTED_FREEZE_MIN = DEFAULT_EXPECTED_FREEZE_MIN
+export const EXPECTED_DEFROST_MIN = DEFAULT_EXPECTED_DEFROST_MIN
 export const EXPECTED_CYCLE_MIN = 30
 export const EXPECTED_KG_PER_CYCLE = 650
 

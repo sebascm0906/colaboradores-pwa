@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { getActiveShift } from './api'
+import { resolveSupervisionWarehouseId } from './shiftContext'
 import { listTanks } from '../produccion/barraService'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
@@ -43,6 +44,7 @@ export default function ScreenSupervision() {
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [readiness, setReadiness] = useState(null) // { canClose, blockers, warnings }
   const [summary, setSummary] = useState({})
@@ -61,7 +63,7 @@ export default function ScreenSupervision() {
     setLoading(true)
     try {
       const [s, tanksRes] = await Promise.all([
-        getActiveShift().catch((e) => { logScreenError('ScreenSupervision', 'getActiveShift', e); return null }),
+        getActiveShift(supervisionWarehouseId).catch((e) => { logScreenError('ScreenSupervision', 'getActiveShift', e); return null }),
         listTanks().catch(() => ({ tanks: [] })),
       ])
       setShift(s)

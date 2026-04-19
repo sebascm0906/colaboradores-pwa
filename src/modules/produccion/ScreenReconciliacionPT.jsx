@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
+import { resolveSupervisionWarehouseId } from '../supervision/shiftContext'
 import {
   submitReconciliation,
   getCachedReconciliation,
@@ -25,6 +26,7 @@ export default function ScreenReconciliacionPT() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -40,7 +42,7 @@ export default function ScreenReconciliacionPT() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         // Verificar si hay resultado cacheado

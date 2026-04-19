@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
 import { getModulesForRole } from '../modules/registry'
+import { runLogout } from '../lib/logout'
 
 /* ============================================================================
    ICONS
@@ -261,6 +262,16 @@ export default function ScreenHome() {
     navigate(mod.route)
   }
 
+  function handleLogout() {
+    return runLogout({
+      clearSession: () => {
+        localStorage.removeItem('gf_session')
+        logout()
+      },
+      navigateToLogin: () => navigate('/login', { replace: true }),
+    })
+  }
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -310,11 +321,7 @@ export default function ScreenHome() {
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
-              onClick={() => {
-                localStorage.removeItem('gf_session')
-                logout()
-                navigate('/login', { replace: true })
-              }}
+              onClick={handleLogout}
               style={{
                 fontSize: 11, fontWeight: 700, color: '#f59e0b',
                 background: 'rgba(245,158,11,0.15)',
@@ -326,11 +333,7 @@ export default function ScreenHome() {
               Cambiar perfil
             </button>
             <button
-              onClick={() => {
-                localStorage.removeItem('gf_session')
-                logout()
-                navigate('/login', { replace: true })
-              }}
+              onClick={handleLogout}
               style={{
                 fontSize: 11, fontWeight: 700, color: '#ef4444',
                 background: 'rgba(239,68,68,0.12)',

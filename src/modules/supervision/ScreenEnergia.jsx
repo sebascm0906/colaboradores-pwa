@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getEnergyReadings, createEnergyReading } from './api'
+import { resolveSupervisionWarehouseId } from './shiftContext'
 import { validateEnergyReadings } from '../produccion/productionRules'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -11,6 +12,7 @@ export default function ScreenEnergia() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [readings, setReadings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -24,7 +26,7 @@ export default function ScreenEnergia() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         const r = await getEnergyReadings(s.id).catch((e) => {

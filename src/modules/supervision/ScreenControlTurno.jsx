@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, createShift } from './api'
+import { resolveSupervisionWarehouseId } from './shiftContext'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { closeShiftServerSide } from '../shared/supervisorAuth'
 import {
@@ -34,13 +35,14 @@ export default function ScreenControlTurno() {
   const [showIncidentForm, setShowIncidentForm] = useState(false)
   const [incidentForm, setIncidentForm] = useState({ name: '', description: '', incident_type: 'production', severity: 'low' })
   const [incidentSubmitting, setIncidentSubmitting] = useState(false)
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session, formData.warehouse_id)
 
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         loadIncidents(s.id).then(setIncidents)
@@ -57,7 +59,7 @@ export default function ScreenControlTurno() {
       await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
       setMsg({ type: 'success', text: 'Turno abierto correctamente' })
       setFormData({ shift_code: '', warehouse_id: 76 })
-      await loadData()
+      navigate('/supervision', { replace: true })
     } catch (err) { setMsg({ type: 'error', text: err.message || 'Error al abrir turno' }) }
     finally { setSubmitting(false) }
   }

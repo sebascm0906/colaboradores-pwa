@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getScraps, getScrapReasons, getScrapProducts, createScrap } from './api'
+import { resolveSupervisionWarehouseId } from './shiftContext'
 import { getCycles } from '../produccion/api'
 import { validateMermaVsProduction, MERMA_MAX_PCT } from '../produccion/productionRules'
 import { loadLines } from '../shared/lineService'
@@ -35,6 +36,7 @@ export default function ScreenMerma() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [scraps, setScraps] = useState([])
   const [reasons, setReasons] = useState([])
@@ -53,7 +55,7 @@ export default function ScreenMerma() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         const [sc, rs, ps, cy, lns] = await Promise.all([

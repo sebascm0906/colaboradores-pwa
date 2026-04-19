@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getDowntimes, getDowntimeCategories, createDowntime, closeDowntime } from './api'
+import { resolveSupervisionWarehouseId } from './shiftContext'
 import { loadMachines } from '../shared/machineService'
 import { loadLines } from '../shared/lineService'
 import { logScreenError } from '../shared/logScreenError'
@@ -28,6 +29,7 @@ export default function ScreenParos() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [downtimes, setDowntimes] = useState([])
   const [categories, setCategories] = useState([])
@@ -48,7 +50,7 @@ export default function ScreenParos() {
   async function loadData() {
     setLoading(true)
     try {
-      const s = await getActiveShift()
+      const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
         const [d, cats, machs, lns] = await Promise.all([

@@ -1,3 +1,8 @@
+import {
+  buildCycleExpectedTiming,
+  withExpectedFreezeField,
+} from '../modules/produccion/cycleTiming'
+
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
 // directo en Odoo para evitar 401s cuando n8n no está alineado con la app.
@@ -129,6 +134,31 @@ function pickFirstResponse(payload) {
     if (payload.result && typeof payload.result === 'object') return pickFirstResponse(payload.result)
   }
   return payload || null
+}
+
+const modelFieldSupportCache = new Map()
+
+async function modelHasField(model, fieldName) {
+  const cacheKey = `${model}:${fieldName}`
+  if (modelFieldSupportCache.has(cacheKey)) {
+    return modelFieldSupportCache.get(cacheKey)
+  }
+  try {
+    const result = await readModelSorted('ir.model.fields', {
+      fields: ['id', 'name'],
+      domain: [['model', '=', model], ['name', '=', fieldName]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 1,
+      sudo: 1,
+    })
+    const supported = Boolean(pickFirstResponse(result)?.id)
+    modelFieldSupportCache.set(cacheKey, supported)
+    return supported
+  } catch (_) {
+    modelFieldSupportCache.set(cacheKey, false)
+    return false
+  }
 }
 
 // Normalize a gf.production.machine record (tank) for the PWA Barras UI.
@@ -1758,8 +1788,12 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/pwa-prod/cycles' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
     const result = await readModelSorted('gf.evaporator.cycle', {
-      fields: ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'kg_deviation_pct', 'alert_level', 'cycle_number'],
+      fields: withExpectedFreezeField(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'kg_deviation_pct', 'alert_level', 'cycle_number'],
+        supportsExpectedFreezeMin,
+      ),
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
       sort_desc: true,
@@ -1773,6 +1807,7 @@ async function directProduction(method, path, body) {
     const shiftId = Number(body?.shift_id || 0)
     const machineId = Number(body?.machine_id || 0) || 2
     if (!shiftId) throw new Error('shift_id required')
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
 
     // Count existing cycles for this shift to compute cycle_number
     const existing = await readModelSorted('gf.evaporator.cycle', {
@@ -1785,25 +1820,58 @@ async function directProduction(method, path, body) {
     })
     const lastNum = Number(pickFirstResponse(existing)?.cycle_number || 0)
     const cycleNumber = lastNum + 1
-
-    const created = await createUpdate({
-      model: 'gf.evaporator.cycle',
-      method: 'create',
-      dict: {
-        shift_id: shiftId,
-        machine_id: machineId,
-        cycle_number: cycleNumber,
-        state: 'freezing',
-        // Prefer client-provided timestamp (client local tz to match UI display); fall back to UTC server-now.
-        freeze_start: body?.freeze_start || odooNow(),
-      },
+    const machineRes = await readModel('gf.production.machine', {
+      fields: ['id', 'freeze_hours'],
+      domain: [['id', '=', machineId]],
+      limit: 1,
       sudo: 1,
-      app: 'pwa_colaboradores',
     })
+    const machine = pickFirstResponse(machineRes)
+    const cycleWriteDict = {
+      shift_id: shiftId,
+      machine_id: machineId,
+      cycle_number: cycleNumber,
+      state: 'freezing',
+      // Prefer client-provided timestamp (client local tz to match UI display); fall back to UTC server-now.
+      freeze_start: body?.freeze_start || odooNow(),
+      ...buildCycleExpectedTiming(machine, supportsExpectedFreezeMin),
+    }
+
+    let created
+    try {
+      created = await createUpdate({
+        model: 'gf.evaporator.cycle',
+        method: 'create',
+        dict: cycleWriteDict,
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+    } catch (error) {
+      if (!supportsExpectedFreezeMin || !Object.prototype.hasOwnProperty.call(cycleWriteDict, 'expected_freeze_min')) {
+        throw error
+      }
+      modelFieldSupportCache.set('gf.evaporator.cycle:expected_freeze_min', false)
+      created = await createUpdate({
+        model: 'gf.evaporator.cycle',
+        method: 'create',
+        dict: {
+          shift_id: shiftId,
+          machine_id: machineId,
+          cycle_number: cycleNumber,
+          state: 'freezing',
+          freeze_start: body?.freeze_start || odooNow(),
+        },
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+    }
     const newId = Number(created?.id || 0)
     // Read back so the caller has the full cycle record
     const rec = await readModelSorted('gf.evaporator.cycle', {
-      fields: ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+      fields: withExpectedFreezeField(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+        supportsExpectedFreezeMin,
+      ),
       domain: [['id', '=', newId]],
       sort_column: 'id',
       sort_desc: false,
@@ -1816,6 +1884,7 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/pwa-prod/cycle-update' && method === 'POST') {
     const cycleId = Number(body?.cycle_id || 0)
     if (!cycleId) throw new Error('cycle_id required')
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
     const updates = { ...(body || {}) }
     delete updates.cycle_id
 
@@ -1892,7 +1961,10 @@ async function directProduction(method, path, body) {
 
     // Read-back so caller has fresh state
     const rec = await readModelSorted('gf.evaporator.cycle', {
-      fields: ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+      fields: withExpectedFreezeField(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+        supportsExpectedFreezeMin,
+      ),
       domain: [['id', '=', cycleId]],
       sort_column: 'id',
       sort_desc: false,
