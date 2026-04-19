@@ -1,5 +1,6 @@
 // ─── API Producción — Llamadas a n8n webhooks ──────────────────────────────
 import { api } from '../../lib/api'
+import { buildChecklistPath } from './checklistContext'
 
 // ── Turno ────────────────────────────────────────────────────────────────────
 
@@ -16,8 +17,8 @@ export function getShiftSummary(shiftId) {
 // ── Checklist HACCP ──────────────────────────────────────────────────────────
 
 /** Obtener checklist del turno (con puntos de inspección) */
-export function getChecklist(shiftId) {
-  return api('GET', `/pwa-prod/checklist?shift_id=${shiftId}`)
+export function getChecklist(shiftId, roleContext = '') {
+  return api('GET', buildChecklistPath(shiftId, roleContext))
 }
 
 /** Enviar respuesta de un punto del checklist */

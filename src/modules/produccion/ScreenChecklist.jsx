@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getChecklist, submitCheck, completeChecklist } from './api'
+import { resolveChecklistRoleContext } from './checklistContext'
 import { logScreenError } from '../shared/logScreenError'
 
 const CHECK_ICONS = {
@@ -12,6 +14,8 @@ const CHECK_ICONS = {
 }
 
 export default function ScreenChecklist() {
+  const { session } = useSession()
+  const location = useLocation()
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -22,6 +26,8 @@ export default function ScreenChecklist() {
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef(null)
   const [photoCheckId, setPhotoCheckId] = useState(null)
+  const activeRole = resolveChecklistRoleContext(session, location.state?.selected_role)
+  const productionState = activeRole ? { selected_role: activeRole } : undefined
 
   useEffect(() => { loadChecklist() }, [])
 
@@ -30,7 +36,7 @@ export default function ScreenChecklist() {
     try {
       const shift = await getMyShift()
       if (!shift?.id) { setError('Sin turno activo'); return }
-      const data = await getChecklist(shift.id)
+      const data = await getChecklist(shift.id, activeRole)
       setChecklist(data)
       setChecks((data?.checks || []).map(c => {
         // Determine if the check was already answered in a real sense.
@@ -108,7 +114,7 @@ export default function ScreenChecklist() {
     setSubmitting(true)
     try {
       await completeChecklist(checklist.id)
-      navigate('/produccion')
+      navigate('/produccion', { state: productionState })
     } catch (e) {
       logScreenError('ScreenChecklist', 'completeChecklist', e)
       setError('No se pudo completar el checklist')
@@ -148,7 +154,7 @@ export default function ScreenChecklist() {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/produccion')} style={{
+          <button onClick={() => navigate('/produccion', { state: productionState })} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,

@@ -1650,10 +1650,16 @@ async function directProduction(method, path, body) {
     if (_checklistInFlight.has(cacheKey)) return _checklistInFlight.get(cacheKey)
     const promise = (async () => {
 
-    // 1) Determine target template based on role (rolito / barras / all)
+    // 1) Determine target template based on explicit module context first.
+    // If omitted, fall back to session.role for backward compatibility.
+    const requestedRole = String(query.get('role_context') || '').trim().toLowerCase()
+    const requestedLineType = String(query.get('line_type') || '').trim().toLowerCase()
     const sessionRole = String(getSession().role || '').toLowerCase()
     let lineType = 'all'
-    if (sessionRole.includes('rolito')) lineType = 'rolito'
+    if (requestedLineType === 'rolito' || requestedLineType === 'barras') lineType = requestedLineType
+    else if (requestedRole.includes('rolito')) lineType = 'rolito'
+    else if (requestedRole.includes('barra')) lineType = 'barras'
+    else if (sessionRole.includes('rolito')) lineType = 'rolito'
     else if (sessionRole.includes('barra')) lineType = 'barras'
 
     // 1b) Resolve the target template id for this operator line (used both
