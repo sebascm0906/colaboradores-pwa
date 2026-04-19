@@ -139,6 +139,14 @@ function pickFirstResponse(payload) {
   return payload || null
 }
 
+function toMany2oneId(value) {
+  if (Array.isArray(value)) return Number(value[0] || 0)
+  if (value && typeof value === 'object') {
+    return Number(value.id || value.product_id || value[0] || 0)
+  }
+  return Number(value || 0)
+}
+
 const modelFieldSupportCache = new Map()
 
 async function modelHasField(model, fieldName) {
@@ -2069,7 +2077,8 @@ async function directProduction(method, path, body) {
         : []
 
     return products.map((row) => ({
-      id: Number(row?.product?.product_id || 0),
+      id: toMany2oneId(row?.product?.product_id || row?.product_id),
+      product_id: toMany2oneId(row?.product?.product_id || row?.product_id),
       catalog_item_id: Number(row?.catalog_item_id || 0),
       line_type: row?.line_type || '',
       name: row?.product?.name || 'Producto',

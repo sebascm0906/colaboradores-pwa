@@ -399,8 +399,9 @@ export async function markDump(cycleId, kgDumped, extra) {
 export async function registerPacking(shiftId, productId, qtyBags, cycleId) {
   const data = {
     shift_id: shiftId,
-    product_id: productId,
+    product_id: Number(productId || 0),
     qty_bags: parseInt(qtyBags),
+    production_order_id: 0,
     timestamp: nowDatetime(),
   }
   if (cycleId) {

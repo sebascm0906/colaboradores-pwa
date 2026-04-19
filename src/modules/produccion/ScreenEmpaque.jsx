@@ -98,9 +98,11 @@ export default function ScreenEmpaque() {
     setError('')
     setSaving(true)
     try {
+      const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
+      if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
       await createPackingEntry({
         shift_id: shift.id,
-        product_id: selectedProduct.id,
+        product_id: productId,
         qty_bags: parseInt(qtyBags),
         timestamp: (() => { const d = new Date(); const p = (n) => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; })(),
       })

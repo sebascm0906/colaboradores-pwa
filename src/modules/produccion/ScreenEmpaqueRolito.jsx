@@ -129,7 +129,9 @@ export default function ScreenEmpaqueRolito() {
     setError('')
     try {
       // cycle_id se envia siempre — backend debe persistirlo
-      await registerPacking(shift.id, selectedProduct.id, qtyBags, selectedCycleId)
+      const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
+      if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
+      await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
       setSuccess(`${qtyBags} bolsas registradas (${totalKg} kg)`)
       setQtyBags(0)
       // Reload entries
