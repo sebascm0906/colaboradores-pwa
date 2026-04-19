@@ -284,25 +284,37 @@ function MetabaseFrame({ period, sw, sh, embedHeight, jobKey, refreshKey = 0 }) 
     }
   }, [period]);
 
-  // Cargar token Metabase real desde W18
+  // Cargar token Metabase real desde Odoo.
+  // Si el endpoint no existe o falla, degradamos silenciosamente al
+  // MockDashboard. NUNCA propagar error que pueda causar logout — este
+  // endpoint está en la lista de "optionalEndpoint" del interceptor global.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setHasError(false);
     const key = jobKey || getSession()?.job_key || "VENDEDOR";
-    apiGet(`/pwa-metabase-token?job_key=${key}`)
+    apiGet(`/pwa-metabase-token?job_key=${encodeURIComponent(key)}`)
       .then(res => {
         if (cancelled) return;
-        if (res.success && res.embed_url) {
-          setEmbedUrl(`${res.embed_url}&period=${period}`);
-          setLoading(false);
+        // El handler directo de lib/api.js siempre responde con shape consistente:
+        //   { success: true,  embed_url: "https://..." }  → usar iframe
+        //   { success: false, embed_url: null, reason: ... } → mock dashboard
+        if (res?.success && res?.embed_url) {
+          const sep = res.embed_url.includes('?') ? '&' : '?';
+          setEmbedUrl(`${res.embed_url}${sep}period=${encodeURIComponent(period)}`);
         } else {
-          // No embed URL — fall back to mock dashboard
           setEmbedUrl(null);
-          setLoading(false);
         }
+        setLoading(false);
       })
-      .catch(() => { if (!cancelled) { setEmbedUrl(null); setLoading(false); } });
+      .catch(err => {
+        if (cancelled) return;
+        // Swallow — este endpoint es opcional. Nunca debe causar logout.
+        // El interceptor ya no propaga 401 de este path, pero por si acaso.
+        console.warn('[ScreenKPIs] Metabase token no disponible, usando mock:', err?.message || err);
+        setEmbedUrl(null);
+        setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [retryKey, refreshKey, jobKey, period]);
 

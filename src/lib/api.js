@@ -511,6 +511,35 @@ async function directProfile(method, path, body) {
     return { success: true }
   }
 
+  // ── Metabase Embed Token (P0 fix 2026-04-18) ─────────────────────────────
+  // El módulo `gf_metabase_embed` aún es stub (no installable). Mientras no
+  // exponga /pwa-metabase-token, el frontend HACÍA fallback a n8n que devolvía
+  // 401 y el interceptor global expulsaba al usuario. Este handler intercepta
+  // ANTES del fallback y devuelve un payload degradado {success:false} para
+  // que ScreenKPIs muestre el MockDashboard sin crashear la sesión.
+  //
+  // Cuando backend implemente el endpoint real, responderá con JWT firmado
+  // y el frontend pasa directamente al iframe sin cambios.
+  if ((path.startsWith('/pwa-metabase-token') || path.startsWith('/pwa-metabase/token')) && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const jobKey = query.get('job_key') || 'VENDEDOR'
+    try {
+      // Intenta el controller real si está expuesto en Odoo
+      const res = await odooJson('/pwa-metabase-token', { job_key: jobKey })
+      // Backend puede responder { success, embed_url } o { ok, data: {...} }
+      if (res?.success && res?.embed_url) return res
+      if (res?.ok && res?.data?.embed_url) {
+        return { success: true, embed_url: res.data.embed_url, dashboard_id: res.data.dashboard_id }
+      }
+      // Respuesta válida pero sin embed_url → degradar silenciosamente
+      return { success: false, embed_url: null, reason: 'no_embed_url' }
+    } catch (err) {
+      // Controller no existe o falló. NO propagar error — degradar a mock.
+      // Esto evita que el interceptor global dispare expireSession().
+      return { success: false, embed_url: null, reason: 'backend_unavailable' }
+    }
+  }
+
   return NO_DIRECT
 }
 
@@ -4962,7 +4991,13 @@ export async function api(method, path, body) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      expireSession()
+      // Solo expirar sesión si el 401 viene de un endpoint CRÍTICO de auth.
+      // Endpoints opcionales (Metabase, capabilities, reportes externos) NO
+      // deben disparar logout — la PWA los trata como "feature no disponible".
+      // Guía 2026-04-18: evitamos el bug P0 donde Mis KPIs expulsaba al usuario.
+      if (!isOptionalEndpoint(path)) {
+        expireSession()
+      }
       throw new ApiError('no_session', { status: 401, code: 'no_session' })
     }
     const err = await res.json().catch(() => ({}))
@@ -4972,6 +5007,21 @@ export async function api(method, path, body) {
   const json = await res.json()
   // n8n suele devolver { data: ... }.
   return json.data !== undefined ? json.data : json
+}
+
+/** Endpoints cuyo 401 NO debe disparar logout.
+ *  Son features externas/opcionales (Metabase, capabilities, telemetría).
+ *  Si fallan, el usuario sigue operando normalmente y se degrada la UI. */
+function isOptionalEndpoint(path) {
+  if (!path) return false
+  const clean = String(path).split('?')[0]
+  return (
+    clean.startsWith('/pwa-metabase-token') ||
+    clean.startsWith('/pwa-metabase/token') ||
+    clean.startsWith('/pwa-metabase/') ||
+    clean.startsWith('/pwa-admin/capabilities') ||
+    clean.startsWith('/pwa/evidence/upload') // fallar upload de foto NO debe cerrar sesión
+  )
 }
 
 export function apiGet(path) {

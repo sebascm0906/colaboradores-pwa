@@ -10,6 +10,69 @@ Cuando un endpoint se habilite, el frontend puede conectarse **sin cambios en la
 
 ## 🔴 CRÍTICO — bloqueantes para productivo
 
+### 0. Metabase Embed Token — P0 (bug de logout corregido en frontend 2026-04-18)
+
+El módulo `gf_metabase_embed` existe pero es STUB (`installable: False`, sin controllers). La pantalla `/kpis` llama `/pwa-metabase-token` y antes del parche el 401 disparaba logout automático. **El parche frontend degrada silenciosamente al MockDashboard** si el endpoint no existe, pero el backend sigue pendiente.
+
+**Contrato esperado del endpoint**:
+
+```python
+# addons/gf_metabase_embed/controllers/metabase.py
+from odoo import http
+from odoo.http import request
+import jwt, time
+
+class MetabaseEmbedController(http.Controller):
+
+    @http.route('/pwa-metabase-token', type='json', auth='user', methods=['POST', 'GET'], csrf=False)
+    def get_metabase_token(self, job_key='VENDEDOR', **kw):
+        # 1. Resolver dashboard_id según job_key del empleado
+        dashboard_map = {
+            'VENDEDOR':      int(request.env['ir.config_parameter'].sudo().get_param('metabase.dashboard.vendedor', '0')),
+            'JEFE_RUTA':     int(request.env['ir.config_parameter'].sudo().get_param('metabase.dashboard.jefe_ruta', '0')),
+            'SUPERVISOR':    int(request.env['ir.config_parameter'].sudo().get_param('metabase.dashboard.supervisor', '0')),
+            'GERENTE':       int(request.env['ir.config_parameter'].sudo().get_param('metabase.dashboard.gerente', '0')),
+            'AUXILIAR_ADMIN':int(request.env['ir.config_parameter'].sudo().get_param('metabase.dashboard.admin', '0')),
+        }
+        dashboard_id = dashboard_map.get(job_key.upper(), dashboard_map['VENDEDOR'])
+        if not dashboard_id:
+            return {'success': False, 'embed_url': None, 'reason': 'no_dashboard_configured'}
+
+        # 2. Firmar JWT con METABASE_SECRET_KEY (ir.config_parameter)
+        secret = request.env['ir.config_parameter'].sudo().get_param('metabase.secret_key')
+        site   = request.env['ir.config_parameter'].sudo().get_param('metabase.site_url', 'https://metabase.grupofrio.mx')
+        if not secret:
+            return {'success': False, 'embed_url': None, 'reason': 'secret_not_configured'}
+
+        emp = request.env.user.employee_id
+        payload = {
+            'resource': {'dashboard': dashboard_id},
+            'params': {
+                'employee_id': emp.id,
+                'company_id':  emp.company_id.id,
+            },
+            'exp': int(time.time()) + 60 * 10  # 10 min
+        }
+        token = jwt.encode(payload, secret, algorithm='HS256')
+        url = f"{site}/embed/dashboard/{token}#bordered=false&titled=false"
+        return {'success': True, 'embed_url': url, 'dashboard_id': dashboard_id}
+```
+
+**Respuesta esperada por la PWA**:
+```json
+{ "success": true, "embed_url": "https://metabase.grupofrio.mx/embed/dashboard/eyJ...#bordered=false&titled=false" }
+```
+
+**Config params necesarios en Odoo**:
+- `metabase.secret_key` — shared secret de Metabase (Admin > Embedding in other Applications > Enable)
+- `metabase.site_url` — URL pública de Metabase
+- `metabase.dashboard.vendedor` — ID de dashboard para ese rol (repetir por cada rol)
+
+**Mientras tanto (ya implementado)**: el frontend usa `MockMetabaseDashboard` como fallback. No crashea.
+
+---
+
+
 ### 1. Cash Closing — validación de umbrales y autorización
 
 Actualmente `/pwa-admin/cash-closing` solo persiste el cierre. La PWA ya valida umbrales en UI (`CIERRE_THRESHOLDS` en `AdminCierreForm`), pero backend debe:
