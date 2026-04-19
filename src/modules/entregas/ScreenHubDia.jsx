@@ -158,6 +158,31 @@ export default function ScreenHubDia() {
         </button>
       </div>
 
+      <button
+        onClick={() => navigate('/entregas/transformacion')}
+        style={{
+          width: '100%',
+          marginBottom: 12,
+          padding: '14px 16px',
+          borderRadius: TOKENS.radius.lg,
+          background: 'linear-gradient(180deg, rgba(43,143,224,0.14), rgba(43,143,224,0.04))',
+          border: `1px solid rgba(43,143,224,0.35)`,
+          boxShadow: TOKENS.shadow.blue,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Transformacion</p>
+          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>Medias barras para entregas</p>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+
       {/* Error */}
       {error && (
         <div style={{
