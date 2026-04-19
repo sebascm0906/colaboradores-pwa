@@ -3831,6 +3831,55 @@ async function directSupervision(method, path, body) {
     return { success: true, data: result }
   }
 
+  if (cleanPath === '/pwa-sup/brine-reading-create' && method === 'POST') {
+    const machineId = Number(body?.machine_id || 0)
+    const saltLevel = Number(body?.salt_level || 0)
+    const brineTempRaw = body?.brine_temp
+    if (!machineId) throw new Error('machine_id requerido')
+    if (!Number.isFinite(saltLevel) || saltLevel <= 0) throw new Error('salt_level invalido')
+
+    const now = odooNow()
+    const dict = {
+      x_salt_level: saltLevel,
+      x_salt_level_updated_at: now,
+    }
+
+    if (brineTempRaw !== undefined && brineTempRaw !== null && String(brineTempRaw).trim() !== '') {
+      const brineTemp = Number(brineTempRaw)
+      if (!Number.isFinite(brineTemp)) throw new Error('brine_temp invalida')
+      dict.x_brine_temp_current = brineTemp
+      dict.x_brine_temp_updated_at = now
+    }
+
+    await createUpdate({
+      model: 'gf.production.machine',
+      method: 'update',
+      ids: [machineId],
+      dict,
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+
+    const reread = await readModel('gf.production.machine', {
+      fields: [
+        'id', 'name', 'display_name', 'machine_type', 'line_id',
+        'slot_rows', 'slot_columns', 'bars_per_basket', 'kg_per_bar',
+        'bar_product_id', 'capacity_tons_day', 'freeze_hours',
+        'x_salt_level', 'x_salt_level_updated_at', 'salt_level_unit',
+        'min_salt_level_for_harvest', 'min_brine_temp_for_harvest',
+        'x_brine_temp_current', 'x_brine_temp_alert', 'x_brine_temp_updated_at',
+        'x_total_slots', 'x_active_slots_count', 'x_ready_slots_count',
+        'x_next_slot_id', 'x_next_slot_name', 'x_next_allowed_extraction',
+        'x_last_extraction_time', 'x_extractions_last_30min',
+      ],
+      domain: [['id', '=', machineId]],
+      limit: 1,
+      sudo: 1,
+    })
+
+    return shapeTank(pickFirstResponse(reread))
+  }
+
   return NO_DIRECT
 }
 

@@ -47,3 +47,6 @@ export function createEnergyReading(data) { return api('POST', '/pwa-sup/energy-
 // ── Mantenimiento (sin reemplazo REST aun) ──────────────────────────────────
 export function getMaintenanceRequests() { return api('GET', '/pwa-sup/maintenance') }
 export function createMaintenanceRequest(data) { return api('POST', '/pwa-sup/maintenance-create', data) }
+
+// ── Salmuera por tanque ──────────────────────────────────────────────────────
+export function createBrineReading(data) { return api('POST', '/pwa-sup/brine-reading-create', data) }

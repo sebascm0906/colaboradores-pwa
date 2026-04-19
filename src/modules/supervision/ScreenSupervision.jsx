@@ -2,8 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
-import { getActiveShift } from './api'
+import { createBrineReading, getActiveShift } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
+import BrineReadingModal from './BrineReadingModal'
+import {
+  buildBrineReadingPayload,
+  getBrineReadingStatus,
+  getInitialBrineReadingForm,
+  validateBrineReadingInput,
+} from './brineReadings'
 import { listTanks } from '../produccion/barraService'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
@@ -50,6 +57,11 @@ export default function ScreenSupervision() {
   const [summary, setSummary] = useState({})
   const [tanks, setTanks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedTank, setSelectedTank] = useState(null)
+  const [readingForm, setReadingForm] = useState({ machineId: 0, saltLevel: '', brineTemp: '' })
+  const [formErrors, setFormErrors] = useState({})
+  const [savingReading, setSavingReading] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -88,6 +100,49 @@ export default function ScreenSupervision() {
   const warnings = readiness?.warnings || []
   const canClose = !!readiness?.canClose
   const hasProblems = blockers.length > 0
+
+  function openBrineReading(tank) {
+    setSelectedTank(tank)
+    setReadingForm(getInitialBrineReadingForm(tank))
+    setFormErrors({})
+    setSaveError('')
+  }
+
+  function closeBrineReading() {
+    if (savingReading) return
+    setSelectedTank(null)
+    setFormErrors({})
+    setSaveError('')
+  }
+
+  function updateReadingField(field, value) {
+    setReadingForm((prev) => ({ ...prev, [field]: value }))
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev
+      return { ...prev, [field]: '' }
+    })
+    setSaveError('')
+  }
+
+  async function handleSaveBrineReading() {
+    const errors = validateBrineReadingInput(readingForm)
+    setFormErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
+    setSavingReading(true)
+    setSaveError('')
+    try {
+      const updatedTank = await createBrineReading(buildBrineReadingPayload(readingForm))
+      setTanks((prev) => prev.map((tank) => tank.id === updatedTank?.id ? updatedTank : tank))
+      setSelectedTank(null)
+      setFormErrors({})
+    } catch (e) {
+      logScreenError('ScreenSupervision', 'createBrineReading', e)
+      setSaveError(e.message || 'No se pudo guardar la lectura')
+    } finally {
+      setSavingReading(false)
+    }
+  }
 
   return (
     <div style={{
@@ -180,7 +235,15 @@ export default function ScreenSupervision() {
             {tanks.length > 0 && (
               <div style={{ marginTop: 18 }}>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>ESTADO DE BARRAS</p>
-                {tanks.map(t => <TankRow key={t.id} t={t} typo={typo} onClick={() => navigate(`/produccion/tanque/${t.id}`)} />)}
+                {tanks.map(t => (
+                  <TankRow
+                    key={t.id}
+                    t={t}
+                    typo={typo}
+                    onClick={() => navigate(`/produccion/tanque/${t.id}`)}
+                    onRegisterSalt={() => openBrineReading(t)}
+                  />
+                ))}
               </div>
             )}
 
@@ -201,6 +264,19 @@ export default function ScreenSupervision() {
           </>
         )}
       </div>
+      {selectedTank && (
+        <BrineReadingModal
+          tank={selectedTank}
+          typo={typo}
+          form={readingForm}
+          errors={formErrors}
+          saveError={saveError}
+          saving={savingReading}
+          onChange={updateReadingField}
+          onCancel={closeBrineReading}
+          onSave={handleSaveBrineReading}
+        />
+      )}
     </div>
   )
 }
@@ -379,7 +455,7 @@ function IssueRow({ level, code, message, onGo, goLabel, typo }) {
   )
 }
 
-function TankRow({ t, typo, onClick }) {
+function TankRow({ t, typo, onClick, onRegisterSalt }) {
   const tempThr = t.min_brine_temp_for_harvest
   const saltThr = t.min_salt_level_for_harvest
   const saltUnit = t.salt_level_unit || 'ppm'
@@ -389,41 +465,76 @@ function TankRow({ t, typo, onClick }) {
   const saltBad = saltThr != null && !saltMissing && t.salt_level < saltThr
   const saltOk = saltThr == null || (!saltMissing && t.salt_level >= saltThr)
   const hasAlerts = tempBad || saltBad || saltMissing
+  const readingStatus = getBrineReadingStatus(t)
+  const statusColor = getReadingStatusColor(readingStatus.kind)
   return (
-    <button onClick={onClick} style={{
+    <div style={{
       padding: 14, borderRadius: TOKENS.radius.lg, textAlign: 'left',
       background: hasAlerts ? 'rgba(239,68,68,0.06)' : TOKENS.glass.panel,
       border: `1px solid ${hasAlerts ? 'rgba(239,68,68,0.25)' : TOKENS.colors.border}`,
-      display: 'flex', flexDirection: 'column', gap: 8, width: '100%', marginBottom: 8,
+      display: 'flex', flexDirection: 'column', gap: 10, width: '100%', marginBottom: 8,
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 700 }}>{t.display_name || t.name}</p>
-        <span style={{
-          padding: '2px 8px', borderRadius: TOKENS.radius.pill, fontSize: 11, fontWeight: 700,
-          background: (t.ready_slots_count || 0) > 0 ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
-          color: (t.ready_slots_count || 0) > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted,
-          border: `1px solid ${(t.ready_slots_count || 0) > 0 ? 'rgba(34,197,94,0.25)' : 'transparent'}`,
-        }}>{t.ready_slots_count || 0} listas</span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-        <TankMini label="CANAST." value={t.total_slots || '—'} />
-        <TankMini label="TEMP" value={t.brine_temp ? `${t.brine_temp}°C` : '—'} color={tempBad ? TOKENS.colors.error : tempOk ? TOKENS.colors.success : null} />
-        <TankMini label="SAL" value={t.salt_level || '—'} color={saltOk ? TOKENS.colors.success : TOKENS.colors.warning} />
-        <TankMini label="ÚLT. EXTR." value={t.last_extraction_time ? new Date(t.last_extraction_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—'} color={TOKENS.colors.blue2} />
-      </div>
-      {hasAlerts && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 12 }}>&#x26A0;</span>
-          <span style={{ ...typo.caption, color: TOKENS.colors.error, fontWeight: 600 }}>
-            {[
-              tempBad ? `Temp ${t.brine_temp}°C > ${tempThr}°C` : null,
-              saltMissing ? 'Sin lectura de sal' : null,
-              saltBad ? `Sal ${t.salt_level} < ${saltThr} ${saltUnit}` : null,
-            ].filter(Boolean).join(' · ')}
+      <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 700 }}>{t.display_name || t.name}</p>
+          <span style={{
+            padding: '2px 8px', borderRadius: TOKENS.radius.pill, fontSize: 11, fontWeight: 700,
+            background: (t.ready_slots_count || 0) > 0 ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
+            color: (t.ready_slots_count || 0) > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted,
+            border: `1px solid ${(t.ready_slots_count || 0) > 0 ? 'rgba(34,197,94,0.25)' : 'transparent'}`,
+          }}>{t.ready_slots_count || 0} listas</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            padding: '3px 9px',
+            borderRadius: TOKENS.radius.pill,
+            fontSize: 11,
+            fontWeight: 700,
+            background: `${statusColor}16`,
+            color: statusColor,
+            border: `1px solid ${statusColor}33`,
+          }}>
+            {readingStatus.label}
+          </span>
+          <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+            {t.salt_level_updated_at ? `Lectura ${formatReadingTimestamp(t.salt_level_updated_at)}` : 'Aun sin captura del dia'}
           </span>
         </div>
-      )}
-    </button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+          <TankMini label="CANAST." value={t.total_slots || '—'} />
+          <TankMini label="TEMP" value={t.brine_temp ? `${t.brine_temp}°C` : '—'} color={tempBad ? TOKENS.colors.error : tempOk ? TOKENS.colors.success : null} />
+          <TankMini label="SAL" value={t.salt_level || '—'} color={saltOk ? TOKENS.colors.success : TOKENS.colors.warning} />
+          <TankMini label="ÚLT. EXTR." value={t.last_extraction_time ? new Date(t.last_extraction_time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—'} color={TOKENS.colors.blue2} />
+        </div>
+        {hasAlerts && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <span style={{ fontSize: 12 }}>&#x26A0;</span>
+            <span style={{ ...typo.caption, color: TOKENS.colors.error, fontWeight: 600 }}>
+              {[
+                tempBad ? `Temp ${t.brine_temp}°C > ${tempThr}°C` : null,
+                saltMissing ? 'Sin lectura de sal' : null,
+                saltBad ? `Sal ${t.salt_level} < ${saltThr} ${saltUnit}` : null,
+              ].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+        )}
+      </button>
+      <button
+        onClick={onRegisterSalt}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '10px 14px',
+          borderRadius: TOKENS.radius.pill,
+          background: 'rgba(20,184,166,0.14)',
+          border: '1px solid rgba(20,184,166,0.3)',
+          color: '#7dd3fc',
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        Registrar sal
+      </button>
+    </div>
   )
 }
 
@@ -434,6 +545,25 @@ function TankMini({ label, value, color }) {
       <p style={{ fontSize: 9, fontWeight: 600, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{label}</p>
     </div>
   )
+}
+
+function getReadingStatusColor(kind) {
+  if (kind === 'ok') return TOKENS.colors.success
+  if (kind === 'low') return TOKENS.colors.error
+  if (kind === 'stale') return TOKENS.colors.warning
+  return TOKENS.colors.textMuted
+}
+
+function formatReadingTimestamp(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16)
+  return date.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function NavGrid({ items, typo, onGo }) {

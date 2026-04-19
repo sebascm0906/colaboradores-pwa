@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { listSlots, harvest, reportIncident, INCIDENT_TYPES } from './barraService'
+import { getTodayDateKey } from '../supervision/brineReadings'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
 const STATE_META = {
@@ -140,7 +141,7 @@ export default function ScreenTanque() {
         warnings.push({ key: 'salt_missing', msg: 'Sin revisión de sal del día. Registra la lectura antes de extraer.', blocking: true })
       } else {
         const updatedDate = String(tank.salt_level_updated_at).substring(0, 10)
-        const today = new Date().toISOString().substring(0, 10)
+        const today = getTodayDateKey()
         if (updatedDate < today) {
           warnings.push({ key: 'salt_old', msg: 'La revisión de sal no es de hoy. Registra una nueva lectura.', blocking: true })
         } else if (saltVal < saltThreshold) {
@@ -292,7 +293,7 @@ export default function ScreenTanque() {
                   })()}
                   {saltThreshold != null && (() => {
                     const cur = tank.salt_level
-                    const todayStr = new Date().toISOString().substring(0, 10)
+                    const todayStr = getTodayDateKey()
                     const updStr = tank.salt_level_updated_at ? String(tank.salt_level_updated_at).substring(0, 10) : ''
                     const isToday = updStr === todayStr
                     const missing = !cur || !isToday
