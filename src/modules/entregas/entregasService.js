@@ -262,6 +262,21 @@ export async function acceptReturn(stopLineIds, lines, employeeId, warehouseId) 
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Catalogo dinamico de motivos de merma desde Odoo (gf.production.scrap.reason).
+ * Backend: POST /gf/logistics/api/employee/warehouse_scrap/reasons
+ * @returns {Promise<Array<{id:number, name:string}>>}
+ */
+export async function getScrapReasons() {
+  try {
+    const result = await api('GET', '/pwa-entregas/scrap-reasons')
+    const items = result?.data || result || []
+    return Array.isArray(items) ? items : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Registrar merma en almacén.
  * Backend (gf_logistics_ops): creates stock.scrap, validates available stock,
  * validates scrap location exists, validates immediately (action_validate).
@@ -271,17 +286,17 @@ export async function acceptReturn(stopLineIds, lines, employeeId, warehouseId) 
  * @param {number} employeeId
  * @param {number} productId
  * @param {number} qty
- * @param {string} reasonTag - 'damage', 'expired', 'shortage', 'contamination', 'other'
+ * @param {number} reasonId - id de gf.production.scrap.reason
  * @param {string} [notes]
  * @returns {Promise<Object>} { success, scrap_id, scrap_name, product, qty, state }
  */
-export async function createScrap(warehouseId, employeeId, productId, qty, reasonTag, notes) {
+export async function createScrap(warehouseId, employeeId, productId, qty, reasonId, notes) {
   return api('POST', '/pwa-entregas/scrap-create', {
     warehouse_id: warehouseId,
     employee_id: employeeId,
     product_id: productId,
     scrap_qty: qty,
-    reason_tag: reasonTag,
+    reason_id: reasonId,
     notes: notes || '',
   })
 }

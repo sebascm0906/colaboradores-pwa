@@ -2,21 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { safeNumber } from '../../lib/safeNumber'
-import { getCedisInventory, createScrap, getScrapHistory } from './entregasService'
+import { getCedisInventory, createScrap, getScrapHistory, getScrapReasons } from './entregasService'
 import { ScreenShell, ConfirmDialog } from './components'
 import { logScreenError } from '../shared/logScreenError'
 
 /* ============================================================================
    ScreenMerma — Register shrinkage / damaged products
+   Catalogo de motivos viene de Odoo (gf.production.scrap.reason) via getScrapReasons()
 ============================================================================ */
-
-const REASONS = [
-  { tag: 'damage', label: 'Dano fisico', icon: '\u{1F4A5}' },
-  { tag: 'expired', label: 'Producto vencido', icon: '\u{1F4C5}' },
-  { tag: 'shortage', label: 'Faltante', icon: '\u{1F50D}' },
-  { tag: 'contamination', label: 'Contaminacion', icon: '\u2623\uFE0F' },
-  { tag: 'other', label: 'Otro', icon: '\u270F\uFE0F' },
-]
 
 export default function ScreenMerma() {
   const { session } = useSession()
@@ -32,9 +25,13 @@ export default function ScreenMerma() {
   const [showProductList, setShowProductList] = useState(false)
   const [loadingInit, setLoadingInit] = useState(true)
 
+  // ── Catalogo de motivos (dinamico desde Odoo) ─────────────────────────────
+  const [reasons, setReasons] = useState([])
+
   // ── Form state ────────────────────────────────────────────────────────────
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [qty, setQty] = useState(1)
+  // selectedReason guarda el objeto completo {id, name} para acceso al name en confirmacion
   const [selectedReason, setSelectedReason] = useState(null)
   const [notes, setNotes] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -57,9 +54,10 @@ export default function ScreenMerma() {
   async function loadData() {
     setLoadingInit(true)
     try {
-      const [inv, hist] = await Promise.allSettled([
+      const [inv, hist, reas] = await Promise.allSettled([
         getCedisInventory(warehouseId),
         getScrapHistory(warehouseId),
+        getScrapReasons(),
       ])
       if (inv.status === 'fulfilled' && Array.isArray(inv.value)) {
         setInventory(inv.value)
@@ -72,6 +70,12 @@ export default function ScreenMerma() {
       } else {
         if (hist.status === 'rejected') logScreenError('ScreenMerma', 'getScrapHistory', hist.reason)
         setHistory([])
+      }
+      if (reas.status === 'fulfilled' && Array.isArray(reas.value)) {
+        setReasons(reas.value)
+      } else {
+        if (reas.status === 'rejected') logScreenError('ScreenMerma', 'getScrapReasons', reas.reason)
+        setReasons([])
       }
     } catch (e) { logScreenError('ScreenMerma', 'loadData', e) }
     finally { setLoadingInit(false) }
@@ -87,8 +91,7 @@ export default function ScreenMerma() {
     const errs = {}
     if (!selectedProduct) errs.product = 'Selecciona un producto'
     if (!qty || qty <= 0) errs.qty = 'Cantidad debe ser mayor a 0'
-    if (!selectedReason) errs.reason = 'Selecciona un motivo'
-    if (selectedReason === 'other' && !notes.trim()) errs.notes = 'Ingresa una nota para motivo "Otro"'
+    if (!selectedReason?.id) errs.reason = 'Selecciona un motivo'
     setValidationErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -107,7 +110,7 @@ export default function ScreenMerma() {
         employeeId,
         selectedProduct.product_id,
         qty,
-        selectedReason,
+        selectedReason.id,
         notes.trim() || undefined
       )
       setSuccess('Merma registrada correctamente')
@@ -139,9 +142,8 @@ export default function ScreenMerma() {
     setValidationErrors(prev => ({ ...prev, product: undefined }))
   }
 
-  const reasonObj = REASONS.find(r => r.tag === selectedReason)
   const confirmMessage = selectedProduct
-    ? `Registrar ${qty} kg de merma de ${selectedProduct.product} por ${reasonObj?.label || selectedReason}?`
+    ? `Registrar ${qty} kg de merma de ${selectedProduct.product} por ${selectedReason?.name || ''}?`
     : ''
 
   return (
@@ -271,39 +273,41 @@ export default function ScreenMerma() {
               {validationErrors.qty && <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{validationErrors.qty}</p>}
             </div>
 
-            {/* Reason buttons */}
+            {/* Reason buttons (catalogo dinamico desde Odoo) */}
             <div style={{ marginBottom: 16 }}>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontWeight: 600 }}>Motivo</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {REASONS.map(reason => {
-                  const active = selectedReason === reason.tag
-                  return (
-                    <button
-                      key={reason.tag}
-                      onClick={() => { setSelectedReason(reason.tag); setValidationErrors(prev => ({ ...prev, reason: undefined })) }}
-                      style={{
-                        padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: active ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surfaceSoft,
-                        border: `1.5px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
-                        color: active ? TOKENS.colors.blue3 : TOKENS.colors.textSoft,
-                        fontSize: 13, fontWeight: 600,
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        transition: `all ${TOKENS.motion.fast}`,
-                      }}
-                    >
-                      <span style={{ fontSize: 16 }}>{reason.icon}</span>
-                      {reason.label}
-                    </button>
-                  )
-                })}
-              </div>
+              {reasons.length === 0 ? (
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Sin motivos disponibles. Verifica conexion con Odoo.</p>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {reasons.map(reason => {
+                    const active = selectedReason?.id === reason.id
+                    return (
+                      <button
+                        key={reason.id}
+                        onClick={() => { setSelectedReason(reason); setValidationErrors(prev => ({ ...prev, reason: undefined })) }}
+                        style={{
+                          padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                          background: active ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surfaceSoft,
+                          border: `1.5px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                          color: active ? TOKENS.colors.blue3 : TOKENS.colors.textSoft,
+                          fontSize: 13, fontWeight: 600,
+                          transition: `all ${TOKENS.motion.fast}`,
+                        }}
+                      >
+                        {reason.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               {validationErrors.reason && <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '4px 0 0' }}>{validationErrors.reason}</p>}
             </div>
 
             {/* Notes */}
             <div style={{ marginBottom: 16 }}>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 6px', fontWeight: 600 }}>
-                Notas {selectedReason === 'other' ? '(requerido)' : '(opcional)'}
+                Notas (opcional)
               </p>
               <textarea
                 value={notes}

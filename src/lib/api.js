@@ -4610,7 +4610,7 @@ async function directEntregas(method, path, body) {
       employee_id: body?.employee_id || getEmployeeId() || 0,
       product_id: body?.product_id || 0,
       scrap_qty: body?.scrap_qty || body?.qty || 0,
-      reason_tag: body?.reason_tag || '',
+      reason_id: body?.reason_id || 0,
       notes: body?.notes || '',
       lot_id: body?.lot_id || null,
     })
@@ -4620,6 +4620,10 @@ async function directEntregas(method, path, body) {
     return odooJson('/gf/logistics/api/employee/warehouse_scrap/history', {
       warehouse_id: warehouseId,
     })
+  }
+
+  if (cleanPath === '/pwa-entregas/scrap-reasons' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/warehouse_scrap/reasons', {})
   }
 
   if (cleanPath === '/pwa-entregas/shift-handover-create' && method === 'POST') {

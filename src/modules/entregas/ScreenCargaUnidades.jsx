@@ -17,6 +17,7 @@ const stateColors = {
   published: TOKENS.colors.blue2,
   in_progress: TOKENS.colors.warning,
   closed: TOKENS.colors.success,
+  reconciled: TOKENS.colors.textSoft,
 }
 
 const stateLabels = {
@@ -24,6 +25,7 @@ const stateLabels = {
   published: 'Publicada',
   in_progress: 'En Progreso',
   closed: 'Cerrada',
+  reconciled: 'Conciliada',
 }
 
 export default function ScreenCargaUnidades() {
