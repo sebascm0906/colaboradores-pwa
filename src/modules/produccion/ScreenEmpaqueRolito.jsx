@@ -1,7 +1,7 @@
 // ScreenEmpaqueRolito.jsx — V2 Empaque Simplificado Operador de Rolito
 // UX optimizada para operador con baja escolaridad:
 // - Botones grandes de producto (no dropdown)
-// - Botones +/- para cantidad (no input numerico directo)
+// - Captura libre de cantidad con atajos rapidos
 // - Total kg calculado en grande
 // - Vinculo con cycle_id (se envia, backend puede o no persistirlo)
 // - Historial del turno visible
@@ -104,6 +104,11 @@ export default function ScreenEmpaqueRolito() {
   // Form state
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [qtyBags, setQtyBags] = useState(0)
+
+  function setQtyBagsSafe(value) {
+    const next = Number.parseInt(String(value || '').replace(/[^\d]/g, ''), 10)
+    setQtyBags(Number.isFinite(next) && next > 0 ? next : 0)
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -362,7 +367,7 @@ export default function ScreenEmpaqueRolito() {
                   return (
                     <button
                       key={p.id}
-                      onClick={() => { setSelectedProduct(p); if (qtyBags === 0) setQtyBags(1) }}
+                      onClick={() => { setSelectedProduct(p); if (qtyBags === 0) setQtyBagsSafe(1) }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         padding: '14px 16px', borderRadius: TOKENS.radius.md,
@@ -387,7 +392,7 @@ export default function ScreenEmpaqueRolito() {
               </div>
             </div>
 
-            {/* Quantity with +/- buttons */}
+            {/* Quantity with free input + shortcuts */}
             {selectedProduct && (
               <div>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>CANTIDAD DE BOLSAS</p>
@@ -401,11 +406,29 @@ export default function ScreenEmpaqueRolito() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}
                   >-</button>
-                  <div style={{ textAlign: 'center', minWidth: 80 }}>
-                    <p style={{ fontSize: 40, fontWeight: 700, color: TOKENS.colors.text, margin: 0, letterSpacing: '-0.04em' }}>
-                      {qtyBags}
-                    </p>
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>bolsas</p>
+                  <div style={{ textAlign: 'center', minWidth: 140 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      value={qtyBags || ''}
+                      onChange={(e) => setQtyBagsSafe(e.target.value)}
+                      placeholder="0"
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: TOKENS.radius.md,
+                        background: TOKENS.colors.surface,
+                        border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text,
+                        fontSize: 36,
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        letterSpacing: '-0.04em',
+                        outline: 'none',
+                      }}
+                    />
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>bolsas</p>
                   </div>
                   <button
                     onClick={() => setQtyBags(q => q + 1)}
@@ -421,7 +444,7 @@ export default function ScreenEmpaqueRolito() {
                 {/* Quick quantity buttons */}
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 10 }}>
                   {[5, 10, 20, 50].map(n => (
-                    <button key={n} onClick={() => setQtyBags(n)}
+                    <button key={n} onClick={() => setQtyBagsSafe(n)}
                       style={{
                         padding: '6px 14px', borderRadius: TOKENS.radius.pill,
                         background: qtyBags === n ? 'rgba(43,143,224,0.15)' : TOKENS.colors.surfaceSoft,
