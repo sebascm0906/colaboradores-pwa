@@ -20,6 +20,7 @@ import {
   saveBagReconciliation as apiSaveBagReconciliation,
   closeShift as apiCloseShift,
 } from './api'
+import { getSession } from '../../lib/api'
 import { computePackingCoherence } from '../shared/packingCoherence'
 import { getMaterialIssues } from '../almacen-pt/materialsService'
 import {
@@ -104,11 +105,12 @@ export function minutesBetween(start, end) {
 export async function getShiftOverview() {
   const shift = await getMyShift()
   if (!shift?.id) return { shift: null, cycles: [], packing: [], checklist: null, kpis: null, bagMaterials: [] }
+  const roleContext = String(getSession()?.role || '')
 
   const [cyclesRes, packingRes, checklistRes, materialsRes] = await Promise.allSettled([
     getCycles(shift.id),
     getPackingEntries(shift.id),
-    getChecklist(shift.id).catch(() => null),
+    getChecklist(shift.id, roleContext).catch(() => null),
     getMaterialIssues({ shiftId: shift.id, lineId: 2 }).catch(() => ({ items: [] })),
   ])
 

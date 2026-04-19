@@ -6,6 +6,7 @@
 //   Checklist entrega: local-only (template no existe en Odoo aun)
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import {
   getShiftOverview,
@@ -17,6 +18,7 @@ import { computePackingCoherence, getCoherenceHeadline } from '../shared/packing
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -107,14 +109,17 @@ export default function ScreenCierreRolito() {
   // Acepta objeto {code, message} (contrato real) o string (legacy).
   function blockerRoute(b) {
     const code = (b && typeof b === 'object' ? b.code : '') || ''
+    const energyRoute = String(session?.role || '').includes('rolito')
+      ? '/supervision/energia'
+      : '/supervision/energia'
     // Mapeo por code (autoridad backend — evita heuristicas de texto)
     const byCode = {
-      energy_end: '/supervision/energia',
-      energy_start: '/supervision/energia',
+      energy_end: energyRoute,
+      energy_start: energyRoute,
       open_downtime: '/supervision/paros',
       open_cycles: '/produccion/ciclo',
       open_incidents: '/supervision/paros',
-      balance: '/produccion/empaque',
+      balance: '/supervision/merma',
       checklist: '/produccion/checklist',
       shift_state: null,
     }
@@ -122,11 +127,11 @@ export default function ScreenCierreRolito() {
     // Fallback por texto (para codes no mapeados)
     const t = ((b && typeof b === 'object' ? b.message : b) || '').toString().toLowerCase()
     if (t.includes('checklist') || t.includes('inspecci')) return '/produccion/checklist'
-    if (t.includes('empaque') || t.includes('bolsa') || t.includes('packing') || t.includes('balance')) return '/produccion/empaque'
+    if (t.includes('balance') || t.includes('merma')) return '/supervision/merma'
+    if (t.includes('empaque') || t.includes('bolsa') || t.includes('packing')) return '/produccion/empaque'
     if (t.includes('ciclo') || t.includes('producci') || t.includes('congela')) return '/produccion/ciclo'
-    if (t.includes('energ')) return '/supervision/energia'
+    if (t.includes('energ')) return energyRoute
     if (t.includes('paro')) return '/supervision/paros'
-    if (t.includes('merma')) return '/supervision/merma'
     if (t.includes('turno')) return '/supervision/turno'
     return null
   }
@@ -250,7 +255,7 @@ export default function ScreenCierreRolito() {
                       <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <span style={{ ...typo.caption, color: TOKENS.colors.textSoft, flex: 1 }}>• {blockerText(b)}</span>
                         {route && (
-                          <button onClick={() => navigate(route)} style={{
+                          <button onClick={() => navigate(route, { state: { backTo: '/produccion/cierre' } })} style={{
                             padding: '4px 10px', borderRadius: TOKENS.radius.pill,
                             background: 'rgba(43,143,224,0.12)', border: '1px solid rgba(43,143,224,0.25)',
                             color: TOKENS.colors.blue2, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,

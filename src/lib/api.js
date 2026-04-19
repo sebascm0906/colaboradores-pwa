@@ -1861,14 +1861,40 @@ async function directProduction(method, path, body) {
   }
 
   if (cleanPath === '/pwa-prod/checklist-complete' && method === 'POST') {
-    return createUpdate({
+    const checklistId = Number(body?.checklist_id || 0)
+    const result = await createUpdate({
       model: 'gf.haccp.checklist',
       method: 'function',
-      ids: [Number(body?.checklist_id || 0)],
+      ids: [checklistId],
       function: 'action_complete',
       sudo: 1,
       app: 'pwa_colaboradores',
     })
+    try {
+      if (checklistId) {
+        const checklistRes = await readModelSorted('gf.haccp.checklist', {
+          fields: ['id', 'shift_id', 'state'],
+          domain: [['id', '=', checklistId]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: 1,
+          sudo: 1,
+        })
+        const checklist = pickFirstResponse(checklistRes)
+        const shiftId = Number(Array.isArray(checklist?.shift_id) ? checklist.shift_id[0] : checklist?.shift_id || 0)
+        if (shiftId && checklist?.state === 'completed') {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { haccp_checklist_id: checklistId },
+            sudo: 1,
+            app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      }
+    } catch { /* non-fatal */ }
+    return result
   }
 
   if (cleanPath === '/pwa-prod/cycles' && method === 'GET') {
@@ -3740,6 +3766,22 @@ async function directSupervision(method, path, body) {
       sudo: 1,
       app: 'pwa_colaboradores',
     })
+    try {
+      const readingId = Number(result?.id || result?.result || 0)
+      const readingType = String(body?.reading_type || '')
+      if (readingId && (readingType === 'start' || readingType === 'end')) {
+        await createUpdate({
+          model: 'gf.production.shift',
+          method: 'update',
+          ids: [shiftId],
+          dict: readingType === 'start'
+            ? { energy_start_id: readingId }
+            : { energy_end_id: readingId },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+    } catch { /* non-fatal */ }
     return { success: true, data: result }
   }
 

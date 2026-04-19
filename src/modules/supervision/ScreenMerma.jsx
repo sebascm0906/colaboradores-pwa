@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift, getScraps, getScrapReasons, getScrapProducts, createScrap } from './api'
@@ -33,9 +33,11 @@ const SCRAP_PHASES = [
 
 export default function ScreenMerma() {
   const { session } = useSession()
+  const location = useLocation()
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const backTo = location.state?.backTo || '/supervision'
   const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [scraps, setScraps] = useState([])
@@ -180,7 +182,7 @@ export default function ScreenMerma() {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => navigate('/supervision')} style={{
+          <button onClick={() => navigate(backTo)} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
