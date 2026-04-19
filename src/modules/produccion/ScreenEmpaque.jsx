@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { getModuleById } from '../registry'
+import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, getPackingProducts, createPackingEntry, getPackingEntries } from './api'
 
 // V2: Rolito users get the new simplified packing flow
@@ -23,16 +25,17 @@ const FALLBACK_BARRAS = [
 
 export default function ScreenEmpaque() {
   const { session } = useSession()
-
-  // V2: Rolito operators get the new simplified packing
-  if (session?.role === 'operador_rolito') {
-    return <ScreenEmpaqueRolito />
-  }
+  const location = useLocation()
+  const activeRole = resolveModuleContextRole(
+    session,
+    getModuleById('registro_produccion'),
+    location.state?.selected_role,
+  ) || session?.role || ''
 
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const isBarras = session?.role === 'operador_barra'
+  const isBarras = activeRole === 'operador_barra'
   const FALLBACK_PRODUCTS = isBarras ? FALLBACK_BARRAS : FALLBACK_ROLITO
   const [shift, setShift] = useState(null)
   const [products, setProducts] = useState([])
@@ -47,7 +50,15 @@ export default function ScreenEmpaque() {
   const [qtyBags, setQtyBags] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    if (activeRole === 'operador_rolito') return
+    loadData()
+  }, [activeRole])
+
+  // V2: Rolito operators get the new simplified packing
+  if (activeRole === 'operador_rolito') {
+    return <ScreenEmpaqueRolito />
+  }
 
   async function loadData() {
     setLoading(true)

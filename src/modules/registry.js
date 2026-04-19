@@ -45,6 +45,7 @@ export const MODULES = [
     route:  '/produccion',
     tone:   'blueDeep',
     roles:  ['operador_barra', 'operador_rolito', 'auxiliar_produccion'],
+    roleContextRoles: ['operador_barra', 'operador_rolito', 'auxiliar_produccion'],
     status: 'live',
     icon:   'produccion',
   },
@@ -102,7 +103,8 @@ export const MODULES = [
     label:  'Admin Sucursal',
     route:  '/admin',
     tone:   'blueDeep',
-    roles:  ['auxiliar_admin', 'gerente_sucursal'],
+    roles:  ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'],
+    roleContextRoles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'],
     status: 'live',
     icon:   'admin',
   },
@@ -137,6 +139,16 @@ export const MODULES = [
 /** Módulos visibles para un rol dado */
 export function getModulesForRole(role) {
   return MODULES.filter(m => m.roles.includes('*') || m.roles.includes(role))
+}
+
+export function getModulesForRoles(roles = []) {
+  const seen = new Set()
+  return MODULES.filter((module) => {
+    const visible = module.roles.includes('*') || roles.some((role) => module.roles.includes(role))
+    if (!visible || seen.has(module.id)) return false
+    seen.add(module.id)
+    return true
+  })
 }
 
 /** Lookup rápido por id */

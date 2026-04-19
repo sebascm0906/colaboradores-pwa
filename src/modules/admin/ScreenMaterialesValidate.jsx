@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { getEffectiveJobKeys } from '../../lib/roleContext'
 import {
   getPendingSettlements, validateMaterial,
   stateLabel, lineOf, colorForSeverity, colorForState,
@@ -42,8 +43,8 @@ export default function ScreenMaterialesValidate() {
   const [notes, setNotes] = useState('')
   const submittingRef = useRef(false) // guard double-submit
 
-  const role = session?.role || ''
-  const allowed = ALLOWED_ROLES.includes(role)
+  const effectiveRoles = getEffectiveJobKeys(session)
+  const allowed = ALLOWED_ROLES.some((role) => effectiveRoles.includes(role))
 
   useEffect(() => {
     if (allowed) loadData()

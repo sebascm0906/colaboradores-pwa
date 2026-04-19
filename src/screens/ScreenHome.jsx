@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../App'
 import { TOKENS, MODULE_TONES, getTypo, COMPANY_LABELS, TURNO_LABELS } from '../tokens'
-import { getModulesForRole } from '../modules/registry'
+import { getModulesForRoles } from '../modules/registry'
+import ModuleRolePrompt from '../components/ModuleRolePrompt'
+import { getEffectiveJobKeys, getModuleEntryDecision, upsertModuleRoleContext } from '../lib/roleContext'
 import { runLogout } from '../lib/logout'
 
 /* ============================================================================
@@ -236,11 +238,12 @@ function ModuleCard({ module, typo, onClick }) {
    SCREEN HOME
 ============================================================================ */
 export default function ScreenHome() {
-  const { session, logout } = useSession()
+  const { session, logout, updateSession } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const isBypass = session?._bypass === true
+  const [rolePromptModule, setRolePromptModule] = useState(null)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -250,8 +253,8 @@ export default function ScreenHome() {
 
   // Módulos visibles para este rol
   const modules = useMemo(() =>
-    getModulesForRole(session?.role || ''),
-  [session?.role])
+    getModulesForRoles(getEffectiveJobKeys(session)),
+  [session])
 
   const firstName = session?.name?.split(' ')[0] ?? 'Colaborador'
   const companyLabel = COMPANY_LABELS[session?.company_id] ?? session?.company ?? ''
@@ -259,7 +262,29 @@ export default function ScreenHome() {
   const turnoLabel = TURNO_LABELS[session?.turno] ?? ''
 
   function handleModule(mod) {
+    const decision = getModuleEntryDecision(mod, session)
+    if (decision.type === 'denied') return
+    if (decision.type === 'choose') {
+      setRolePromptModule({ module: mod, compatibleRoles: decision.compatibleRoles })
+      return
+    }
+
+    if (decision.selectedRole) {
+      const moduleRoleContexts = upsertModuleRoleContext(session?.module_role_contexts, mod.id, decision.selectedRole)
+      updateSession({ module_role_contexts: moduleRoleContexts })
+      navigate(mod.route, { state: { selected_role: decision.selectedRole } })
+      return
+    }
+
     navigate(mod.route)
+  }
+
+  function handleRoleSelect(role) {
+    if (!rolePromptModule?.module) return
+    const moduleRoleContexts = upsertModuleRoleContext(session?.module_role_contexts, rolePromptModule.module.id, role)
+    updateSession({ module_role_contexts: moduleRoleContexts })
+    navigate(rolePromptModule.module.route, { state: { selected_role: role } })
+    setRolePromptModule(null)
   }
 
   function handleLogout() {
@@ -273,6 +298,7 @@ export default function ScreenHome() {
   }
 
   return (
+    <>
     <div style={{
       minHeight: '100dvh',
       background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
@@ -430,6 +456,13 @@ export default function ScreenHome() {
       {/* ── Nav Bottom ──────────────────────────────────────────────────── */}
       <BottomNav current="home" />
     </div>
+    <ModuleRolePrompt
+      title={rolePromptModule ? `Elegir puesto para ${rolePromptModule.module.label}` : undefined}
+      roles={rolePromptModule?.compatibleRoles || []}
+      onSelect={handleRoleSelect}
+      onCancel={rolePromptModule ? () => setRolePromptModule(null) : undefined}
+    />
+    </>
   )
 }
 

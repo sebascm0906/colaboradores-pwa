@@ -2,6 +2,7 @@ import { lazy, Suspense, Component } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
+import { normalizeSessionRoleContext } from './lib/roleContext'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -112,7 +113,7 @@ function getStoredSession() {
       localStorage.removeItem('gf_session')
       return null
     }
-    return s
+    return normalizeSessionRoleContext(s)
   } catch {
     return null
   }
@@ -223,10 +224,10 @@ export default function App() {
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
 
-  function login(sessionData) { setSession(sessionData) }
+  function login(sessionData) { setSession(normalizeSessionRoleContext(sessionData)) }
   function logout()           { setSession(null) }
   function updateSession(patch) {
-    setSession(prev => (prev ? { ...prev, ...patch } : prev))
+    setSession(prev => (prev ? normalizeSessionRoleContext({ ...prev, ...patch }) : prev))
   }
 
   return (

@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
+import { getEffectiveJobKeys } from '../../../lib/roleContext'
 import CompanySelector from './CompanySelector'
 import ActivityFeed from './ActivityFeed'
 
@@ -47,6 +48,10 @@ export function navItemsForRole(role) {
   return NAV_ITEMS.filter(item => item.roles.includes(role))
 }
 
+export function navItemsForRoles(roles = []) {
+  return NAV_ITEMS.filter((item) => item.roles.some((role) => roles.includes(role)))
+}
+
 export default function AdminShell({
   activeBlock = 'hub',
   title = 'Administración de sucursal',
@@ -62,8 +67,8 @@ export default function AdminShell({
 
   // Filtrar módulos según rol del usuario
   const visibleNavItems = useMemo(
-    () => navItemsForRole(session?.role || ''),
-    [session?.role],
+    () => navItemsForRoles(getEffectiveJobKeys(session)),
+    [session],
   )
 
   useEffect(() => {

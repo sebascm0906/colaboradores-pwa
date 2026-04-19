@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSession } from "../App";
+import { normalizeSessionRoleContext } from "../lib/roleContext";
 
 // ── Login directo a Odoo ──────────────────────────────────────────────────
 const ODOO_SIGN_IN_URL = "/api-odoo/employee-sign-in";
@@ -136,6 +137,12 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
   const employee = result?.employee || {};
   const jobTitle = employee?.job_title || employee?.job_id?.[1] || "";
   const role = resolveRole(employee, jobTitle);
+  const additionalJobKeys =
+    employee?.additional_job_keys
+    || result?.additional_job_keys
+    || employee?.additional_roles
+    || result?.additional_roles
+    || [];
   const userId = result?.user_id || employee?.user_id?.[0] || 0;
   const employeeId = employee?.id || result?.employee_id || 0;
   const companyId = employee?.company_id?.[0] || inferCompanyId(role);
@@ -146,6 +153,8 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
     source: "odoo",
     role,
     job_key: role,
+    additional_job_keys: additionalJobKeys,
+    module_role_contexts: {},
     job_title: jobTitle,
     employee_id: employeeId,
     name: employee?.name || result?.message?.replace(/^Bienvenido,\s*/, "") || "Empleado",
@@ -166,11 +175,11 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
   const sessionToken = result?.session_token || buildLocalSessionToken(fallbackPayload);
   const decoded = decodeSessionToken(sessionToken, fallbackPayload);
 
-  return {
+  return normalizeSessionRoleContext({
     ...decoded,
     ...fallbackPayload,
     session_token: sessionToken,
-  };
+  });
 }
 
 /*

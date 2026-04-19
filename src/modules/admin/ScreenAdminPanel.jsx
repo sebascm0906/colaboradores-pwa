@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
+import { getEffectiveJobKeys } from '../../lib/roleContext'
 import { getTodaySales, getTodayExpenses } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import { AdminProvider } from './AdminContext'
@@ -70,7 +71,7 @@ function MobileAdminHub() {
     return () => { alive = false }
   }, [warehouseId])
 
-  const role = session?.role || ''
+  const effectiveRoles = getEffectiveJobKeys(session)
   const ACTIONS = [
     { id: 'pos',              label: 'POS Mostrador',      desc: 'Punto de venta mostrador',   route: '/admin/pos',              color: TOKENS.colors.success, badge: salesCount || null },
     { id: 'gastos',           label: 'Gastos',             desc: 'Registrar gastos del día',   route: '/admin/gastos',           color: TOKENS.colors.warning, badge: expensesCount || null },
@@ -80,7 +81,7 @@ function MobileAdminHub() {
     { id: 'salida_rolito',    label: 'Salida a Rolito',    desc: 'Entregar material al turno',  route: '/almacen-pt/materiales/crear', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
     { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
   ]
-  const visibleActions = ACTIONS.filter(a => !a.roles || a.roles.includes(role))
+  const visibleActions = ACTIONS.filter((action) => !action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
 
   return (
     <div style={{

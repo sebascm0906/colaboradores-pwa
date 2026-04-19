@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { getEffectiveJobKeys } from '../../lib/roleContext'
 import {
   resolveRejectedSettlement, getPendingSettlements,
   stateLabel, lineOf,
@@ -45,8 +46,8 @@ export default function ScreenMaterialesResolverRejected() {
   const [qtyConsumed, setQtyConsumed] = useState('')
   const [notes, setNotes] = useState('')
 
-  const role = session?.role || ''
-  const allowed = ALLOWED_ROLES.includes(role)
+  const effectiveRoles = getEffectiveJobKeys(session)
+  const allowed = ALLOWED_ROLES.some((role) => effectiveRoles.includes(role))
 
   useEffect(() => {
     if (!allowed) { setLoading(false); return }

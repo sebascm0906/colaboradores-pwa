@@ -8,8 +8,9 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { useSession } from '../../../App'
+import { getEffectiveJobKeys } from '../../../lib/roleContext'
 import { getDashboardData } from '../adminService'
-import { NAV_ITEMS, navItemsForRole } from './AdminShell'
+import { navItemsForRoles } from './AdminShell'
 
 const POLL_MS = 60_000
 
@@ -26,8 +27,8 @@ export default function HubV2() {
   // Atajos visibles: mismo filtro por rol que el sidenav — si no se filtra aquí,
   // auxiliar_admin vería "Validar materiales", "Aprobar gastos", etc. (bug 2026-04-18)
   const visibleNavItems = useMemo(
-    () => navItemsForRole(session?.role || '').filter(i => i.id !== 'hub'),
-    [session?.role],
+    () => navItemsForRoles(getEffectiveJobKeys(session)).filter(i => i.id !== 'hub'),
+    [session],
   )
 
   useEffect(() => {

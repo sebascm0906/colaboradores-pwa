@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { getModuleById } from '../registry'
+import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, createCycle, updateCycle, getCycles } from './api'
 
 // V2: Rolito users get the new guided cycle flow
@@ -9,16 +11,17 @@ import ScreenCicloRolito from './ScreenCicloRolito'
 
 export default function ScreenCiclo() {
   const { session } = useSession()
-
-  // V2: Rolito operators get the new guided cycle
-  if (session?.role === 'operador_rolito') {
-    return <ScreenCicloRolito />
-  }
+  const location = useLocation()
+  const activeRole = resolveModuleContextRole(
+    session,
+    getModuleById('registro_produccion'),
+    location.state?.selected_role,
+  ) || session?.role || ''
 
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const isBarras = session?.role === 'operador_barra'
+  const isBarras = activeRole === 'operador_barra'
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -35,8 +38,14 @@ export default function ScreenCiclo() {
   const [kgDumped, setKgDumped] = useState('')
 
   useEffect(() => {
+    if (activeRole === 'operador_rolito') return
     loadShift()
-  }, [])
+  }, [activeRole])
+
+  // V2: Rolito operators get the new guided cycle
+  if (activeRole === 'operador_rolito') {
+    return <ScreenCicloRolito />
+  }
 
   async function loadShift() {
     try {

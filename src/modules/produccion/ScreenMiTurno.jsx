@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
+import { getModuleById } from '../registry'
+import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, getCycles, getPackingEntries } from './api'
 import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
 import OpeningStateBanner from './OpeningStateBanner'
@@ -18,11 +20,12 @@ const STATES = {
 
 export default function ScreenMiTurno() {
   const { session } = useSession()
-
-  // V2: Rolito operators get the new guided hub
-  if (session?.role === 'operador_rolito') {
-    return <ScreenTurnoRolito />
-  }
+  const location = useLocation()
+  const activeRole = resolveModuleContextRole(
+    session,
+    getModuleById('registro_produccion'),
+    location.state?.selected_role,
+  ) || session?.role || ''
 
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
@@ -42,11 +45,16 @@ export default function ScreenMiTurno() {
   }, [])
 
   useEffect(() => {
+    if (activeRole === 'operador_rolito') return
     loadData()
-  }, [])
+  }, [activeRole])
 
-  const role = session?.role || ''
-  const isBarras = role === 'operador_barra'
+  const isBarras = activeRole === 'operador_barra'
+
+  // V2: Rolito operators get the new guided hub
+  if (activeRole === 'operador_rolito') {
+    return <ScreenTurnoRolito />
+  }
 
   async function loadData() {
     setLoading(true)
