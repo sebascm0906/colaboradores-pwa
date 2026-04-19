@@ -7,6 +7,7 @@ import {
   getVisibleRecipes,
   normalizeTransformationRecipe,
   normalizeTransformationSummary,
+  resolveTransformationWarehouseId,
   validateTransformationDraft,
 } from '../src/modules/transformaciones/utils/transformationHelpers.js'
 
@@ -55,6 +56,17 @@ test('normalizeTransformationSummary derives actual output from output_qty_units
   })
 
   assert.equal(summary.actual_output_qty_units, 7)
+})
+
+test('resolveTransformationWarehouseId falls back to PT default warehouse', () => {
+  const warehouseId = resolveTransformationWarehouseId({}, 'pt')
+
+  assert.equal(warehouseId, 76)
+})
+
+test('resolveTransformationWarehouseId prefers session warehouse fields', () => {
+  assert.equal(resolveTransformationWarehouseId({ warehouse_id: 90 }, 'pt'), 90)
+  assert.equal(resolveTransformationWarehouseId({ plant_warehouse_id: 77 }, 'pt'), 77)
 })
 
 test('validateTransformationDraft requires recipe, input product, and positive quantities', () => {

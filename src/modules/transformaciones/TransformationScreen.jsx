@@ -13,6 +13,7 @@ import {
   getRoleScopeConfig,
   getVisibleRecipes,
   normalizeTransformationRecipe,
+  resolveTransformationWarehouseId,
   validateTransformationDraft,
 } from './utils/transformationHelpers'
 
@@ -26,7 +27,7 @@ export default function TransformationScreen({ roleScope }) {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const roleConfig = getRoleScopeConfig(roleScope)
-  const warehouseId = Number(session?.warehouse_id || 0)
+  const warehouseId = resolveTransformationWarehouseId(session, roleScope)
   const employeeId = Number(session?.employee_id || 0)
   const [draft, setDraft] = useState({
     recipe_code: '',

@@ -5,6 +5,7 @@ const ROLE_SCOPE_CONFIG = {
     backTo: '/almacen-pt',
     outputUomLabel: 'bolsas',
     apiBase: '/pwa-pt',
+    defaultWarehouseId: 76,
   },
   entregas: {
     title: 'Transformacion',
@@ -12,11 +13,21 @@ const ROLE_SCOPE_CONFIG = {
     backTo: '/entregas',
     outputUomLabel: 'piezas',
     apiBase: '/pwa-entregas',
+    defaultWarehouseId: 0,
   },
 }
 
 export function getRoleScopeConfig(roleScope) {
   return ROLE_SCOPE_CONFIG[roleScope] || ROLE_SCOPE_CONFIG.pt
+}
+
+export function resolveTransformationWarehouseId(session = {}, roleScope) {
+  return Number(
+    session?.warehouse_id
+    || session?.plant_warehouse_id
+    || getRoleScopeConfig(roleScope).defaultWarehouseId
+    || 0
+  ) || 0
 }
 
 export function normalizeTransformationRecipe(recipe = {}) {
