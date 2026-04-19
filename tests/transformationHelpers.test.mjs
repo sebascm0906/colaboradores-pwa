@@ -5,6 +5,8 @@ import {
   buildTransformationPayload,
   getRoleScopeConfig,
   getVisibleRecipes,
+  normalizeTransformationRecipe,
+  normalizeTransformationSummary,
   validateTransformationDraft,
 } from '../src/modules/transformaciones/utils/transformationHelpers.js'
 
@@ -28,6 +30,31 @@ test('getVisibleRecipes hides blocked recipes and preserves active ones', () => 
   ])
 
   assert.deepEqual(recipes.map((item) => item.recipe_code), ['molido_chico'])
+})
+
+test('normalizeTransformationRecipe adapts backend recipe payload to frontend shape', () => {
+  const recipe = normalizeTransformationRecipe({
+    recipe_code: 'molido_chico',
+    name: 'Molido chico',
+    input_product: { product_id: 725, name: 'Barra grande' },
+    output_product: { product_id: 900, name: 'Molido chico' },
+    is_complete: true,
+    is_blocked: false,
+  })
+
+  assert.equal(recipe.active, true)
+  assert.equal(recipe.label, 'Molido chico')
+  assert.deepEqual(recipe.input_product_options, [{ product_id: 725, name: 'Barra grande' }])
+  assert.equal(recipe.output_product_id, 900)
+})
+
+test('normalizeTransformationSummary derives actual output from output_qty_units', () => {
+  const summary = normalizeTransformationSummary({
+    output_qty_units: 7,
+    expected_output_qty_units: 6,
+  })
+
+  assert.equal(summary.actual_output_qty_units, 7)
 })
 
 test('validateTransformationDraft requires recipe, input product, and positive quantities', () => {

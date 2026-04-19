@@ -12,6 +12,7 @@ import {
   buildTransformationPayload,
   getRoleScopeConfig,
   getVisibleRecipes,
+  normalizeTransformationRecipe,
   validateTransformationDraft,
 } from './utils/transformationHelpers'
 
@@ -43,8 +44,9 @@ export default function TransformationScreen({ roleScope }) {
   const { recipes, loading: catalogLoading, error: catalogError } = useTransformationCatalog(roleScope, warehouseId, employeeId)
   const { history, loading: historyLoading, error: historyError, reload } = useTransformationHistory(roleScope, warehouseId, employeeId, todayIso())
 
-  const visibleRecipes = getVisibleRecipes(recipes)
-  const blockedRecipes = recipes.filter((recipe) => !recipe.active)
+  const normalizedRecipes = recipes.map((recipe) => normalizeTransformationRecipe(recipe))
+  const visibleRecipes = getVisibleRecipes(normalizedRecipes)
+  const blockedRecipes = normalizedRecipes.filter((recipe) => !recipe.active)
 
   function updateDraft(field, value) {
     setDraft((current) => {
