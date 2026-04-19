@@ -4233,17 +4233,19 @@ async function directAlmacenPT(method, path, body) {
   }
 
   if (cleanPath === '/pwa-pt/reception-create' && method === 'POST') {
+    // Backend expects packing_entry_ids (array) + received_lines.
+    // The PWA sends a single packing_entry_id — adapt here.
+    const entryId = body?.packing_entry_id || undefined
+    const receivedQty = body?.qty_received != null ? Number(body.qty_received) : 0
     return odooJson('/api/pt/reception/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
-      packing_entry_id: body?.packing_entry_id || undefined,
-      product_id: body?.product_id || undefined,
-      qty_reported: body?.qty_reported != null ? Number(body.qty_reported) : undefined,
-      qty_received: body?.qty_received != null ? Number(body.qty_received) : undefined,
-      difference: body?.difference != null ? Number(body.difference) : undefined,
-      difference_pct: body?.difference_pct != null ? Number(body.difference_pct) : undefined,
-      notes: body?.notes || '',
-      lines: body?.lines || undefined,
+      packing_entry_ids: entryId ? [entryId] : [],
+      received_lines: entryId ? [{
+        packing_entry_id: entryId,
+        received_qty: receivedQty,
+        notes: body?.notes || '',
+      }] : [],
     })
   }
 
