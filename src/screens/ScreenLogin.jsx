@@ -149,6 +149,8 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
   const company = employee?.company_id?.[1] || inferCompanyLabel(companyId, role);
   const now = Math.floor(Date.now() / 1000);
 
+  const warehouseId = Number(employee?.warehouse_id) || Number(employee?.default_source_warehouse_id) || 0;
+
   const fallbackPayload = {
     source: "odoo",
     role,
@@ -160,6 +162,7 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
     name: employee?.name || result?.message?.replace(/^Bienvenido,\s*/, "") || "Empleado",
     company_id: companyId,
     company,
+    warehouse_id: warehouseId,
     turno: employee?.turno || employee?.x_turno || result?.turno || "",
     api_key: result?.api_key || "",
     odoo_api_key: result?.api_key || "",
