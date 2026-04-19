@@ -4089,15 +4089,87 @@ async function directAlmacenPT(method, path, body) {
     return result?.data ?? result
   }
 
+  if (cleanPath === '/pwa-pt/transformation-catalog' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/catalog', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'pt',
+    })
+    return result?.data ?? result
+  }
+
+  if (cleanPath === '/pwa-pt/transformation-history' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/history', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'pt',
+      date: query.get('date') || undefined,
+    })
+    return result?.data ?? result
+  }
+
   if (cleanPath === '/pwa-pt/transformation-create' && method === 'POST') {
     return odooJson('/api/pt/transformation/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
+      role_scope: body?.role_scope || 'pt',
+      recipe_code: body?.recipe_code || undefined,
+      input_product_id: body?.input_product_id || body?.from_product_id || undefined,
+      input_qty_units: body?.input_qty_units != null ? Number(body.input_qty_units) : undefined,
+      output_qty_units: body?.output_qty_units != null ? Number(body.output_qty_units) : undefined,
       from_product_id: body?.from_product_id || undefined,
       to_product_id: body?.to_product_id || undefined,
       qty: body?.qty != null ? Number(body.qty) : undefined,
       notes: body?.notes || '',
       lines: body?.lines || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-pt/transformation-cancel' && method === 'POST') {
+    return odooJson('/api/pt/transformation/cancel', {
+      transformation_id: body?.transformation_id || undefined,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      reason: body?.reason || '',
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-catalog' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/catalog', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'entregas',
+    })
+    return result?.data ?? result
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-history' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/history', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'entregas',
+      date: query.get('date') || undefined,
+    })
+    return result?.data ?? result
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-create' && method === 'POST') {
+    return odooJson('/api/pt/transformation/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      role_scope: body?.role_scope || 'entregas',
+      recipe_code: body?.recipe_code || undefined,
+      input_product_id: body?.input_product_id || undefined,
+      input_qty_units: body?.input_qty_units != null ? Number(body.input_qty_units) : undefined,
+      output_qty_units: body?.output_qty_units != null ? Number(body.output_qty_units) : undefined,
+      notes: body?.notes || '',
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-cancel' && method === 'POST') {
+    return odooJson('/api/pt/transformation/cancel', {
+      transformation_id: body?.transformation_id || undefined,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      reason: body?.reason || '',
     })
   }
 

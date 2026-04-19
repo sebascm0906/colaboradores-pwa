@@ -34,6 +34,7 @@ const ScreenInventarioPT    = lazy(() => import('./modules/almacen-pt/ScreenInve
 const ScreenTraspasoPT      = lazy(() => import('./modules/almacen-pt/ScreenTraspasoPT'))
 const ScreenHandoverPT      = lazy(() => import('./modules/almacen-pt/ScreenHandoverPT'))
 const ScreenMermaPT         = lazy(() => import('./modules/almacen-pt/ScreenMermaPT'))
+const ScreenTransformacionPT = lazy(() => import('./modules/almacen-pt/ScreenTransformacionPT'))
 const ScreenMaterialesIssue    = lazy(() => import('./modules/almacen-pt/ScreenMaterialesIssue'))
 const ScreenMaterialesReport   = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReport'))
 const ScreenMaterialesReconcile = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReconcile'))
@@ -66,6 +67,7 @@ const ScreenOperacionDia    = lazy(() => import('./modules/entregas/ScreenOperac
 const ScreenDevolucionesV2  = lazy(() => import('./modules/entregas/ScreenDevolucionesV2'))
 const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'))
 const ScreenCierreTurno     = lazy(() => import('./modules/entregas/ScreenCierreTurno'))
+const ScreenTransformacionEntregas = lazy(() => import('./modules/entregas/ScreenTransformacionEntregas'))
 // Ruta V2 — V1 eliminado 2026-04-17
 const ScreenMiRutaV2        = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
 const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
@@ -262,6 +264,7 @@ export default function App() {
             <Route path="/almacen-pt" element={<PrivateRoute><ScreenAlmacenPT /></PrivateRoute>} />
             <Route path="/almacen-pt/recepcion" element={<PrivateRoute><ScreenRecepcion /></PrivateRoute>} />
             <Route path="/almacen-pt/inventario" element={<PrivateRoute><ScreenInventarioPT /></PrivateRoute>} />
+            <Route path="/almacen-pt/transformacion" element={<PrivateRoute><ScreenTransformacionPT /></PrivateRoute>} />
             <Route path="/almacen-pt/traspaso" element={<PrivateRoute><ScreenTraspasoPT /></PrivateRoute>} />
             <Route path="/almacen-pt/handover" element={<PrivateRoute><ScreenHandoverPT /></PrivateRoute>} />
             <Route path="/almacen-pt/merma" element={<PrivateRoute><ScreenMermaPT /></PrivateRoute>} />
@@ -296,6 +299,7 @@ export default function App() {
             {/* Entregas V2 — flujo guiado */}
             <Route path="/entregas" element={<PrivateRoute><ScreenHubDia /></PrivateRoute>} />
             <Route path="/entregas/recibir-pt" element={<PrivateRoute><ScreenRecibirPT /></PrivateRoute>} />
+            <Route path="/entregas/transformacion" element={<PrivateRoute><ScreenTransformacionEntregas /></PrivateRoute>} />
             <Route path="/entregas/carga" element={<PrivateRoute><ScreenCargaUnidades /></PrivateRoute>} />
             <Route path="/entregas/operacion" element={<PrivateRoute><ScreenOperacionDia /></PrivateRoute>} />
             <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevolucionesV2 /></PrivateRoute>} />

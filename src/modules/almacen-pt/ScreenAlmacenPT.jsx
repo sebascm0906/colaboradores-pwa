@@ -68,6 +68,13 @@ export default function ScreenAlmacenPT() {
       icon: 'box',
     },
     {
+      id: 'transformacion', label: 'Transformacion',
+      desc: 'Molidos y barra chica embolsada',
+      route: '/almacen-pt/transformacion',
+      color: TOKENS.colors.warning,
+      icon: 'check',
+    },
+    {
       id: 'traspaso', label: 'Traspasar a CEDIS',
       desc: todayTransfers.length > 0 ? `${todayTransfers.length} traspasos hoy` : 'Surtir a almacén de entregas',
       route: '/almacen-pt/traspaso',
