@@ -42,11 +42,7 @@ export const CYCLE_STATES = {
   cancelled:  { label: 'Cancelado',    color: '#ef4444' },
 }
 
-export const FALLBACK_PRODUCTS = [
-  { id: 758, name: 'Rolito 15 KG', weight: 15 },
-  { id: 761, name: 'Rolito 5.5 KG', weight: 5.5 },
-  { id: 760, name: 'Rolito 3.8 KG', weight: 3.8 },
-]
+export const FALLBACK_PRODUCTS = []
 
 export function computeAvailableBagMaterials(issues, packingEntries) {
   const validIssues = (issues || []).filter(it => {
@@ -415,10 +411,10 @@ export async function registerPacking(shiftId, productId, qtyBags, cycleId) {
 
 // ── LIVE: Products ───────────────────────────────────────────────────────────
 
-export async function getProducts() {
+export async function getProducts(options = {}) {
   try {
-    const prods = await getPackingProducts()
-    return prods?.length ? prods : FALLBACK_PRODUCTS
+    const prods = await getPackingProducts(options)
+    return Array.isArray(prods) ? prods : FALLBACK_PRODUCTS
   } catch {
     return FALLBACK_PRODUCTS
   }

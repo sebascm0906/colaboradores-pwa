@@ -49,9 +49,14 @@ export function updateCycle(cycleId, data) {
 
 // ── Empaque ──────────────────────────────────────────────────────────────────
 
-/** Obtener productos de empaque disponibles (bolsas rolito) */
-export function getPackingProducts() {
-  return api('GET', '/pwa-prod/packing-products')
+/** Obtener catalogo de PT empacable desde Odoo */
+export function getPackingProducts(options = {}) {
+  const params = new URLSearchParams()
+  if (options.shift_id) params.set('shift_id', String(options.shift_id))
+  if (options.warehouse_id) params.set('warehouse_id', String(options.warehouse_id))
+  if (options.line_type) params.set('line_type', String(options.line_type))
+  const query = params.toString()
+  return api('GET', `/pwa-prod/packing-products${query ? `?${query}` : ''}`)
 }
 
 /** Registrar entrada de empaque */

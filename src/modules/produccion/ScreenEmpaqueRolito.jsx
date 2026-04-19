@@ -13,7 +13,6 @@ import {
   getShiftOverview,
   getProducts,
   registerPacking,
-  FALLBACK_PRODUCTS,
   computeAvailableBagMaterials,
 } from './rolitoService'
 import { getPackingEntries } from './api'
@@ -32,66 +31,13 @@ function getUnpackedCycles(cycles, entries) {
     .sort((a, b) => (b.cycle_number || 0) - (a.cycle_number || 0))
 }
 
-function normalizeName(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
-function extractKgHints(value) {
-  const text = normalizeName(value)
-  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*kg/g)]
-  return matches.map(m => Number(m[1])).filter(n => Number.isFinite(n) && n > 0)
-}
-
-function extractBrandHints(value) {
-  const text = normalizeName(value)
-  return ['kold', 'laurita', 'rolito', 'gourmet', 'cilindro', 'cubo']
-    .filter(token => text.includes(token))
-}
-
-function filterPackingProductsByIssues(products, issues) {
-  const validIssues = (issues || []).filter(it => {
-    const state = String(it?.settlement_state || it?.state || '').toLowerCase()
-    return state !== 'rejected' && state !== 'cancelled' && state !== 'abandoned'
-  })
-  if (!validIssues.length) return products
-
-  const strict = (products || []).filter(p => validIssues.some(it => {
-    const productName = normalizeName(p.name)
-    const productWeight = Number(p.weight || p.kg_per_bag || 0)
-    const issueName = it.product_name || it.material_name || ''
-    const issueWeights = extractKgHints(issueName)
-    const issueBrands = extractBrandHints(issueName)
-    const weightMatch = issueWeights.some(w => Math.abs(w - productWeight) <= 0.25)
-    const brandMatch = !issueBrands.length || issueBrands.some(b => productName.includes(b))
-    return weightMatch && brandMatch
-  }))
-  if (strict.length) return strict
-
-  const issueNames = validIssues.map(it => normalizeName(it.product_name || it.material_name || ''))
-  const issueWeights = validIssues.flatMap(it => extractKgHints(it.product_name || it.material_name || ''))
-  const filtered = (products || []).filter(p => {
-    const productName = normalizeName(p.name)
-    const productWeight = Number(p.weight || p.kg_per_bag || 0)
-    const nameMatch = issueNames.some(name => name && (name.includes(productName) || productName.includes(name)))
-    const weightMatch = issueWeights.some(w => Math.abs(w - productWeight) <= 0.6)
-    return nameMatch || weightMatch
-  })
-
-  return filtered.length ? filtered : products
-}
-
 export default function ScreenEmpaqueRolito() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
   const [shift, setShift] = useState(null)
-  const [products, setProducts] = useState(FALLBACK_PRODUCTS)
+  const [products, setProducts] = useState([])
   const [entries, setEntries] = useState([])
   const [cycles, setCycles] = useState([])
   const [bagIssues, setBagIssues] = useState([])
@@ -113,25 +59,23 @@ export default function ScreenEmpaqueRolito() {
   const loadData = useCallback(async () => {
     try {
       setError('')
-      const [overview, prods] = await Promise.all([
-        getShiftOverview(),
-        getProducts(),
-      ])
+      const overview = await getShiftOverview()
       setShift(overview.shift)
       setEntries([])
       setCycles(overview.cycles || [])
 
       if (overview.shift?.id) {
-        const [ents, issues] = await Promise.all([
+        const [prods, ents, issues] = await Promise.all([
+          getProducts({ shift_id: overview.shift.id, line_type: 'rolito' }).catch(() => []),
           getPackingEntries(overview.shift.id).catch(() => []),
           getMaterialIssues({ shiftId: overview.shift.id, lineId: 2 }).catch(() => ({ items: [] })),
         ])
         setEntries(ents || [])
         setBagIssues(issues?.items || [])
-        setProducts(filterPackingProductsByIssues(prods, issues?.items || []))
+        setProducts(prods || [])
       } else {
         setBagIssues([])
-        setProducts(prods)
+        setProducts([])
       }
 
       setSelectedCycleId(prev => {
@@ -361,6 +305,20 @@ export default function ScreenEmpaqueRolito() {
             {/* Product selection — big buttons */}
             <div>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>TIPO DE BOLSA</p>
+              {products.length === 0 ? (
+                <div style={{
+                  padding: 12, borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, fontWeight: 600 }}>
+                    No hay productos de empaque configurados en Odoo para este turno
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                    Revisa el Catalogo Productos Empaque para Rolito y la planta actual
+                  </p>
+                </div>
+              ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {products.map(p => {
                   const isSelected = selectedProduct?.id === p.id
@@ -390,6 +348,7 @@ export default function ScreenEmpaqueRolito() {
                   )
                 })}
               </div>
+              )}
             </div>
 
             {/* Quantity with free input + shortcuts */}

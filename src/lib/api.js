@@ -2024,22 +2024,31 @@ async function directProduction(method, path, body) {
   }
 
   if (cleanPath === '/pwa-prod/packing-products' && method === 'GET') {
-    const result = await readModelSorted('product.product', {
-      fields: ['id', 'name', 'weight', 'qty_available', 'sale_ok', 'available_in_pos'],
-      domain: [['sale_ok', '=', true]],
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 200,
-      sudo: 1,
-    })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      weight: Number(row.weight || 0),
-      qty_available: Number(row.qty_available || 0),
-      sale_ok: row.sale_ok !== false,
-      available_in_pos: row.available_in_pos !== false,
-    }))
+    const shiftId = Number(query.get('shift_id') || 0)
+    const warehouseId = Number(query.get('warehouse_id') || 0)
+    const lineType = String(query.get('line_type') || 'rolito').trim() || 'rolito'
+    const params = {}
+    if (shiftId) params.shift_id = shiftId
+    else if (warehouseId) params.warehouse_id = warehouseId
+    if (lineType) params.line_type = lineType
+
+    const result = await odooHttp('GET', '/api/production/pack/catalog', params)
+    const products = Array.isArray(result?.data?.products)
+      ? result.data.products
+      : Array.isArray(result?.products)
+        ? result.products
+        : []
+
+    return products.map((row) => ({
+      id: Number(row?.product?.product_id || 0),
+      catalog_item_id: Number(row?.catalog_item_id || 0),
+      line_type: row?.line_type || '',
+      name: row?.product?.name || 'Producto',
+      weight: Number(row?.product?.weight || 0),
+      uom_name: row?.product?.uom_name || '',
+      warehouse_ids: Array.isArray(row?.warehouse_ids) ? row.warehouse_ids : [],
+      warehouses: Array.isArray(row?.warehouses) ? row.warehouses : [],
+    })).filter((row) => row.id > 0)
   }
 
   if (cleanPath === '/pwa-prod/packing-create' && method === 'POST') {

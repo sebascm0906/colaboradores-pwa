@@ -57,7 +57,10 @@ export default function ScreenEmpaque() {
       if (!s?.id) { setError('Sin turno activo'); return }
 
       const [prods, ents] = await Promise.all([
-        getPackingProducts().catch(() => FALLBACK_PRODUCTS),
+        getPackingProducts({
+          shift_id: s.id,
+          line_type: isBarras ? 'barras' : 'rolito',
+        }).catch(() => FALLBACK_PRODUCTS),
         getPackingEntries(s.id).catch(() => []),
       ])
       setProducts(prods?.length ? prods : FALLBACK_PRODUCTS)
