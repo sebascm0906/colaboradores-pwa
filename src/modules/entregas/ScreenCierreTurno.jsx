@@ -211,7 +211,7 @@ export default function ScreenCierreTurno() {
     }
   }
 
-  const canSubmitEntregar = hasScrolledBottom && entregarLines.length > 0
+  const canSubmitEntregar = entregarLines.length === 0 || hasScrolledBottom
   const canSubmitAcceptar = hasScrolledBottom && acceptLines.length > 0
 
   return (
@@ -441,13 +441,12 @@ export default function ScreenCierreTurno() {
           ════════════════════════════════════════════════════════════════ */}
           {mode === MODES.ENTREGAR && (
             <>
-              {entregarLines.length === 0 ? (
-                <div style={{ padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center', marginTop: 20 }}>
-                  <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>Sin inventario para entregar</p>
+              {entregarLines.length === 0 && (
+                <div style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center', marginBottom: 12 }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0 }}>Sin inventario en sistema. Puedes entregar un turno vacio para inicializar el ciclo.</p>
                 </div>
-              ) : (
-                <>
-                  {/* Product lines */}
+              )}
+              {/* Product lines */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                     {entregarLines.map((line, i) => {
                       const diff = line.qty_declared - line.qty_system
@@ -555,12 +554,10 @@ export default function ScreenCierreTurno() {
                     {submitting ? 'Procesando...' : 'Entregar Turno'}
                   </button>
 
-                  {!hasScrolledBottom && entregarLines.length > 3 && (
-                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, textAlign: 'center', marginTop: 10 }}>
-                      Revisa todos los productos para habilitar la entrega
-                    </p>
-                  )}
-                </>
+              {!hasScrolledBottom && entregarLines.length > 3 && (
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, textAlign: 'center', marginTop: 10 }}>
+                  Revisa todos los productos para habilitar la entrega
+                </p>
               )}
             </>
           )}

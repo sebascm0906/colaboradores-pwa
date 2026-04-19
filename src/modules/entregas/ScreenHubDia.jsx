@@ -23,15 +23,15 @@ function getBadgeText(stepId, summary) {
     case 'aceptarTurno':
       return summary.shift_handover_pending ? 'Pendiente' : summary.shift_accepted_today ? 'Aceptado' : 'Pendiente'
     case 'recibirPT':
-      return `${summary.pending_pallets} pallets`
+      return `${summary.pending_pallets ?? 0} pallets`
     case 'cargarUnidades':
-      return `${summary.routes_sealed}/${summary.routes_total} cargadas`
+      return `${summary.routes_sealed ?? 0}/${summary.routes_total ?? 0} cargadas`
     case 'operacionDia':
-      return `${summary.pending_tickets} tickets`
+      return `${summary.pending_tickets ?? 0} tickets`
     case 'devoluciones':
-      return `${summary.pending_returns} pendientes`
+      return `${summary.pending_returns ?? 0} pendientes`
     case 'merma':
-      return `${summary.scraps_today} registradas`
+      return `${summary.scraps_today ?? 0} registradas`
     case 'entregarTurno':
       return 'Pendiente'
     default:
