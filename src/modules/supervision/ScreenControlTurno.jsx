@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getActiveShift, createShift } from './api'
+import { listTanks } from '../produccion/barraService'
+import { getActiveShift, createShift, startShift, getEnergyReadings, createBrineReading } from './api'
 import { resolveSupervisionWarehouseId } from './shiftContext'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { closeShiftServerSide } from '../shared/supervisorAuth'
@@ -11,11 +12,49 @@ import {
   INCIDENT_TYPES, INCIDENT_SEVERITIES, INCIDENT_STATES,
   getOpenIncidents, getIncidentTypeLabel,
 } from '../shared/incidentService'
+import BrineReadingModal from './BrineReadingModal'
+import {
+  buildBrineReadingPayload,
+  getInitialBrineReadingForm,
+  validateBrineReadingInput,
+} from './brineReadings'
+import { getShiftStartReadiness } from './shiftStartReadiness'
 
 const SHIFT_CODES = [
   { value: 1, label: 'Dia' },
   { value: 2, label: 'Noche' },
 ]
+
+const START_STATUS_META = {
+  missing: {
+    color: TOKENS.colors.textMuted,
+    bg: 'rgba(148,163,184,0.08)',
+    border: 'rgba(148,163,184,0.22)',
+    label: 'Sin lectura',
+  },
+  stale: {
+    color: TOKENS.colors.warning,
+    bg: 'rgba(245,158,11,0.08)',
+    border: 'rgba(245,158,11,0.24)',
+    label: 'Lectura vencida',
+  },
+  low: {
+    color: TOKENS.colors.error,
+    bg: 'rgba(239,68,68,0.08)',
+    border: 'rgba(239,68,68,0.24)',
+    label: 'Sal baja',
+  },
+  ok: {
+    color: TOKENS.colors.success,
+    bg: 'rgba(34,197,94,0.08)',
+    border: 'rgba(34,197,94,0.24)',
+    label: 'Al dia',
+  },
+}
+
+function getStartStatusMeta(status) {
+  return START_STATUS_META[status] || START_STATUS_META.missing
+}
 
 export default function ScreenControlTurno() {
   const { session } = useSession()
@@ -30,14 +69,77 @@ export default function ScreenControlTurno() {
   const [confirmClose, setConfirmClose] = useState(false)
   const [closeReadiness, setCloseReadiness] = useState(null)
   const [loadingReadiness, setLoadingReadiness] = useState(false)
+  const [energyReadings, setEnergyReadings] = useState([])
+  const [tanks, setTanks] = useState([])
+  const [startReadiness, setStartReadiness] = useState(null)
+  const [loadingStartReadiness, setLoadingStartReadiness] = useState(false)
+  const [selectedTank, setSelectedTank] = useState(null)
+  const [brineForm, setBrineForm] = useState(getInitialBrineReadingForm())
+  const [brineErrors, setBrineErrors] = useState({})
+  const [savingBrine, setSavingBrine] = useState(false)
+  const [brineSaveError, setBrineSaveError] = useState('')
   // Incidentes
   const [incidents, setIncidents] = useState([])
   const [showIncidentForm, setShowIncidentForm] = useState(false)
   const [incidentForm, setIncidentForm] = useState({ name: '', description: '', incident_type: 'production', severity: 'low' })
   const [incidentSubmitting, setIncidentSubmitting] = useState(false)
   const supervisionWarehouseId = resolveSupervisionWarehouseId(session, formData.warehouse_id)
+  const startEnergyReading = useMemo(
+    () => energyReadings.find((reading) => reading?.reading_type === 'start') || null,
+    [energyReadings]
+  )
 
   useEffect(() => { loadData() }, [])
+
+  function resetStartReadiness() {
+    setEnergyReadings([])
+    setTanks([])
+    setStartReadiness(null)
+    setLoadingStartReadiness(false)
+    setSelectedTank(null)
+    setBrineForm(getInitialBrineReadingForm())
+    setBrineErrors({})
+    setBrineSaveError('')
+  }
+
+  async function loadStartChecklist(shiftRow) {
+    if (!shiftRow?.id || shiftRow.state !== 'draft') {
+      resetStartReadiness()
+      return null
+    }
+
+    setLoadingStartReadiness(true)
+    try {
+      const [readings, tanksResponse] = await Promise.all([
+        getEnergyReadings(shiftRow.id).catch(() => []),
+        listTanks().catch(() => ({ tanks: [] })),
+      ])
+      const nextEnergyReadings = Array.isArray(readings) ? readings : []
+      const nextTanks = Array.isArray(tanksResponse?.tanks) ? tanksResponse.tanks : []
+      const readiness = getShiftStartReadiness({
+        shift: shiftRow,
+        energyReadings: nextEnergyReadings,
+        tanks: nextTanks,
+      })
+      setEnergyReadings(nextEnergyReadings)
+      setTanks(nextTanks)
+      setStartReadiness(readiness)
+      return readiness
+    } catch {
+      const readiness = {
+        canStart: false,
+        energyReady: false,
+        tankReadiness: [],
+        blockers: ['Error consultando requisitos de inicio'],
+      }
+      setEnergyReadings([])
+      setTanks([])
+      setStartReadiness(readiness)
+      return readiness
+    } finally {
+      setLoadingStartReadiness(false)
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -46,8 +148,20 @@ export default function ScreenControlTurno() {
       setShift(s)
       if (s?.id) {
         loadIncidents(s.id).then(setIncidents)
+        if (s.state === 'draft') {
+          await loadStartChecklist(s)
+        } else {
+          resetStartReadiness()
+        }
+      } else {
+        setIncidents([])
+        resetStartReadiness()
       }
-    } catch { setShift(null) }
+    } catch {
+      setShift(null)
+      setIncidents([])
+      resetStartReadiness()
+    }
     finally { setLoading(false) }
   }
 
@@ -59,7 +173,9 @@ export default function ScreenControlTurno() {
       await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
       setMsg({ type: 'success', text: 'Turno abierto correctamente' })
       setFormData({ shift_code: '', warehouse_id: 76 })
-      navigate('/supervision', { replace: true })
+      setConfirmClose(false)
+      setCloseReadiness(null)
+      await loadData()
     } catch (err) { setMsg({ type: 'error', text: err.message || 'Error al abrir turno' }) }
     finally { setSubmitting(false) }
   }
@@ -137,6 +253,79 @@ export default function ScreenControlTurno() {
       }
     } catch (e) { setMsg({ type: 'error', text: e.message }) }
     finally { setIncidentSubmitting(false) }
+  }
+
+  function openBrineModal(tank) {
+    setSelectedTank(tank)
+    setBrineForm(getInitialBrineReadingForm(tank))
+    setBrineErrors({})
+    setBrineSaveError('')
+  }
+
+  function closeBrineModal() {
+    if (savingBrine) return
+    setSelectedTank(null)
+    setBrineForm(getInitialBrineReadingForm())
+    setBrineErrors({})
+    setBrineSaveError('')
+  }
+
+  function handleBrineFieldChange(field, value) {
+    setBrineForm((prev) => ({ ...prev, [field]: value }))
+    setBrineErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+    setBrineSaveError('')
+  }
+
+  async function handleSaveBrineReading() {
+    const errors = validateBrineReadingInput(brineForm)
+    if (Object.keys(errors).length) {
+      setBrineErrors(errors)
+      return
+    }
+
+    setSavingBrine(true)
+    setBrineSaveError('')
+    try {
+      await createBrineReading(buildBrineReadingPayload(brineForm))
+      setMsg({ type: 'success', text: 'Lectura de salmuera registrada' })
+      setSelectedTank(null)
+      setBrineForm(getInitialBrineReadingForm())
+      setBrineErrors({})
+      setBrineSaveError('')
+      await loadStartChecklist(shift)
+    } catch (err) {
+      setBrineSaveError(err.message || 'Error al registrar lectura')
+    } finally {
+      setSavingBrine(false)
+    }
+  }
+
+  async function handleStartShift() {
+    if (!shift?.id) return
+
+    const readiness = await loadStartChecklist(shift)
+    if (!readiness?.canStart) {
+      setMsg({ type: 'error', text: readiness?.blockers?.[0] || 'Completa los requisitos antes de iniciar el turno' })
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await startShift({ shift_id: shift.id })
+      setMsg({ type: 'success', text: 'Turno iniciado correctamente' })
+      setConfirmClose(false)
+      setCloseReadiness(null)
+      await loadData()
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message || 'Error al iniciar turno' })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   useEffect(() => {
@@ -245,7 +434,168 @@ export default function ScreenControlTurno() {
                 </div>
               </div>
 
-              {!confirmClose ? (
+              {shift.state === 'draft' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{
+                    padding: 14, borderRadius: TOKENS.radius.md,
+                    background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.22)',
+                  }}>
+                    <p style={{ ...typo.overline, color: TOKENS.colors.blue3, margin: 0 }}>REQUISITOS PARA INICIAR</p>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                      Registra la lectura inicial de energia y la salmuera de todos los tanques activos antes de activar el turno.
+                    </p>
+                  </div>
+
+                  {loadingStartReadiness ? (
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>
+                      Verificando requisitos de inicio...
+                    </p>
+                  ) : (
+                    <>
+                      <div style={{
+                        padding: 12, borderRadius: TOKENS.radius.md,
+                        background: startReadiness?.energyReady ? 'rgba(34,197,94,0.08)' : 'rgba(148,163,184,0.08)',
+                        border: `1px solid ${startReadiness?.energyReady ? 'rgba(34,197,94,0.24)' : 'rgba(148,163,184,0.24)'}`,
+                        display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center',
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Energia inicial</p>
+                          <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: '4px 0 0' }}>
+                            {startEnergyReading ? `${startEnergyReading.kwh_value} kWh` : 'Pendiente'}
+                          </p>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
+                            {startEnergyReading?.created_at || 'Lectura global del medidor requerida'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => navigate('/supervision/energia', { state: { backTo: '/supervision/turno' } })}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: TOKENS.radius.sm,
+                            background: startReadiness?.energyReady ? 'rgba(34,197,94,0.12)' : 'rgba(43,143,224,0.12)',
+                            border: `1px solid ${startReadiness?.energyReady ? 'rgba(34,197,94,0.3)' : 'rgba(43,143,224,0.3)'}`,
+                            color: startReadiness?.energyReady ? TOKENS.colors.success : TOKENS.colors.blue2,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {startEnergyReading ? 'Ver energia' : 'Registrar'}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>SALMUERA POR TANQUE</p>
+                        {tanks.map((tank) => {
+                          const tankStatus = startReadiness?.tankReadiness?.find((item) => item.tankId === tank.id)
+                          const meta = getStartStatusMeta(tankStatus?.status)
+                          return (
+                            <div
+                              key={tank.id}
+                              style={{
+                                padding: 12,
+                                borderRadius: TOKENS.radius.md,
+                                background: meta.bg,
+                                border: `1px solid ${meta.border}`,
+                                display: 'flex',
+                                gap: 12,
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: 0 }}>
+                                    {tank.display_name || tank.name}
+                                  </p>
+                                  <span style={{
+                                    padding: '3px 8px',
+                                    borderRadius: TOKENS.radius.pill,
+                                    background: meta.bg,
+                                    border: `1px solid ${meta.border}`,
+                                    color: meta.color,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}>
+                                    {tankStatus?.status === 'ok' ? 'AL DIA' : meta.label.toUpperCase()}
+                                  </span>
+                                </div>
+                                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                                  {tank.salt_level
+                                    ? `${tank.salt_level} ${tank.salt_level_unit || 'ppm'}${tank.brine_temp ? ` · ${tank.brine_temp}°C` : ''}`
+                                    : 'Sin lectura registrada'}
+                                </p>
+                                <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
+                                  {tank.salt_level_updated_at || 'Actualiza este tanque para habilitar el inicio'}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => openBrineModal(tank)}
+                                style={{
+                                  padding: '10px 12px',
+                                  borderRadius: TOKENS.radius.sm,
+                                  background: 'rgba(15,118,110,0.12)',
+                                  border: '1px solid rgba(20,184,166,0.3)',
+                                  color: '#5eead4',
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {tankStatus?.status === 'ok' ? 'Actualizar' : 'Registrar sal'}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {startReadiness?.blockers?.length > 0 && (
+                        <div style={{
+                          padding: 10, borderRadius: TOKENS.radius.md,
+                          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                        }}>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                            BLOQUEOS PARA INICIAR ({startReadiness.blockers.length})
+                          </p>
+                          <ul style={{ margin: 0, paddingLeft: 18 }}>
+                            {startReadiness.blockers.map((blocker, index) => (
+                              <li key={index} style={{ ...typo.caption, color: TOKENS.colors.error, marginBottom: 2 }}>
+                                {blocker}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {startReadiness?.canStart && (
+                        <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, textAlign: 'center', fontWeight: 700 }}>
+                          ✓ Requisitos completos — puede iniciar el turno
+                        </p>
+                      )}
+
+                      <button
+                        onClick={handleStartShift}
+                        disabled={submitting || loadingStartReadiness || !startReadiness?.canStart}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          borderRadius: TOKENS.radius.sm,
+                          background: startReadiness?.canStart
+                            ? 'linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)'
+                            : TOKENS.colors.surface,
+                          border: `1px solid ${startReadiness?.canStart ? 'transparent' : TOKENS.colors.border}`,
+                          color: 'white',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          opacity: submitting ? 0.6 : 1,
+                        }}
+                      >
+                        {submitting ? 'Iniciando...' : 'Iniciar turno'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : !confirmClose ? (
                 <button onClick={handleRequestClose} style={{
                   width: '100%', padding: '12px', borderRadius: TOKENS.radius.sm,
                   background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
@@ -496,6 +846,17 @@ export default function ScreenControlTurno() {
         )}
         <div style={{ height: 32 }} />
       </div>
+      <BrineReadingModal
+        tank={selectedTank}
+        typo={typo}
+        form={brineForm}
+        errors={brineErrors}
+        saveError={brineSaveError}
+        saving={savingBrine}
+        onChange={handleBrineFieldChange}
+        onCancel={closeBrineModal}
+        onSave={handleSaveBrineReading}
+      />
     </div>
   )
 }

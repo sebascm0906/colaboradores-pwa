@@ -27,6 +27,7 @@ export function getActiveShift(warehouseId) {
   return api('GET', `/pwa-sup/active-shift${qs}`)
 }
 export function createShift(data) { return api('POST', '/pwa-sup/shift-create', data) }
+export function startShift(data) { return api('POST', '/pwa-sup/shift-start', data) }
 
 // ── Paros (sin reemplazo REST aun) ──────────────────────────────────────────
 export function getDowntimes(shiftId) { return api('GET', `/pwa-sup/downtimes?shift_id=${shiftId}`) }

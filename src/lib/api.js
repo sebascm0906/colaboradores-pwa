@@ -3461,6 +3461,22 @@ async function directSupervision(method, path, body) {
     return { success: true, data: result }
   }
 
+  if (cleanPath === '/pwa-sup/shift-start' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) throw new Error('shift_id requerido')
+
+    const result = await createUpdate({
+      model: 'gf.production.shift',
+      method: 'function',
+      ids: [shiftId],
+      function: 'action_start_shift',
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+
+    return { ok: true, data: result }
+  }
+
   // ── Shift close readiness check ──────────────────────────────────────
   if (cleanPath === '/pwa-sup/shift-close-check' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
