@@ -2996,8 +2996,22 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/api/production/incidents' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
+    const supportsIncidentType = await modelHasField('gf.production.incident', 'incident_type')
+    const supportsSeverity = await modelHasField('gf.production.incident', 'severity')
+    const supportsReportedBy = await modelHasField('gf.production.incident', 'reported_by_id')
+    const supportsName = await modelHasField('gf.production.incident', 'name')
     const result = await readModelSorted('gf.production.incident', {
-      fields: ['id', 'name', 'description', 'incident_type', 'severity', 'state', 'shift_id', 'reported_by_id', 'create_date'],
+      fields: [
+        'id',
+        ...(supportsName ? ['name'] : []),
+        'description',
+        ...(supportsIncidentType ? ['incident_type'] : []),
+        ...(supportsSeverity ? ['severity'] : []),
+        'state',
+        'shift_id',
+        ...(supportsReportedBy ? ['reported_by_id'] : []),
+        'create_date',
+      ],
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
       sort_desc: true,
@@ -3007,25 +3021,34 @@ async function directProduction(method, path, body) {
     return pickListResponse(result).map(row => ({
       ...row,
       reported_by: Array.isArray(row.reported_by_id) ? row.reported_by_id[1] : '',
+      incident_type: row.incident_type || '',
+      severity: row.severity || '',
+      name: row.name || row.description || 'Incidencia',
     }))
   }
 
   if (cleanPath === '/api/production/incidents' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
-    // NOTA: el modelo gf.production.incident NO tiene campo `name` (verificado en vivo
-    // 2026-04-16: "Invalid field 'name' on model 'gf.production.incident'").
-    // Si Sebastian agrega el campo, se puede re-introducir aqui.
+    const supportsIncidentType = await modelHasField('gf.production.incident', 'incident_type')
+    const supportsSeverity = await modelHasField('gf.production.incident', 'severity')
+    const supportsReportedBy = await modelHasField('gf.production.incident', 'reported_by_id')
+    const supportsName = await modelHasField('gf.production.incident', 'name')
+    const description = body?.description || body?.name || 'Incidencia'
+    const typeLabel = body?.incident_type ? `Tipo: ${body.incident_type}` : ''
+    const severityLabel = body?.severity ? `Severidad: ${body.severity}` : ''
+    const fallbackDescription = [description, typeLabel, severityLabel].filter(Boolean).join('\n')
     const result = await createUpdate({
       model: 'gf.production.incident',
       method: 'create',
       dict: {
         shift_id: shiftId,
-        description: body?.description || body?.name || 'Incidencia',
-        incident_type: body?.incident_type || 'production',
-        severity: body?.severity || 'low',
+        ...(supportsName ? { name: body?.name || 'Incidencia' } : {}),
+        description: supportsIncidentType && supportsSeverity ? description : fallbackDescription,
+        ...(supportsIncidentType ? { incident_type: body?.incident_type || 'production' } : {}),
+        ...(supportsSeverity ? { severity: body?.severity || 'low' } : {}),
         state: 'open',
-        reported_by_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+        ...(supportsReportedBy ? { reported_by_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined } : {}),
       },
       sudo: 1,
       app: 'pwa_colaboradores',
