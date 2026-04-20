@@ -4500,7 +4500,8 @@ async function directEntregas(method, path, body) {
     const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
     const domain = [['date', '=', todayStr]]
     if (companyId) domain.push(['company_id', '=', companyId])
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    // gf.route.plan no tiene warehouse_id directo; el almacen vive en route_id.warehouse_dispatch_id
+    if (warehouseId) domain.push(['route_id.warehouse_dispatch_id', '=', warehouseId])
     const result = await readModelSorted('gf.route.plan', {
       fields: [
         'id', 'name', 'date', 'route_id', 'state',
