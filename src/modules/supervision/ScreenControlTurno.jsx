@@ -731,7 +731,11 @@ export default function ScreenControlTurno() {
                         background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
                         color: 'white', fontSize: 12, fontFamily: 'inherit',
                       }}>
-                      {INCIDENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      {INCIDENT_TYPES.map(t => (
+                        <option key={t.value} value={t.value} style={{ color: '#111827', background: '#ffffff' }}>
+                          {t.label}
+                        </option>
+                      ))}
                     </select>
                     <select value={incidentForm.severity}
                       onChange={e => setIncidentForm(p => ({ ...p, severity: e.target.value }))}
@@ -740,7 +744,11 @@ export default function ScreenControlTurno() {
                         background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
                         color: 'white', fontSize: 12, fontFamily: 'inherit',
                       }}>
-                      {INCIDENT_SEVERITIES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      {INCIDENT_SEVERITIES.map(s => (
+                        <option key={s.value} value={s.value} style={{ color: '#111827', background: '#ffffff' }}>
+                          {s.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <button onClick={handleCreateIncident}

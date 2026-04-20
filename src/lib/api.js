@@ -147,6 +147,14 @@ function toMany2oneId(value) {
   return Number(value || 0)
 }
 
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 const modelFieldSupportCache = new Map()
 const modelFieldInfoCache = new Map()
 
@@ -3070,15 +3078,34 @@ async function directProduction(method, path, body) {
       const categoryModel = categoryField?.relation || 'gf.production.incident.category'
       const categoryHasActive = await modelHasField(categoryModel, 'active')
       const categoryHasSequence = await modelHasField(categoryModel, 'sequence')
+      const desiredCategoryNameMap = {
+        production: 'Produccion',
+        quality: 'Calidad',
+        inventory: 'Inventario',
+        equipment: 'Equipo',
+        safety: 'Seguridad',
+        other: 'Otro',
+      }
+      const desiredCategoryName = desiredCategoryNameMap[String(body?.incident_type || '').toLowerCase()] || ''
       const categoryResult = await readModelSorted(categoryModel, {
         fields: ['id', 'name', ...(categoryHasSequence ? ['sequence'] : []), ...(categoryHasActive ? ['active'] : [])],
         domain: categoryHasActive ? [['active', '=', true]] : [],
         sort_column: categoryHasSequence ? 'sequence' : 'id',
         sort_desc: false,
-        limit: 1,
+        limit: 100,
         sudo: 1,
       }).catch(() => [])
-      categoryId = Number(pickListResponse(categoryResult)?.[0]?.id || 0) || 0
+      const categoryRows = pickListResponse(categoryResult)
+      const matchedCategory = categoryRows.find((row) => {
+        const rowName = normalizeText(row?.name)
+        return rowName && (
+          rowName === normalizeText(desiredCategoryName) ||
+          rowName === normalizeText(body?.incident_type) ||
+          rowName.includes(normalizeText(desiredCategoryName)) ||
+          normalizeText(desiredCategoryName).includes(rowName)
+        )
+      }) || categoryRows[0]
+      categoryId = Number(matchedCategory?.id || 0) || 0
     }
 
     if (supportsCategory && categoryField?.required && !categoryId) {
