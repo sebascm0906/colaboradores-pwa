@@ -148,6 +148,7 @@ function toMany2oneId(value) {
 }
 
 const modelFieldSupportCache = new Map()
+const modelFieldInfoCache = new Map()
 
 async function modelHasField(model, fieldName) {
   const cacheKey = `${model}:${fieldName}`
@@ -169,6 +170,29 @@ async function modelHasField(model, fieldName) {
   } catch (_) {
     modelFieldSupportCache.set(cacheKey, false)
     return false
+  }
+}
+
+async function getModelFieldInfo(model, fieldName) {
+  const cacheKey = `${model}:${fieldName}:info`
+  if (modelFieldInfoCache.has(cacheKey)) {
+    return modelFieldInfoCache.get(cacheKey)
+  }
+  try {
+    const result = await readModelSorted('ir.model.fields', {
+      fields: ['id', 'name', 'relation', 'required'],
+      domain: [['model', '=', model], ['name', '=', fieldName]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 1,
+      sudo: 1,
+    })
+    const info = pickFirstResponse(result) || null
+    modelFieldInfoCache.set(cacheKey, info)
+    return info
+  } catch (_) {
+    modelFieldInfoCache.set(cacheKey, null)
+    return null
   }
 }
 
@@ -3034,10 +3058,33 @@ async function directProduction(method, path, body) {
     const supportsSeverity = await modelHasField('gf.production.incident', 'severity')
     const supportsReportedBy = await modelHasField('gf.production.incident', 'reported_by_id')
     const supportsName = await modelHasField('gf.production.incident', 'name')
+    const categoryField = await getModelFieldInfo('gf.production.incident', 'category_id')
+    const supportsCategory = Boolean(categoryField?.id)
     const description = body?.description || body?.name || 'Incidencia'
     const typeLabel = body?.incident_type ? `Tipo: ${body.incident_type}` : ''
     const severityLabel = body?.severity ? `Severidad: ${body.severity}` : ''
     const fallbackDescription = [description, typeLabel, severityLabel].filter(Boolean).join('\n')
+    let categoryId = Number(body?.category_id || 0) || 0
+
+    if (supportsCategory && !categoryId) {
+      const categoryModel = categoryField?.relation || 'gf.production.incident.category'
+      const categoryHasActive = await modelHasField(categoryModel, 'active')
+      const categoryHasSequence = await modelHasField(categoryModel, 'sequence')
+      const categoryResult = await readModelSorted(categoryModel, {
+        fields: ['id', 'name', ...(categoryHasSequence ? ['sequence'] : []), ...(categoryHasActive ? ['active'] : [])],
+        domain: categoryHasActive ? [['active', '=', true]] : [],
+        sort_column: categoryHasSequence ? 'sequence' : 'id',
+        sort_desc: false,
+        limit: 1,
+        sudo: 1,
+      }).catch(() => [])
+      categoryId = Number(pickListResponse(categoryResult)?.[0]?.id || 0) || 0
+    }
+
+    if (supportsCategory && categoryField?.required && !categoryId) {
+      return { success: false, error: 'No existe una categoria de incidencia disponible en Odoo.' }
+    }
+
     const result = await createUpdate({
       model: 'gf.production.incident',
       method: 'create',
@@ -3045,6 +3092,7 @@ async function directProduction(method, path, body) {
         shift_id: shiftId,
         ...(supportsName ? { name: body?.name || 'Incidencia' } : {}),
         description: supportsIncidentType && supportsSeverity ? description : fallbackDescription,
+        ...(supportsCategory && categoryId ? { category_id: categoryId } : {}),
         ...(supportsIncidentType ? { incident_type: body?.incident_type || 'production' } : {}),
         ...(supportsSeverity ? { severity: body?.severity || 'low' } : {}),
         state: 'open',
