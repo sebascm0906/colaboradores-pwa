@@ -3901,19 +3901,33 @@ async function directAlmacenPT(method, path, body) {
 
   if (!cleanPath.startsWith('/pwa-pt/')) return NO_DIRECT
 
-  // ── gf.pallet legacy (entregas/ScreenRecibirPT lo sigue consumiendo) ─────
-  // gf.pallet tiene 0 registros en producción; estos handlers quedan como
-  // stubs vacíos para no romper el módulo entregas hasta que éste migre a la
-  // arquitectura stock.quant + gf.packing.entry. Las pantallas Despacho e
-  // HistorialPT que vivían en almacen-pt fueron eliminadas 2026-04-11 porque
-  // estaban sobre la misma base y nunca tuvieron datos reales.
-  if (cleanPath === '/pwa-pt/pending-pallets' && method === 'GET') return []
-  if (cleanPath === '/pwa-pt/ready-pallets'   && method === 'GET') return []
-  if (cleanPath === '/pwa-pt/accept-pallet'   && method === 'POST') {
-    return { success: true, data: null, _note: 'gf.pallet deprecated' }
+  // ── PT → CEDIS transfers (Sebastian rollout 2026-04-19, transactional) ───
+  // Reemplaza los stubs anteriores de gf.pallet (deprecado, 0 registros).
+  // Backend opera sobre stock.picking real:
+  //   pending: lee stock.picking destino al CEDIS del almacenista
+  //   accept:  ejecuta picking.button_validate() (movimiento transaccional)
+  //   reject:  cancela picking + registra motivo (reason obligatorio)
+  if (cleanPath === '/pwa-pt/pending-transfers' && method === 'GET') {
+    return odooJson('/gf/logistics/api/employee/pt_transfer/pending', {
+      warehouse_id: warehouseId,
+    })
   }
-  if (cleanPath === '/pwa-pt/reject-pallet'   && method === 'POST') {
-    return { success: true, data: null, _note: 'gf.pallet deprecated' }
+  if (cleanPath === '/pwa-pt/accept-transfer' && method === 'POST') {
+    const pickingId = Number(body?.picking_id || 0)
+    if (!pickingId) return { ok: false, error: 'picking_id requerido' }
+    return odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
+      picking_id: pickingId,
+    })
+  }
+  if (cleanPath === '/pwa-pt/reject-transfer' && method === 'POST') {
+    const pickingId = Number(body?.picking_id || 0)
+    const reason = (body?.reason || '').trim()
+    if (!pickingId) return { ok: false, error: 'picking_id requerido' }
+    if (!reason) return { ok: false, error: 'reason requerido' }
+    return odooJson('/gf/logistics/api/employee/pt_transfer/reject', {
+      picking_id: pickingId,
+      reason,
+    })
   }
 
   if (cleanPath === '/pwa-pt/inventory' && method === 'GET') {

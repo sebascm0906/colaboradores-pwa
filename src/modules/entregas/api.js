@@ -42,26 +42,22 @@ export function getReturns(warehouseId) {
   return api('GET', `/pwa-entregas/returns?warehouse_id=${warehouseId}`)
 }
 
-// ── Pallets desde Producto Terminado ────────────────────────────────────────
+// ── Transferencias PT → CEDIS (stock.picking transactional) ────────────────
+// Sebastian rollout 2026-04-19. Reemplaza el legacy gf.pallet.
 
-/** Tarimas pendientes de aceptar en este CEDIS */
-export function getPendingPallets(warehouseId) {
-  return api('GET', `/pwa-pt/pending-pallets?warehouse_id=${warehouseId}`)
+/** Transferencias pendientes hacia este CEDIS */
+export function getPendingTransfers(warehouseId) {
+  return api('GET', `/pwa-pt/pending-transfers?warehouse_id=${warehouseId}`)
 }
 
-/** Aceptar tarima recibida */
-export function acceptPallet(palletId) {
-  return api('POST', '/pwa-pt/accept-pallet', { pallet_id: palletId })
+/** Aceptar transferencia (ejecuta picking.button_validate en Odoo) */
+export function acceptTransfer(pickingId) {
+  return api('POST', '/pwa-pt/accept-transfer', { picking_id: pickingId })
 }
 
-/** Rechazar tarima con motivo */
-export function rejectPallet(palletId, reason) {
-  return api('POST', '/pwa-pt/reject-pallet', { pallet_id: palletId, reason })
-}
-
-/** Tarimas listas (ya aceptadas) en CEDIS */
-export function getReadyPallets(warehouseId) {
-  return api('GET', `/pwa-pt/ready-pallets?warehouse_id=${warehouseId}`)
+/** Rechazar transferencia con motivo obligatorio */
+export function rejectTransfer(pickingId, reason) {
+  return api('POST', '/pwa-pt/reject-transfer', { picking_id: pickingId, reason })
 }
 
 // ── Detalle de carga ────────────────────────────────────────────────────────

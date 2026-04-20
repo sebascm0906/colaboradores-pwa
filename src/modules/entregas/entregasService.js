@@ -66,11 +66,11 @@ export async function getDaySummary(warehouseId) {
   }
 
   // Fallback: composite aggregation from existing endpoints
-  const [routes, pending, returns, pallets, handover] = await Promise.allSettled([
+  const [routes, pending, returns, transfers, handover] = await Promise.allSettled([
     api('GET', `/pwa-entregas/today-routes?warehouse_id=${warehouseId}`),
     api('GET', `/pwa-admin/pending-tickets?warehouse_id=${warehouseId}`),
     api('GET', `/pwa-entregas/returns?warehouse_id=${warehouseId}`),
-    api('GET', `/pwa-pt/pending-pallets?warehouse_id=${warehouseId}`),
+    getPendingTransfers(warehouseId),
     getPendingHandover(warehouseId),
   ])
 
@@ -82,13 +82,13 @@ export async function getDaySummary(warehouseId) {
   const routeData = safe(routes)
   const pendingData = safe(pending)
   const returnData = safe(returns)
-  const palletData = safe(pallets)
+  const transferData = transfers.status === 'fulfilled' && Array.isArray(transfers.value) ? transfers.value : []
   const handoverData = handover.status === 'fulfilled' ? handover.value : null
 
   return {
     date: new Date().toISOString().slice(0, 10),
     warehouse_id: warehouseId,
-    pending_pallets: palletData.length,
+    pending_pallets: transferData.length,
     routes_total: routeData.length,
     routes_sealed: routeData.filter((r) => r.load_sealed).length,
     routes_pending: routeData.filter((r) => !r.load_sealed).length,
@@ -102,45 +102,50 @@ export async function getDaySummary(warehouseId) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  LIVE — Pallets from Producto Terminado
+//  LIVE — PT → CEDIS transfers (stock.picking transactional)
+//  Sebastian rollout 2026-04-19: reemplaza el legacy gf.pallet (deprecated).
+//  Backend: /gf/logistics/api/employee/pt_transfer/{pending,accept,reject}
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Tarimas pendientes de aceptar en este CEDIS.
+ * Transferencias PT pendientes para este CEDIS.
+ * Backend devuelve stock.picking destino al warehouse del almacenista,
+ * con sus moves (lineas de producto) y datos para mostrar en pantalla.
  * @param {number} warehouseId
- * @returns {Promise<Array>}
+ * @returns {Promise<Array<{id:number, name:string, origin?:string,
+ *   scheduled_date?:string, state?:string, location_src?:string,
+ *   location_dest?:string, moves?:Array<{product_id:number, product_name:string,
+ *   qty_demand:number, uom?:string}>}>>}
  */
-export async function getPendingPallets(warehouseId) {
-  return api('GET', `/pwa-pt/pending-pallets?warehouse_id=${warehouseId}`)
+export async function getPendingTransfers(warehouseId) {
+  try {
+    const result = await api('GET', `/pwa-pt/pending-transfers?warehouse_id=${warehouseId}`)
+    const items = result?.data?.pickings || result?.pickings || result?.data || result || []
+    return Array.isArray(items) ? items : []
+  } catch {
+    return []
+  }
 }
 
 /**
- * Aceptar tarima recibida.
- * @param {number} palletId
- * @param {number} [employeeId] - Empleado que acepta (para trazabilidad futura)
- * @returns {Promise<Object>}
+ * Aceptar transferencia: backend ejecuta picking.button_validate() (movimiento real).
+ * Precondicion backend: stock 'assigned' en origen.
+ * @param {number} pickingId
+ * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
-export async function acceptPallet(palletId, employeeId) {
-  return api('POST', '/pwa-pt/accept-pallet', { pallet_id: palletId })
+export async function acceptTransfer(pickingId) {
+  return api('POST', '/pwa-pt/accept-transfer', { picking_id: pickingId })
 }
 
 /**
- * Rechazar tarima con motivo.
- * @param {number} palletId
- * @param {string} reason
- * @returns {Promise<Object>}
+ * Rechazar transferencia con motivo obligatorio.
+ * Backend cancela el picking y registra el motivo.
+ * @param {number} pickingId
+ * @param {string} reason - obligatorio
+ * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
-export async function rejectPallet(palletId, reason) {
-  return api('POST', '/pwa-pt/reject-pallet', { pallet_id: palletId, reason })
-}
-
-/**
- * Tarimas ya aceptadas y listas en CEDIS.
- * @param {number} warehouseId
- * @returns {Promise<Array>}
- */
-export async function getReadyPallets(warehouseId) {
-  return api('GET', `/pwa-pt/ready-pallets?warehouse_id=${warehouseId}`)
+export async function rejectTransfer(pickingId, reason) {
+  return api('POST', '/pwa-pt/reject-transfer', { picking_id: pickingId, reason })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
