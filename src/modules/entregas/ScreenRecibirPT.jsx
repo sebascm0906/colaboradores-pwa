@@ -179,7 +179,7 @@ export default function ScreenRecibirPT() {
           </p>
 
           {pending.length === 0 ? (
-            <EmptyState icon="\u{2705}" message="Sin pallets pendientes" />
+            <EmptyState icon="✅" message="Sin pallets pendientes" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
               {pending.map((pallet) => {
@@ -268,7 +268,7 @@ export default function ScreenRecibirPT() {
           </p>
 
           {ready.length === 0 ? (
-            <EmptyState icon="\u{1F4E6}" message="Sin recepciones hoy" />
+            <EmptyState icon="📦" message="Sin recepciones hoy" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {ready.map((pallet) => (
