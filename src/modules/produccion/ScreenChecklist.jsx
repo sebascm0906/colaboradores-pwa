@@ -37,22 +37,27 @@ export default function ScreenChecklist() {
       const shift = await getMyShift()
       if (!shift?.id) { setError('Sin turno activo'); return }
       const data = await getChecklist(shift.id, activeRole)
+      setError('')
       setChecklist(data)
       setChecks((data?.checks || []).map(c => {
-        // Determine if the check was already answered in a real sense.
-        // A fresh check has result_bool=false, result_numeric=0, result_text=''; don't mark those as saved.
-        const hasReal =
-          (c.check_type === 'yes_no' && c.result_bool === true) ||
-          (c.check_type === 'numeric' && Number(c.result_numeric) !== 0) ||
-          (c.check_type === 'text' && !!(c.result_text || '').trim()) ||
+        const attempted =
+          (c.check_type === 'yes_no' && c.result_bool !== undefined && c.result_bool !== null) ||
+          (c.check_type === 'numeric' && c.result_numeric !== undefined && c.result_numeric !== null && c.result_numeric !== '') ||
+          (c.check_type === 'text' && (c.result_text || '') !== '') ||
           (c.check_type === 'photo' && !!c.result_photo)
+
         return {
           ...c,
-          localValue: c.check_type === 'yes_no' ? (hasReal ? true : undefined) : undefined,
-          localNumeric: c.result_numeric ? String(c.result_numeric) : '',
+          localValue: c.check_type === 'yes_no'
+            ? (c.result_bool === true ? true : c.result_bool === false ? false : undefined)
+            : undefined,
+          localNumeric: c.result_numeric !== undefined && c.result_numeric !== null && c.result_numeric !== ''
+            ? String(c.result_numeric)
+            : '',
           localText: c.result_text || '',
           hasPhoto: !!c.result_photo,
-          saved: hasReal,
+          attempted,
+          saved: Boolean(c.passed),
         }
       }))
     } catch (e) {
@@ -64,7 +69,7 @@ export default function ScreenChecklist() {
   }
 
   function updateLocal(idx, field, value) {
-    setChecks(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value, saved: false } : c))
+    setChecks(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value, attempted: true, saved: false } : c))
   }
 
   async function saveCheck(idx, overrides = null) {
@@ -80,10 +85,12 @@ export default function ScreenChecklist() {
 
     try {
       await submitCheck(c.id, data)
-      setChecks(prev => prev.map((ch, i) => i === idx ? { ...ch, saved: true } : ch))
+      await loadChecklist()
+      return true
     } catch (e) {
       logScreenError('ScreenChecklist', 'submitCheck', e)
-      // user can retry
+      setError('No se pudo guardar uno de los checks. Revisa los datos e intenta de nuevo.')
+      return false
     }
   }
 
@@ -99,7 +106,7 @@ export default function ScreenChecklist() {
     reader.onload = async () => {
       try {
         await submitCheck(photoCheckId, { result_photo: reader.result })
-        setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
+        await loadChecklist()
       } catch (err) {
         logScreenError('ScreenChecklist', 'submitCheck(photo)', err)
         setError('Error subiendo foto — intenta de nuevo')
@@ -107,12 +114,75 @@ export default function ScreenChecklist() {
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+    setPhotoCheckId(null)
   }
 
   async function handleComplete() {
     if (!checklist?.id) return
     setSubmitting(true)
     try {
+      setError('')
+      let currentChecks = checks
+      for (let idx = 0; idx < currentChecks.length; idx += 1) {
+        const c = currentChecks[idx]
+        const needsSave =
+          c.check_type === 'yes_no'
+            ? c.localValue !== undefined && !c.saved
+            : c.check_type === 'numeric'
+              ? c.localNumeric !== '' && !c.saved
+              : c.check_type === 'text'
+                ? !!c.localText?.trim() && !c.saved
+                : false
+        if (!needsSave) continue
+        const ok = await saveCheck(idx)
+        if (!ok) return
+        const shiftSnapshot = await getMyShift()
+        const latest = await getChecklist(shiftSnapshot.id, activeRole)
+        currentChecks = (latest?.checks || []).map(c2 => ({
+          ...c2,
+          localValue: c2.check_type === 'yes_no'
+            ? (c2.result_bool === true ? true : c2.result_bool === false ? false : undefined)
+            : undefined,
+          localNumeric: c2.result_numeric !== undefined && c2.result_numeric !== null && c2.result_numeric !== ''
+            ? String(c2.result_numeric)
+            : '',
+          localText: c2.result_text || '',
+          hasPhoto: !!c2.result_photo,
+          attempted:
+            (c2.check_type === 'yes_no' && c2.result_bool !== undefined && c2.result_bool !== null) ||
+            (c2.check_type === 'numeric' && c2.result_numeric !== undefined && c2.result_numeric !== null && c2.result_numeric !== '') ||
+            (c2.check_type === 'text' && (c2.result_text || '') !== '') ||
+            (c2.check_type === 'photo' && !!c2.result_photo),
+          saved: Boolean(c2.passed),
+        }))
+      }
+
+      const shift = await getMyShift()
+      const fresh = await getChecklist(shift.id, activeRole)
+      const pending = (fresh?.checks || []).filter(c => !c.passed)
+      if (pending.length) {
+        setChecklist(fresh)
+        setChecks((fresh?.checks || []).map(c => ({
+          ...c,
+          localValue: c.check_type === 'yes_no'
+            ? (c.result_bool === true ? true : c.result_bool === false ? false : undefined)
+            : undefined,
+          localNumeric: c.result_numeric !== undefined && c.result_numeric !== null && c.result_numeric !== ''
+            ? String(c.result_numeric)
+            : '',
+          localText: c.result_text || '',
+          hasPhoto: !!c.result_photo,
+          attempted:
+            (c.check_type === 'yes_no' && c.result_bool !== undefined && c.result_bool !== null) ||
+            (c.check_type === 'numeric' && c.result_numeric !== undefined && c.result_numeric !== null && c.result_numeric !== '') ||
+            (c.check_type === 'text' && (c.result_text || '') !== '') ||
+            (c.check_type === 'photo' && !!c.result_photo),
+          saved: Boolean(c.passed),
+        })))
+        setError('Hay checks pendientes o fallidos. Revisa los puntos marcados antes de completar.')
+        return
+      }
+
       await completeChecklist(checklist.id)
       navigate('/produccion', { state: productionState })
     } catch (e) {
@@ -290,6 +360,12 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
       </div>
 
       {/* Input según tipo */}
+      {check.attempted && !check.saved && (
+        <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '0 0 10px 38px' }}>
+          Este punto aun no cumple la validacion de Odoo.
+        </p>
+      )}
+
       {check.check_type === 'yes_no' && (
         <div style={{ display: 'flex', gap: 8, marginLeft: 38 }}>
           {[true, false].map(val => (

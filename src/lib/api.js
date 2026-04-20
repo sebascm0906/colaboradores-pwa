@@ -1860,6 +1860,16 @@ async function directProduction(method, path, body) {
     return result
   }
 
+  if (cleanPath === '/api/production/haccp/check' && method === 'POST') {
+    return odooHttp('POST', '/api/production/haccp/check', {}, {
+      check_id: Number(body?.check_id || 0),
+      ...(body?.result_bool !== undefined ? { result_bool: !!body.result_bool } : {}),
+      ...(body?.result_numeric !== undefined ? { result_numeric: Number(body.result_numeric || 0) } : {}),
+      ...(body?.result_text !== undefined ? { result_text: body.result_text || '' } : {}),
+      ...(body?.result_photo !== undefined ? { result_photo: body.result_photo } : {}),
+    })
+  }
+
   if (cleanPath === '/pwa-prod/checklist-complete' && method === 'POST') {
     const checklistId = Number(body?.checklist_id || 0)
     const result = await createUpdate({

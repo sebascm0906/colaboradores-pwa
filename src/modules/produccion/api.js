@@ -23,7 +23,7 @@ export function getChecklist(shiftId, roleContext = '') {
 
 /** Enviar respuesta de un punto del checklist */
 export function submitCheck(checkId, data) {
-  return api('POST', '/pwa-prod/checklist-check', { check_id: checkId, ...data })
+  return api('POST', '/api/production/haccp/check', { check_id: checkId, ...data })
 }
 
 /** Marcar checklist como completado */
