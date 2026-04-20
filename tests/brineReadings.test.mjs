@@ -6,6 +6,7 @@ import {
   validateBrineReadingInput,
   buildBrineReadingPayload,
   getInitialBrineReadingForm,
+  getReadingLocalDateKey,
 } from '../src/modules/supervision/brineReadings.js'
 
 test('getBrineReadingStatus marks tank as missing when it has no salt reading', () => {
@@ -89,4 +90,8 @@ test('getBrineReadingStatus marks tank as ok when reading is from today and abov
 
   assert.equal(status.kind, 'ok')
   assert.equal(status.label, 'Al dia')
+})
+
+test('getReadingLocalDateKey converts UTC datetime strings to the local calendar day', () => {
+  assert.equal(getReadingLocalDateKey('2026-04-20 01:30:00', 360), '2026-04-19')
 })
