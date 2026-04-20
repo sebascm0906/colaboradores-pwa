@@ -157,13 +157,16 @@ export async function getTodayRoutes(warehouseId) {
 }
 
 /**
- * Confirmar que la carga fue despachada a la ruta.
- * Backend ahora registra load_sealed_by_id y load_sealed_at para auditoría.
+ * Sellar la carga: backend valida el load_picking (button_validate),
+ * marca load_sealed/load_sealed_at/load_sealed_by_id y propaga el state.
+ * Precondiciones backend: picking 'assigned', plan 'published'.
+ * Backend: POST /gf/logistics/api/employee/route_plan/seal_load
  * @param {number} routePlanId
- * @returns {Promise<Object>}
+ * @returns {Promise<{ok:boolean, error?:string, plan_id?:number, state?:string,
+ *   load_sealed?:boolean, load_sealed_at?:string, picking_state?:string}>}
  */
 export async function confirmLoad(routePlanId) {
-  return api('POST', '/pwa-entregas/confirm-load', { route_plan_id: routePlanId })
+  return api('POST', '/pwa-entregas/confirm-load', { plan_id: routePlanId })
 }
 
 /**

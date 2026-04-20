@@ -4533,21 +4533,15 @@ async function directEntregas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-entregas/confirm-load' && method === 'POST') {
-    const routePlanId = Number(body?.route_plan_id || 0)
-    if (!routePlanId) return { success: false, error: 'route_plan_id requerido' }
-    const result = await createUpdate({
-      model: 'gf.route.plan',
-      method: 'update',
-      ids: [routePlanId],
-      dict: {
-        load_sealed: true,
-        load_sealed_by_id: Number(body?.sealed_by_id || getEmployeeId() || 0) || undefined,
-        load_sealed_at: new Date().toISOString(),
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    // Sebastian rollout 2026-04-19: motor transaccional. El controller
+    // route_plan/seal_load valida el load_picking_id (button_validate),
+    // marca load_sealed/load_sealed_at/load_sealed_by_id y propaga el state.
+    // Precondiciones: stock reservado (assigned), plan en estado 'published'.
+    const planId = Number(body?.plan_id || body?.route_plan_id || 0)
+    if (!planId) return { ok: false, error: 'plan_id requerido' }
+    return odooJson('/gf/logistics/api/employee/route_plan/seal_load', {
+      plan_id: planId,
     })
-    return { success: true, data: result }
   }
 
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {

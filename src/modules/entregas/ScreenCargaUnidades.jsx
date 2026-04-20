@@ -112,14 +112,22 @@ export default function ScreenCargaUnidades() {
     setConfirmRoute(null)
     setConfirming(routePlanId)
     try {
-      await confirmLoad(routePlanId)
-      showToast('Carga confirmada')
+      const res = await confirmLoad(routePlanId)
+      // Backend transaccional puede devolver { ok:false, error } sin lanzar excepcion
+      if (res && res.ok === false) {
+        const msg = res.error || 'Verificar disponibilidad de stock'
+        showToast(`Error: ${msg}`, 'error')
+        return
+      }
+      showToast('Carga sellada y picking validado')
       // Clear cached detail for this route
       setLoadLines((prev) => { const n = { ...prev }; delete n[routePlanId]; return n })
       setExpandedId(null)
       await loadRoutes()
     } catch (e) {
-      if (e.message !== 'no_session') showToast('Error al confirmar carga', 'error')
+      if (e.message === 'no_session') return
+      const msg = e?.message || 'Verificar disponibilidad de stock'
+      showToast(`Error: ${msg}`, 'error')
     } finally {
       setConfirming(null)
     }
