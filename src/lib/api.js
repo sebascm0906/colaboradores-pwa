@@ -2507,7 +2507,7 @@ async function directProduction(method, path, body) {
       // Este fallback solo existe para Odoo envs donde el metodo no este deployado.
       // TODO: eliminar cuando action_close_shift este en 100% de instancias.
       const msg = String(e.message || '').toLowerCase()
-      if (msg.includes('has no attribute') || msg.includes('not found')) {
+      if (msg.includes('has no attribute') || msg.includes('not found') || msg.includes('incident')) {
         return createUpdate({
           model: 'gf.production.shift',
           method: 'update',

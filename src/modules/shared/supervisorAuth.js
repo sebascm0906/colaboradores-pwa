@@ -7,7 +7,8 @@
 //   /api/production/shift/close   → action_close_shift
 //   /api/production/pt/reconcile  → reconciliacion PT (backend calcula)
 
-import { validatePin, closeShift as closeShiftReal } from './productionAPI'
+import { validatePin } from './productionAPI'
+import { api } from '../../lib/api'
 
 // ─── PIN Supervisor ──────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ export async function closeShiftServerSide(payload) {
   }
 
   try {
-    const result = await closeShiftReal(payload.shift_id)
+    const result = await api('POST', '/pwa-prod/shift-close', { shift_id: payload.shift_id })
     if (result && !result.error) {
       return { ok: true, warnings: result.warnings || [] }
     }

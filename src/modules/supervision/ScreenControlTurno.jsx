@@ -12,6 +12,11 @@ import {
   INCIDENT_TYPES, INCIDENT_SEVERITIES, INCIDENT_STATES,
   getOpenIncidents, getIncidentTypeLabel,
 } from '../shared/incidentService'
+import {
+  areRequiredOperatorClosesDone,
+  clearOperatorTurnClosed,
+  getOperatorCloseSummary,
+} from '../shared/operatorTurnCloseStore'
 import BrineReadingModal from './BrineReadingModal'
 import {
   buildBrineReadingPayload,
@@ -54,6 +59,49 @@ const START_STATUS_META = {
 
 function getStartStatusMeta(status) {
   return START_STATUS_META[status] || START_STATUS_META.missing
+}
+
+function readinessText(item) {
+  if (!item) return ''
+  if (typeof item === 'string') return item
+  return item.message || item.code || ''
+}
+
+function isIncidentReadinessItem(item) {
+  const code = typeof item === 'object' ? String(item.code || '').toLowerCase() : ''
+  const text = readinessText(item).toLowerCase()
+  return code.includes('incident') || text.includes('incidenc')
+}
+
+function buildSupervisorCloseReadiness(rawReadiness, shiftId) {
+  const base = rawReadiness || { canClose: false, blockers: [], warnings: [] }
+  const operatorSummary = getOperatorCloseSummary(shiftId)
+  const operatorBlockers = operatorSummary
+    .filter((item) => !item.closed)
+    .map((item) => `${item.label} pendiente de cerrar su turno`)
+
+  const keptBlockers = (base.blockers || [])
+    .filter((item) => !isIncidentReadinessItem(item))
+    .map(readinessText)
+    .filter(Boolean)
+
+  const incidentWarnings = (base.blockers || [])
+    .filter((item) => isIncidentReadinessItem(item))
+    .map(readinessText)
+    .filter(Boolean)
+
+  const warnings = [
+    ...(base.warnings || []).map(readinessText).filter(Boolean),
+    ...incidentWarnings,
+  ]
+
+  return {
+    canClose: keptBlockers.length === 0 && operatorBlockers.length === 0,
+    blockers: [...keptBlockers, ...operatorBlockers],
+    warnings,
+    operatorSummary,
+    operatorsReady: areRequiredOperatorClosesDone(shiftId),
+  }
 }
 
 export default function ScreenControlTurno() {
@@ -185,10 +233,11 @@ export default function ScreenControlTurno() {
     setLoadingReadiness(true)
     try {
       const { readiness } = await loadShiftReadiness(shift.id)
-      setCloseReadiness(readiness)
-      return readiness
+      const effectiveReadiness = buildSupervisorCloseReadiness(readiness, shift.id)
+      setCloseReadiness(effectiveReadiness)
+      return effectiveReadiness
     } catch (e) {
-      const err = { canClose: false, blockers: ['Error consultando estado de cierre'], warnings: [] }
+      const err = { canClose: false, blockers: ['Error consultando estado de cierre'], warnings: [], operatorSummary: [] }
       setCloseReadiness(err)
       return err
     } finally {
@@ -214,6 +263,7 @@ export default function ScreenControlTurno() {
       if (!result.ok) {
         throw new Error(result.error || 'Error cerrando turno')
       }
+      clearOperatorTurnClosed(shift.id)
       setMsg({ type: 'success', text: 'Turno cerrado correctamente' })
       setConfirmClose(false)
       setCloseReadiness(null)
@@ -612,6 +662,33 @@ export default function ScreenControlTurno() {
                     </p>
                   ) : closeReadiness ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {Array.isArray(closeReadiness.operatorSummary) && closeReadiness.operatorSummary.length > 0 && (
+                        <div style={{
+                          padding: 10, borderRadius: TOKENS.radius.md,
+                          background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.22)',
+                        }}>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: 0, marginBottom: 6, fontWeight: 700 }}>
+                            CIERRE DE OPERADORES
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {closeReadiness.operatorSummary.map((item) => (
+                              <div key={item.role} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>
+                                  {item.label}
+                                </span>
+                                <span style={{
+                                  ...typo.caption,
+                                  color: item.closed ? TOKENS.colors.success : TOKENS.colors.warning,
+                                  fontWeight: 700,
+                                }}>
+                                  {item.closed ? `Cerrado${item.employee_name ? ` · ${item.employee_name}` : ''}` : 'Pendiente'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Bloqueos */}
                       {closeReadiness.blockers.length > 0 && (
                         <div style={{
