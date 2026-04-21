@@ -12,22 +12,22 @@ import {
   getShiftOverview,
   saveBagReconciliation,
 } from './rolitoService'
-import { loadShiftReadiness } from '../shared/shiftReadiness'
-import { closeShiftServerSide } from '../shared/supervisorAuth'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
+import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const activeOperatorRole = normalizeOperatorCloseRole(session?.role)
 
   const [data, setData] = useState({ shift: null, cycles: [], packing: [], kpis: null })
-  const [readiness, setReadiness] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [closing, setClosing] = useState(false)
+  const [alreadyClosed, setAlreadyClosed] = useState(false)
 
   // Bag reconciliation — persisted via POST /api/production/shift/bag-reconciliation
   const [bagsReceived, setBagsReceived] = useState('')
@@ -45,17 +45,13 @@ export default function ScreenCierreRolito() {
     try {
       const result = await getShiftOverview()
       setData(result)
-      // Readiness centralizado (servicio compartido, no duplica logica)
-      if (result.shift?.id) {
-        const { readiness: r } = await loadShiftReadiness(result.shift.id)
-        setReadiness(r)
-      }
+      setAlreadyClosed(Boolean(result.shift?.id && isOperatorTurnClosed(result.shift.id, activeOperatorRole)))
     } catch {
       setError('Error cargando datos')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeOperatorRole])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -65,10 +61,10 @@ export default function ScreenCierreRolito() {
   const bagsRemainingNum = parseInt(bagsRemaining) || 0
   const bagsDiff = bagsReceivedNum > 0 ? bagsReceivedNum - totalBagsUsed - bagsRemainingNum : null
   const allChecked = checks.every(c => c.done)
-  // Autoridad de cierre: backend (_get_close_readiness). Frontend solo refleja.
-  const backendCanClose = readiness?.canClose === true
-  const hasBlockers = (readiness?.blockers?.length || 0) > 0
-  const canClose = allChecked && backendCanClose && !hasBlockers
+  const readiness = { warnings: [], blockers: [] }
+  const backendCanClose = true
+  const hasBlockers = false
+  const canClose = allChecked && !alreadyClosed
 
   // Coherencia ciclos <-> empaque (Fase 3) — aviso UX-friendly
   const coherence = useMemo(
@@ -91,13 +87,12 @@ export default function ScreenCierreRolito() {
         await saveBagReconciliation(shift.id, bagsReceivedNum, bagsRemainingNum)
       }
 
-      const result = await closeShiftServerSide({ shift_id: shift.id })
-      if (!result.ok) {
-        setError(result.error || 'No se pudo cerrar el turno')
-        return
-      }
-      setSuccess('Turno cerrado correctamente')
-      setTimeout(() => navigate('/'), 2000)
+      markOperatorTurnClosed(shift.id, activeOperatorRole, {
+        employee_name: session?.employee_name || session?.name || session?.user_name || '',
+      })
+      setAlreadyClosed(true)
+      setSuccess('Tu cierre fue entregado al supervisor. El cierre final del turno lo realiza supervision.')
+      setTimeout(() => navigate('/produccion'), 1800)
     } catch (e) {
       setError(e.message || 'Error al cerrar turno')
     } finally {
@@ -414,13 +409,13 @@ export default function ScreenCierreRolito() {
               }}
             >
               {closing
-                ? 'Cerrando...'
+                ? 'Entregando...'
                 : canClose
-                  ? 'CERRAR TURNO'
+                  ? 'ENTREGAR CIERRE AL SUPERVISOR'
                   : hasBlockers
                     ? 'Corrige los pendientes para cerrar'
-                    : !backendCanClose
-                      ? 'Cargando estado del turno...'
+                    : alreadyClosed
+                      ? 'TURNO YA ENTREGADO'
                       : 'Completa el checklist para cerrar'}
             </button>
 

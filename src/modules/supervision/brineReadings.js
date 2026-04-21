@@ -2,16 +2,30 @@ function toDateOnly(value = '') {
   return String(value || '').trim().slice(0, 10)
 }
 
-export function getTodayDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+function formatDateKey(date, useUTC = false) {
+  const year = useUTC ? date.getUTCFullYear() : date.getFullYear()
+  const month = String((useUTC ? date.getUTCMonth() : date.getMonth()) + 1).padStart(2, '0')
+  const day = String(useUTC ? date.getUTCDate() : date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+export function getTodayDateKey(date = new Date()) {
+  return formatDateKey(date)
+}
+
+export function getReadingLocalDateKey(value = '', timezoneOffsetMinutes = new Date().getTimezoneOffset()) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T')
+  const parsed = new Date(`${normalized}Z`)
+  if (Number.isNaN(parsed.getTime())) return toDateOnly(raw)
+  const localTime = new Date(parsed.getTime() - (timezoneOffsetMinutes * 60 * 1000))
+  return formatDateKey(localTime, true)
 }
 
 export function getBrineReadingStatus(tank = {}, today = getTodayDateKey()) {
   const saltLevel = Number(tank?.salt_level || 0)
-  const updatedAt = toDateOnly(tank?.salt_level_updated_at)
+  const updatedAt = getReadingLocalDateKey(tank?.salt_level_updated_at)
   const minSalt = tank?.min_salt_level_for_harvest != null
     ? Number(tank.min_salt_level_for_harvest)
     : null

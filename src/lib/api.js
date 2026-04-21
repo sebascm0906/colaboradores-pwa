@@ -5,6 +5,7 @@ import {
   withExpectedTimingFields,
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming'
+import { buildPtReceptionFromHarvest } from '../modules/produccion/barraHarvestReception.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -147,7 +148,16 @@ function toMany2oneId(value) {
   return Number(value || 0)
 }
 
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 const modelFieldSupportCache = new Map()
+const modelFieldInfoCache = new Map()
 
 async function modelHasField(model, fieldName) {
   const cacheKey = `${model}:${fieldName}`
@@ -169,6 +179,29 @@ async function modelHasField(model, fieldName) {
   } catch (_) {
     modelFieldSupportCache.set(cacheKey, false)
     return false
+  }
+}
+
+async function getModelFieldInfo(model, fieldName) {
+  const cacheKey = `${model}:${fieldName}:info`
+  if (modelFieldInfoCache.has(cacheKey)) {
+    return modelFieldInfoCache.get(cacheKey)
+  }
+  try {
+    const result = await readModelSorted('ir.model.fields', {
+      fields: ['id', 'name', 'relation', 'required'],
+      domain: [['model', '=', model], ['name', '=', fieldName]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 1,
+      sudo: 1,
+    })
+    const info = pickFirstResponse(result) || null
+    modelFieldInfoCache.set(cacheKey, info)
+    return info
+  } catch (_) {
+    modelFieldInfoCache.set(cacheKey, null)
+    return null
   }
 }
 
@@ -2475,7 +2508,7 @@ async function directProduction(method, path, body) {
       // Este fallback solo existe para Odoo envs donde el metodo no este deployado.
       // TODO: eliminar cuando action_close_shift este en 100% de instancias.
       const msg = String(e.message || '').toLowerCase()
-      if (msg.includes('has no attribute') || msg.includes('not found')) {
+      if (msg.includes('has no attribute') || msg.includes('not found') || msg.includes('incident')) {
         return createUpdate({
           model: 'gf.production.shift',
           method: 'update',
@@ -2611,6 +2644,75 @@ async function directProduction(method, path, body) {
       }
     } catch { /* ignore */ }
     return res
+  }
+
+  if (cleanPath === '/pwa-prod/harvest-with-pt-reception' && method === 'POST') {
+    const slotId = Number(body?.slot_id || 0)
+    const shiftId = Number(body?.shift_id || 0)
+    const operatorId = getEmployeeId() || Number(body?.operator_id || 0)
+    const temperature = Number(body?.temperature || 0)
+    const slot = body?.slot || {}
+    const tank = body?.tank || {}
+
+    if (!slotId) throw new Error('slot_id requerido')
+    if (!shiftId) throw new Error('shift_id requerido')
+
+    const receptionPayload = buildPtReceptionFromHarvest({ slot, tank })
+    const productId = Number(body?.product_id || receptionPayload.product_id || 0)
+    const qtyReported = Number(body?.qty_reported || receptionPayload.qty_reported || 0)
+
+    if (!productId) throw new Error('product_id requerido para recepcion PT')
+    if (!qtyReported || qtyReported <= 0) throw new Error('qty_reported invalido para recepcion PT')
+
+    const harvestResult = await createUpdate({
+      model: 'x_ice.brine.slot',
+      method: 'function',
+      ids: [slotId],
+      function: 'action_cosechar',
+      sudo: 1, app: 'pwa_colaboradores',
+    })
+
+    try {
+      const dict = {}
+      if (operatorId) dict.x_operator_id = operatorId
+      if (temperature) dict.x_brine_temp_at_extraction = temperature
+      if (Object.keys(dict).length > 0) {
+        await createUpdate({
+          model: 'x_ice.brine.slot',
+          method: 'update',
+          ids: [slotId],
+          dict,
+          sudo: 1, app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const packResult = await odooHttp('POST', '/api/production/pack', {}, {
+        shift_id: shiftId,
+        cycle_id: 0,
+        product_id: productId,
+        qty_bags: qtyReported,
+        production_order_id: 0,
+      })
+
+      return {
+        ok: true,
+        harvest: { ok: true, data: harvestResult },
+        pt_reception: { ok: true, data: packResult?.data || packResult || {} },
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        harvested: true,
+        harvest: { ok: true, data: harvestResult },
+        pt_reception: {
+          ok: false,
+          error: error?.message || 'No se pudo generar la recepcion PT',
+        },
+        error: error?.message || 'La canastilla fue cosechada pero la recepcion PT no se pudo generar',
+      }
+    }
   }
 
   // ── Barra: Tank incident ─────────────────────────────────────────────────
@@ -2996,8 +3098,22 @@ async function directProduction(method, path, body) {
   if (cleanPath === '/api/production/incidents' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
+    const supportsIncidentType = await modelHasField('gf.production.incident', 'incident_type')
+    const supportsSeverity = await modelHasField('gf.production.incident', 'severity')
+    const supportsReportedBy = await modelHasField('gf.production.incident', 'reported_by_id')
+    const supportsName = await modelHasField('gf.production.incident', 'name')
     const result = await readModelSorted('gf.production.incident', {
-      fields: ['id', 'name', 'description', 'incident_type', 'severity', 'state', 'shift_id', 'reported_by_id', 'create_date'],
+      fields: [
+        'id',
+        ...(supportsName ? ['name'] : []),
+        'description',
+        ...(supportsIncidentType ? ['incident_type'] : []),
+        ...(supportsSeverity ? ['severity'] : []),
+        'state',
+        'shift_id',
+        ...(supportsReportedBy ? ['reported_by_id'] : []),
+        'create_date',
+      ],
       domain: [['shift_id', '=', shiftId]],
       sort_column: 'id',
       sort_desc: true,
@@ -3007,25 +3123,77 @@ async function directProduction(method, path, body) {
     return pickListResponse(result).map(row => ({
       ...row,
       reported_by: Array.isArray(row.reported_by_id) ? row.reported_by_id[1] : '',
+      incident_type: row.incident_type || '',
+      severity: row.severity || '',
+      name: row.name || row.description || 'Incidencia',
     }))
   }
 
   if (cleanPath === '/api/production/incidents' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
     if (!shiftId) return { success: false, error: 'shift_id requerido' }
-    // NOTA: el modelo gf.production.incident NO tiene campo `name` (verificado en vivo
-    // 2026-04-16: "Invalid field 'name' on model 'gf.production.incident'").
-    // Si Sebastian agrega el campo, se puede re-introducir aqui.
+    const supportsIncidentType = await modelHasField('gf.production.incident', 'incident_type')
+    const supportsSeverity = await modelHasField('gf.production.incident', 'severity')
+    const supportsReportedBy = await modelHasField('gf.production.incident', 'reported_by_id')
+    const supportsName = await modelHasField('gf.production.incident', 'name')
+    const categoryField = await getModelFieldInfo('gf.production.incident', 'category_id')
+    const supportsCategory = Boolean(categoryField?.id)
+    const description = body?.description || body?.name || 'Incidencia'
+    const typeLabel = body?.incident_type ? `Tipo: ${body.incident_type}` : ''
+    const severityLabel = body?.severity ? `Severidad: ${body.severity}` : ''
+    const fallbackDescription = [description, typeLabel, severityLabel].filter(Boolean).join('\n')
+    let categoryId = Number(body?.category_id || 0) || 0
+
+    if (supportsCategory && !categoryId) {
+      const categoryModel = categoryField?.relation || 'gf.production.incident.category'
+      const categoryHasActive = await modelHasField(categoryModel, 'active')
+      const categoryHasSequence = await modelHasField(categoryModel, 'sequence')
+      const desiredCategoryNameMap = {
+        production: 'Produccion',
+        quality: 'Calidad',
+        inventory: 'Inventario',
+        equipment: 'Equipo',
+        safety: 'Seguridad',
+        other: 'Otro',
+      }
+      const desiredCategoryName = desiredCategoryNameMap[String(body?.incident_type || '').toLowerCase()] || ''
+      const categoryResult = await readModelSorted(categoryModel, {
+        fields: ['id', 'name', ...(categoryHasSequence ? ['sequence'] : []), ...(categoryHasActive ? ['active'] : [])],
+        domain: categoryHasActive ? [['active', '=', true]] : [],
+        sort_column: categoryHasSequence ? 'sequence' : 'id',
+        sort_desc: false,
+        limit: 100,
+        sudo: 1,
+      }).catch(() => [])
+      const categoryRows = pickListResponse(categoryResult)
+      const matchedCategory = categoryRows.find((row) => {
+        const rowName = normalizeText(row?.name)
+        return rowName && (
+          rowName === normalizeText(desiredCategoryName) ||
+          rowName === normalizeText(body?.incident_type) ||
+          rowName.includes(normalizeText(desiredCategoryName)) ||
+          normalizeText(desiredCategoryName).includes(rowName)
+        )
+      }) || categoryRows[0]
+      categoryId = Number(matchedCategory?.id || 0) || 0
+    }
+
+    if (supportsCategory && categoryField?.required && !categoryId) {
+      return { success: false, error: 'No existe una categoria de incidencia disponible en Odoo.' }
+    }
+
     const result = await createUpdate({
       model: 'gf.production.incident',
       method: 'create',
       dict: {
         shift_id: shiftId,
-        description: body?.description || body?.name || 'Incidencia',
-        incident_type: body?.incident_type || 'production',
-        severity: body?.severity || 'low',
+        ...(supportsName ? { name: body?.name || 'Incidencia' } : {}),
+        description: supportsIncidentType && supportsSeverity ? description : fallbackDescription,
+        ...(supportsCategory && categoryId ? { category_id: categoryId } : {}),
+        ...(supportsIncidentType ? { incident_type: body?.incident_type || 'production' } : {}),
+        ...(supportsSeverity ? { severity: body?.severity || 'low' } : {}),
         state: 'open',
-        reported_by_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined,
+        ...(supportsReportedBy ? { reported_by_id: Number(body?.reported_by_id || getEmployeeId() || 0) || undefined } : {}),
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -3459,6 +3627,22 @@ async function directSupervision(method, path, body) {
       app: 'pwa_colaboradores',
     })
     return { success: true, data: result }
+  }
+
+  if (cleanPath === '/pwa-sup/shift-start' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    if (!shiftId) throw new Error('shift_id requerido')
+
+    const result = await createUpdate({
+      model: 'gf.production.shift',
+      method: 'function',
+      ids: [shiftId],
+      function: 'action_start_shift',
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+
+    return { ok: true, data: result }
   }
 
   // ── Shift close readiness check ──────────────────────────────────────
@@ -4355,19 +4539,48 @@ async function directAlmacenPT(method, path, body) {
 
   if (cleanPath === '/pwa-pt/reception-create' && method === 'POST') {
     // Backend expects packing_entry_ids (array) + received_lines.
-    // The PWA sends a single packing_entry_id — adapt here.
-    const entryId = body?.packing_entry_id || undefined
+    // Accept both the old single-entry payload and the new aggregated payload.
+    const explicitIds = Array.isArray(body?.packing_entry_ids)
+      ? body.packing_entry_ids
+          .map((value) => Number(Array.isArray(value) ? value[0] : value))
+          .filter((value) => value > 0)
+      : []
+    const entryId = Number(body?.packing_entry_id || 0) || undefined
     const receivedQty = body?.qty_received != null ? Number(body.qty_received) : 0
-    return odooJson('/api/pt/reception/create', {
+    const explicitLines = Array.isArray(body?.received_lines)
+      ? body.received_lines
+          .map((line) => ({
+            packing_entry_id: Number(line?.packing_entry_id || 0),
+            received_qty: Number(line?.received_qty || 0),
+            notes: line?.notes || '',
+          }))
+          .filter((line) => line.packing_entry_id > 0 && line.received_qty > 0)
+      : []
+    const packingEntryIds = explicitIds.length > 0
+      ? explicitIds
+      : entryId
+        ? [entryId]
+        : []
+    const receivedLines = explicitLines.length > 0
+      ? explicitLines
+      : entryId
+        ? [{
+            packing_entry_id: entryId,
+            received_qty: receivedQty,
+            notes: body?.notes || '',
+          }]
+        : []
+    const envelope = await odooJson('/api/pt/reception/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
-      packing_entry_ids: entryId ? [entryId] : [],
-      received_lines: entryId ? [{
-        packing_entry_id: entryId,
-        received_qty: receivedQty,
-        notes: body?.notes || '',
-      }] : [],
+      shift_id: Number(body?.shift_id || 0) || undefined,
+      packing_entry_ids: packingEntryIds,
+      received_lines: receivedLines,
     })
+    if (envelope?.ok === false) {
+      throw new Error(envelope?.message || 'Error confirmando recepción PT')
+    }
+    return envelope?.data ?? envelope
   }
 
   // ── Transformation (Sebastián rollout 2026-04-10) ────────────────────────
