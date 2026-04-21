@@ -4539,18 +4539,43 @@ async function directAlmacenPT(method, path, body) {
 
   if (cleanPath === '/pwa-pt/reception-create' && method === 'POST') {
     // Backend expects packing_entry_ids (array) + received_lines.
-    // The PWA sends a single packing_entry_id — adapt here.
-    const entryId = body?.packing_entry_id || undefined
+    // Accept both the old single-entry payload and the new aggregated payload.
+    const explicitIds = Array.isArray(body?.packing_entry_ids)
+      ? body.packing_entry_ids
+          .map((value) => Number(Array.isArray(value) ? value[0] : value))
+          .filter((value) => value > 0)
+      : []
+    const entryId = Number(body?.packing_entry_id || 0) || undefined
     const receivedQty = body?.qty_received != null ? Number(body.qty_received) : 0
+    const explicitLines = Array.isArray(body?.received_lines)
+      ? body.received_lines
+          .map((line) => ({
+            packing_entry_id: Number(line?.packing_entry_id || 0),
+            received_qty: Number(line?.received_qty || 0),
+            notes: line?.notes || '',
+          }))
+          .filter((line) => line.packing_entry_id > 0 && line.received_qty > 0)
+      : []
+    const packingEntryIds = explicitIds.length > 0
+      ? explicitIds
+      : entryId
+        ? [entryId]
+        : []
+    const receivedLines = explicitLines.length > 0
+      ? explicitLines
+      : entryId
+        ? [{
+            packing_entry_id: entryId,
+            received_qty: receivedQty,
+            notes: body?.notes || '',
+          }]
+        : []
     return odooJson('/api/pt/reception/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
-      packing_entry_ids: entryId ? [entryId] : [],
-      received_lines: entryId ? [{
-        packing_entry_id: entryId,
-        received_qty: receivedQty,
-        notes: body?.notes || '',
-      }] : [],
+      shift_id: Number(body?.shift_id || 0) || undefined,
+      packing_entry_ids: packingEntryIds,
+      received_lines: receivedLines,
     })
   }
 

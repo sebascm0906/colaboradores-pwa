@@ -41,6 +41,111 @@ function num(x, fallback = 0) {
   return Number.isFinite(n) ? n : fallback
 }
 
+function normalizeEntryAllocations(row) {
+  const explicitLines = Array.isArray(row?.received_lines)
+    ? row.received_lines
+    : Array.isArray(row?.pending_lines)
+      ? row.pending_lines
+      : Array.isArray(row?.entries)
+        ? row.entries
+        : Array.isArray(row?.packing_entries)
+          ? row.packing_entries
+          : []
+
+  const fromLines = explicitLines
+    .map((line) => {
+      const packingEntryId = Number(
+        line?.packing_entry_id ||
+        line?.entry_id ||
+        line?.id ||
+        (Array.isArray(line?.packing_entry) ? line.packing_entry[0] : 0) ||
+        0
+      )
+      if (!packingEntryId) return null
+      const qtyReported = num(line?.qty_reported ?? line?.qty_declared ?? line?.qty_expected)
+      const qtyReceived = num(line?.qty_received ?? 0)
+      const qtyPending = line?.qty_pending != null
+        ? num(line?.qty_pending)
+        : Math.max(0, qtyReported - qtyReceived)
+      return { packing_entry_id: packingEntryId, qty_reported: qtyReported, qty_received: qtyReceived, qty_pending: qtyPending }
+    })
+    .filter(Boolean)
+
+  if (fromLines.length > 0) return fromLines
+
+  const rawIds = Array.isArray(row?.packing_entry_ids)
+    ? row.packing_entry_ids
+    : Array.isArray(row?.entry_ids)
+      ? row.entry_ids
+      : row?.packing_entry_id
+        ? [row.packing_entry_id]
+        : row?.id
+          ? [row.id]
+          : []
+
+  const ids = rawIds
+    .map((value) => Number(Array.isArray(value) ? value[0] : value))
+    .filter((value) => value > 0)
+
+  if (ids.length <= 1) {
+    const onlyId = ids[0] || Number(row?.packing_entry_id || row?.id || 0)
+    return onlyId
+      ? [{
+          packing_entry_id: onlyId,
+          qty_reported: num(row?.qty_reported ?? row?.qty_declared ?? row?.qty_expected),
+          qty_received: num(row?.qty_received ?? 0),
+          qty_pending: row?.qty_pending != null
+            ? num(row.qty_pending)
+            : Math.max(0, num(row?.qty_reported ?? row?.qty_declared ?? row?.qty_expected) - num(row?.qty_received ?? 0)),
+        }]
+      : []
+  }
+
+  const totalPending = row?.qty_pending != null
+    ? num(row.qty_pending)
+    : Math.max(0, num(row?.qty_reported ?? row?.qty_declared ?? row?.qty_expected) - num(row?.qty_received ?? 0))
+  const evenPending = ids.length > 0 ? totalPending / ids.length : 0
+  return ids.map((packingEntryId, index) => ({
+    packing_entry_id: packingEntryId,
+    qty_reported: 0,
+    qty_received: 0,
+    qty_pending: index === ids.length - 1
+      ? Math.max(0, totalPending - evenPending * (ids.length - 1))
+      : evenPending,
+  }))
+}
+
+function buildReceivedLines(row, receivedQty, notes = '') {
+  const allocations = Array.isArray(row?.entry_allocations) ? row.entry_allocations : []
+  if (allocations.length === 0) return []
+
+  let remaining = Math.max(0, num(receivedQty))
+  const lines = []
+
+  for (const entry of allocations) {
+    if (remaining <= 0) break
+    const pending = Math.max(0, num(entry?.qty_pending))
+    const allocQty = pending > 0 ? Math.min(remaining, pending) : 0
+    if (allocQty <= 0) continue
+    lines.push({
+      packing_entry_id: Number(entry.packing_entry_id),
+      received_qty: allocQty,
+      ...(notes ? { notes } : {}),
+    })
+    remaining -= allocQty
+  }
+
+  if (remaining > 0 && allocations[0]?.packing_entry_id) {
+    lines.push({
+      packing_entry_id: Number(allocations[0].packing_entry_id),
+      received_qty: remaining,
+      ...(notes ? { notes } : {}),
+    })
+  }
+
+  return lines
+}
+
 /**
  * Normaliza un row del backend en el shape que consume la UI.
  * Sin recálculo: respeta los campos del backend y solo da fallbacks defensivos.
@@ -51,9 +156,14 @@ function normalizePending(row, bucket) {
   const qtyPending  = row?.qty_pending != null
     ? num(row.qty_pending)
     : Math.max(0, qtyReported - qtyReceived)
+  const entryAllocations = normalizeEntryAllocations(row)
+  const packingEntryIds = entryAllocations.map((entry) => Number(entry.packing_entry_id)).filter((id) => id > 0)
   return {
     id: row?.id || row?.packing_entry_id || `${bucket}-${row?.product_id}-${Math.random()}`,
-    packing_entry_id: row?.packing_entry_id || row?.id || null,
+    packing_entry_id: packingEntryIds[0] || row?.packing_entry_id || row?.id || null,
+    packing_entry_ids: packingEntryIds,
+    entry_allocations: entryAllocations,
+    shift_id: Number(row?.shift_id || (Array.isArray(row?.shift) ? row.shift[0] : 0) || 0) || null,
     product_id: row?.product_id || null,
     product_name: row?.product_name || (typeof row?.product === 'object' ? row?.product?.name : row?.product) || '—',
     family: familyOf(row),
@@ -154,14 +264,19 @@ export default function ScreenRecepcion() {
     if (!canSave) return
     setSaving(true)
     setError('')
+    const receivedQty = num(qtyReceived)
+    const receivedLines = buildReceivedLines(selected, receivedQty, notes.trim())
     const payload = {
       warehouse_id: warehouseId,
       employee_id: session?.employee_id || 0,
+      shift_id: selected.shift_id || undefined,
       packing_entry_id: selected.packing_entry_id || undefined,
+      packing_entry_ids: selected.packing_entry_ids || [],
       product_id: selected.product_id || undefined,
       qty_reported: selected.qty_reported || undefined,
-      qty_received: num(qtyReceived),
+      qty_received: receivedQty,
       notes: notes.trim(),
+      received_lines: receivedLines,
     }
     try {
       const result = await confirmReception(payload)
@@ -170,7 +285,7 @@ export default function ScreenRecepcion() {
         product_id: selected.product_id,
         product_name: selected.product_name,
         qty_reported: selected.qty_reported,
-        qty_received: num(qtyReceived),
+        qty_received: receivedQty,
         notes: notes.trim(),
         employee_id: session?.employee_id || 0,
         warehouse_id: warehouseId,

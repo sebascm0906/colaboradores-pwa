@@ -640,14 +640,16 @@ export async function getPendingReceptions(warehouseId) {
  * gf.inventory.posting (no duplicate stock.move).
  *
  * Payload shape accepted:
- *   { packing_entry_id?, product_id, qty_reported?, qty_received,
+ *   { packing_entry_id?, packing_entry_ids?, received_lines?, product_id, qty_reported?, qty_received,
  *     difference?, difference_pct?, notes?, employee_id?, warehouse_id?, lines? }
  */
 export async function confirmReception(data = {}) {
   const result = await api('POST', '/pwa-pt/reception-create', {
     warehouse_id: data.warehouse_id || DEFAULT_WAREHOUSE_ID,
     employee_id: data.employee_id,
+    shift_id: data.shift_id,
     packing_entry_id: data.packing_entry_id,
+    packing_entry_ids: Array.isArray(data.packing_entry_ids) ? data.packing_entry_ids : undefined,
     product_id: data.product_id,
     qty_reported: data.qty_reported,
     qty_received: data.qty_received,
@@ -655,6 +657,7 @@ export async function confirmReception(data = {}) {
     difference_pct: data.difference_pct,
     notes: data.notes || '',
     lines: data.lines,
+    received_lines: Array.isArray(data.received_lines) ? data.received_lines : undefined,
   })
   return result?.data || result
 }
