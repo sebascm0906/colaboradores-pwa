@@ -148,6 +148,11 @@ export function harvestSlot(data) {
   return api('POST', '/pwa-prod/harvest', data)
 }
 
+/** Cosecha de slot de salmuera + alta de recepción PT */
+export function harvestWithPtReception(data) {
+  return api('POST', '/pwa-prod/harvest-with-pt-reception', data)
+}
+
 /** Incidente de tanque — POST /api/ice/tank/incident */
 export function createTankIncident(data) {
   return api('POST', '/pwa-prod/tank-incident', data)

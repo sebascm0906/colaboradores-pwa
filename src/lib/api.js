@@ -5,6 +5,7 @@ import {
   withExpectedTimingFields,
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming'
+import { buildPtReceptionFromHarvest } from '../modules/produccion/barraHarvestReception.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -2643,6 +2644,75 @@ async function directProduction(method, path, body) {
       }
     } catch { /* ignore */ }
     return res
+  }
+
+  if (cleanPath === '/pwa-prod/harvest-with-pt-reception' && method === 'POST') {
+    const slotId = Number(body?.slot_id || 0)
+    const shiftId = Number(body?.shift_id || 0)
+    const operatorId = getEmployeeId() || Number(body?.operator_id || 0)
+    const temperature = Number(body?.temperature || 0)
+    const slot = body?.slot || {}
+    const tank = body?.tank || {}
+
+    if (!slotId) throw new Error('slot_id requerido')
+    if (!shiftId) throw new Error('shift_id requerido')
+
+    const receptionPayload = buildPtReceptionFromHarvest({ slot, tank })
+    const productId = Number(body?.product_id || receptionPayload.product_id || 0)
+    const qtyReported = Number(body?.qty_reported || receptionPayload.qty_reported || 0)
+
+    if (!productId) throw new Error('product_id requerido para recepcion PT')
+    if (!qtyReported || qtyReported <= 0) throw new Error('qty_reported invalido para recepcion PT')
+
+    const harvestResult = await createUpdate({
+      model: 'x_ice.brine.slot',
+      method: 'function',
+      ids: [slotId],
+      function: 'action_cosechar',
+      sudo: 1, app: 'pwa_colaboradores',
+    })
+
+    try {
+      const dict = {}
+      if (operatorId) dict.x_operator_id = operatorId
+      if (temperature) dict.x_brine_temp_at_extraction = temperature
+      if (Object.keys(dict).length > 0) {
+        await createUpdate({
+          model: 'x_ice.brine.slot',
+          method: 'update',
+          ids: [slotId],
+          dict,
+          sudo: 1, app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const packResult = await odooHttp('POST', '/api/production/pack', {}, {
+        shift_id: shiftId,
+        cycle_id: 0,
+        product_id: productId,
+        qty_bags: qtyReported,
+        production_order_id: 0,
+      })
+
+      return {
+        ok: true,
+        harvest: { ok: true, data: harvestResult },
+        pt_reception: { ok: true, data: packResult?.data || packResult || {} },
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        harvested: true,
+        harvest: { ok: true, data: harvestResult },
+        pt_reception: {
+          ok: false,
+          error: error?.message || 'No se pudo generar la recepcion PT',
+        },
+        error: error?.message || 'La canastilla fue cosechada pero la recepcion PT no se pudo generar',
+      }
+    }
   }
 
   // ── Barra: Tank incident ─────────────────────────────────────────────────

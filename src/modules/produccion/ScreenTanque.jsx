@@ -15,7 +15,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
-import { listSlots, harvest, reportIncident, INCIDENT_TYPES } from './barraService'
+import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
+import { harvestWithPtReception } from './api'
+import { buildPtReceptionFromHarvest } from './barraHarvestReception'
 import { getReadingLocalDateKey, getTodayDateKey } from '../supervision/brineReadings'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
@@ -153,19 +155,40 @@ export default function ScreenTanque() {
   }
 
   const harvestWarnings = harvestSlot ? getHarvestWarnings() : []
+  const ptReceptionPreview = harvestSlot
+    ? buildPtReceptionFromHarvest({ slot: harvestSlot, tank })
+    : null
+  const missingReceptionProduct = harvestSlot && !Number(ptReceptionPreview?.product_id || 0)
   const hasBlockingWarning = harvestWarnings.some(w => w.blocking)
-  const canHarvest = harvestSlot && !hasBlockingWarning && !harvestBusy
+  const canHarvest = harvestSlot && !hasBlockingWarning && !harvestBusy && !missingReceptionProduct
 
   async function confirmHarvest() {
     if (!canHarvest) return
     setHarvestBusy(true); setError('')
     try {
-      await harvest(harvestSlot.id, harvestTemp)
-      setSuccess(`Canastilla ${harvestSlot.name} cosechada`)
+      const result = await harvestWithPtReception({
+        slot_id: harvestSlot.id,
+        shift_id: harvestSlot.shift_id || 0,
+        temperature: harvestTemp,
+        slot: harvestSlot,
+        tank,
+        product_id: ptReceptionPreview?.product_id || 0,
+        qty_reported: ptReceptionPreview?.qty_reported || 8,
+      })
+
+      if (result?.ok === false && result?.harvest?.ok) {
+        setHarvestSlot(null)
+        setHarvestTemp('')
+        await load()
+        setError(result?.error || 'La canastilla fue cosechada pero la recepcion PT no se pudo generar')
+        return
+      }
+
+      setSuccess(`Canastilla ${harvestSlot.name} cosechada y recepción PT generada`)
       setHarvestSlot(null)
       setHarvestTemp('')
       await load()
-      setTimeout(() => setSuccess(''), 2500)
+      setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
       setError(e.message || 'Error al cosechar')
     } finally {
@@ -493,7 +516,7 @@ export default function ScreenTanque() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
           }}>
-            <MiniStat label="Barras" value={tank?.bars_per_basket || '—'} typo={typo} />
+            <MiniStat label="Barras PT" value={ptReceptionPreview?.qty_reported || '—'} typo={typo} />
             <MiniStat label="Kg/barra" value={tank?.kg_per_bar || '—'} typo={typo} />
             <MiniStat label="Kg total" value={expectedKgPerBasket || '—'} typo={typo} />
           </div>
@@ -509,6 +532,17 @@ export default function ScreenTanque() {
               Lista hace {harvestSlot.time_in_ready_hours.toFixed(1)}h
             </p>
           )}
+          <div style={{
+            marginTop: 12, padding: 10, borderRadius: TOKENS.radius.sm,
+            background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.25)',
+          }}>
+            <p style={{ ...typo.caption, color: TOKENS.colors.blue3, margin: 0, fontWeight: 700 }}>
+              Se generará una recepción pendiente para Almacén PT
+            </p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+              {ptReceptionPreview?.qty_reported || 8} barras del producto cosechado se enviarán al flujo normal de recepción PT.
+            </p>
+          </div>
 
           <div style={{ marginTop: 16 }}>
             <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
@@ -542,6 +576,18 @@ export default function ScreenTanque() {
               ))}
             </div>
           )}
+          {missingReceptionProduct && (
+            <div style={{
+              marginTop: 12, padding: 10, borderRadius: TOKENS.radius.sm,
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+              display: 'flex', alignItems: 'flex-start', gap: 6,
+            }}>
+              <span style={{ color: TOKENS.colors.error, fontSize: 14, lineHeight: 1.3 }}>&#x26D4;</span>
+              <span style={{ ...typo.caption, color: TOKENS.colors.error, fontWeight: 600 }}>
+                No se detectó el producto de la barra. Configura `x_product_id` del slot o `bar_product_id` del tanque antes de cosechar.
+              </span>
+            </div>
+          )}
 
           {error && (
             <div style={{
@@ -569,7 +615,7 @@ export default function ScreenTanque() {
                 fontSize: 14, fontWeight: 700,
                 opacity: harvestBusy ? 0.6 : 1,
               }}
-            >{harvestBusy ? 'Cosechando...' : !canHarvest ? 'Corrige para extraer' : 'Cosechar'}</button>
+            >{harvestBusy ? 'Confirmando...' : !canHarvest ? 'Corrige para extraer' : 'Confirmar cosecha'}</button>
           </div>
         </Modal>
       )}
