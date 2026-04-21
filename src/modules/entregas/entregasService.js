@@ -277,7 +277,13 @@ export async function acceptReturn(stopLineIds, lines, employeeId, warehouseId) 
 export async function getScrapReasons() {
   try {
     const result = await api('GET', '/pwa-entregas/scrap-reasons')
-    const items = result?.data || result || []
+    // Backend Sebastian shape confirmado: { ok, data: { reasons: [{id, name}, ...] } }
+    // Mantenemos fallbacks defensivos por si cambia.
+    const items = result?.data?.reasons
+      || result?.reasons
+      || (Array.isArray(result?.data) ? result.data : null)
+      || (Array.isArray(result) ? result : null)
+      || []
     return Array.isArray(items) ? items : []
   } catch {
     return []
