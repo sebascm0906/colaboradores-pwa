@@ -4435,13 +4435,17 @@ async function directAlmacenPT(method, path, body) {
 
   // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
   if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
-    return odooJson('/gf/salesops/pt/transfer/orchestrate', {
+    const envelope = await odooJson('/gf/salesops/pt/transfer/orchestrate', {
       warehouse_id: body?.warehouse_id || warehouseId,
       cedis_id: body?.cedis_id || 0,
       employee_id: body?.employee_id || getEmployeeId() || 0,
       lines: body?.lines || [],
       notes: body?.notes || '',
     })
+    if (envelope?.ok === false) {
+      throw new Error(envelope?.message || envelope?.error || 'No se pudo crear el traspaso PT')
+    }
+    return envelope?.data ?? envelope
   }
 
   // ── Shift handover for PT (Sebastián commit a3f58c0) ─────────────────────

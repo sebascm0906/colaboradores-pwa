@@ -99,6 +99,7 @@ export default function ScreenTraspasoPT() {
   const totalQty = lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)
   const totalKg = lines.reduce((s, l) => s + ((Number(l.qty) || 0) * l.weight), 0)
   const selectedCedisObj = cedisList.find(c => c.id === selectedCedis)
+  const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
 
   async function handleSave() {
     if (!selectedCedis || lines.length === 0 || totalQty <= 0) return
@@ -122,7 +123,7 @@ export default function ScreenTraspasoPT() {
       const result = await createTransfer({
         warehouse_id: warehouseId,
         cedis_id: selectedCedis,
-        employee_id: session?.employee_id || 0,
+        employee_id: employeeId || undefined,
         lines: validLines.map(l => ({ product_id: l.product_id, qty: l.qty })),
       })
 
@@ -135,7 +136,7 @@ export default function ScreenTraspasoPT() {
         lines: validLines,
         total_qty: validLines.reduce((s, l) => s + l.qty, 0),
         total_kg: validLines.reduce((s, l) => s + l.total_kg, 0),
-        employee_id: session?.employee_id || 0,
+        employee_id: employeeId,
         employee_name: session?.name || '',
       })
 
