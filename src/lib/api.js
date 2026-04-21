@@ -2659,6 +2659,7 @@ async function directProduction(method, path, body) {
 
     const receptionPayload = buildPtReceptionFromHarvest({ slot, tank })
     const productId = Number(body?.product_id || receptionPayload.product_id || 0)
+    const sourceProductId = Number(body?.source_product_id || receptionPayload.source_product_id || 0)
     const qtyReported = Number(body?.qty_reported || receptionPayload.qty_reported || 0)
 
     if (!productId) throw new Error('product_id requerido para recepcion PT')
@@ -2694,6 +2695,10 @@ async function directProduction(method, path, body) {
         product_id: productId,
         qty_bags: qtyReported,
         production_order_id: 0,
+        line_type: String(body?.line_type || 'barra').trim() || 'barra',
+        source_product_id: sourceProductId || undefined,
+        slot_id: slotId,
+        machine_id: Number(tank?.id || body?.machine_id || 0) || undefined,
       })
 
       return {

@@ -177,7 +177,9 @@ export default function ScreenTanque() {
         temperature: harvestTemp,
         slot: harvestSlot,
         tank,
+        line_type: 'barra',
         product_id: ptReceptionPreview?.product_id || 0,
+        source_product_id: ptReceptionPreview?.source_product_id || harvestSlot?.product_id || 0,
         qty_reported: ptReceptionPreview?.qty_reported || 8,
       })
 
