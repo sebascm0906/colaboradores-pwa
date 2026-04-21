@@ -3,6 +3,38 @@ const MODULE_ROLE_VARIANTS = {
   admin_sucursal: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'],
 }
 
+// ─── WAREHOUSE → PLAZA (fallback defensivo para Fase 0 voice PoC) ───────────
+// El emisor del JWT aun no incluye plaza_id; derivamos desde warehouse_id que
+// si viaja. Alinea con hardcoded plazas de W121 load_plaza_list.
+// Fuente: stock.warehouse en grupofrio.odoo.com (verificado 2026-04-21).
+// Extensible para mas plazas; no match => plaza_id null (W120 degrada con
+// meta.catalog_fallback:true, no rompe el flujo).
+const PLAZA_BY_WAREHOUSE = {
+  // IGUALA (piloto primario)
+  49: 'IGUALA', 50: 'IGUALA', 51: 'IGUALA', 52: 'IGUALA', 53: 'IGUALA',
+  54: 'IGUALA', 76: 'IGUALA', 89: 'IGUALA',
+  // MORELIA
+  2: 'MORELIA', 45: 'MORELIA', 46: 'MORELIA', 47: 'MORELIA', 48: 'MORELIA',
+  // GUADALAJARA
+  55: 'GUADALAJARA', 56: 'GUADALAJARA', 113: 'GUADALAJARA',
+  // TOLUCA
+  57: 'TOLUCA', 58: 'TOLUCA', 59: 'TOLUCA',
+  // ZIHUATANEJO
+  60: 'ZIHUATANEJO', 61: 'ZIHUATANEJO',
+  // MANZANILLO
+  62: 'MANZANILLO',
+}
+
+function derivePlazaId(session = {}) {
+  const explicit = String(session?.plaza_id || '').trim()
+  if (explicit) return explicit.toUpperCase()
+  const wh = Number(session?.warehouse_id || 0)
+  if (wh && Object.prototype.hasOwnProperty.call(PLAZA_BY_WAREHOUSE, wh)) {
+    return PLAZA_BY_WAREHOUSE[wh]
+  }
+  return null
+}
+
 export const ROLE_LABELS = {
   operador_barra: 'Operador barra',
   operador_rolito: 'Operador rolito',
@@ -50,6 +82,7 @@ export function normalizeSessionRoleContext(session = {}) {
     role: primaryRole,
     additional_job_keys,
     module_role_contexts,
+    plaza_id: derivePlazaId(session),
   }
 }
 
