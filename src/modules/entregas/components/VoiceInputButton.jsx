@@ -67,7 +67,7 @@ export default function VoiceInputButton({
     setTimeout(() => setState(S.IDLE), 2500)
   }, [onError])
 
-  const uploadAudio = useCallback(async (blob) => {
+  const uploadAudio = useCallback(async (blob, mimeType) => {
     if (!WEBHOOK_URL || !AUTH_TOKEN) {
       reportError('INTERNAL_ERROR', 'Configuracion de voz ausente (.env.local)')
       return
@@ -78,7 +78,12 @@ export default function VoiceInputButton({
     const timeoutId = setTimeout(() => controller.abort(), 15000)
     try {
       const fd = new FormData()
-      fd.append('audio', blob, `voice_${context_id}_${Date.now()}.webm`)
+      // Extensión derivada del mimeType real para que Deepgram detecte correctamente.
+      // iOS Safari no soporta audio/webm — graba en audio/mp4 (AAC).
+      const ext = (mimeType || '').includes('mp4') ? 'mp4'
+        : (mimeType || '').includes('mpeg') ? 'mp3'
+        : 'webm'
+      fd.append('audio', blob, `voice_${context_id}_${Date.now()}.${ext}`)
       fd.append('context_id', context_id)
       fd.append('timestamp', new Date().toISOString())
       fd.append('metadata', JSON.stringify(metadata))
@@ -123,18 +128,40 @@ export default function VoiceInputButton({
         },
       })
       streamRef.current = stream
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm'
-      const rec = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 })
+      // Orden de preferencia: webm+opus (Chrome/Firefox/Android Chrome) → mp4/AAC (Safari iOS)
+      // → webm simple → default del browser (último recurso).
+      // typeof MediaRecorder.isTypeSupported guard porque algunos browsers viejos no lo tienen.
+      const isSupported = (t) => {
+        try { return typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t) }
+        catch { return false }
+      }
+      const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/mp4;codecs=mp4a.40.2',
+        'audio/mp4',
+        'audio/webm',
+      ]
+      const mimeType = candidates.find(isSupported) || ''
+      let rec
+      try {
+        rec = mimeType
+          ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 })
+          : new MediaRecorder(stream) // fallback sin mimeType: browser escoge
+      } catch (e) {
+        cleanup()
+        reportError('INTERNAL_ERROR', 'Tu navegador no soporta grabacion de audio')
+        return
+      }
+      // mimeType efectivo (puede diferir si el browser eligio en el fallback sin mimeType)
+      const effectiveMimeType = rec.mimeType || mimeType || 'audio/webm'
       chunksRef.current = []
       rec.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data)
       rec.onstop = async () => {
         const duration = Date.now() - startedAtRef.current
         cleanup()
         if (duration < 500) { reportError('AUDIO_TOO_SHORT'); return }
-        const blob = new Blob(chunksRef.current, { type: mimeType })
-        await uploadAudio(blob)
+        const blob = new Blob(chunksRef.current, { type: effectiveMimeType })
+        await uploadAudio(blob, effectiveMimeType)
       }
       startedAtRef.current = Date.now()
       rec.start()
