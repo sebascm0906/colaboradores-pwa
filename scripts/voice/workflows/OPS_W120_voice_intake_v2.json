@@ -1,0 +1,318 @@
+{
+  "name": "OPS_W120_voice_intake_v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-intake",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryData": true,
+          "rawBody": false
+        }
+      },
+      "id": "w120-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "voice-intake"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - auth_check + check_audio_size + normalize_input + context_id validation\n// Consolidado en 1 nodo para reducir latencia.\n\nconst headers = $input.item.json.headers || {};\nconst authHeader = headers.authorization || headers.Authorization;\nconst expected = `Bearer ${$env.N8N_VOICE_TOKEN}`;\n\nif (!authHeader || authHeader !== expected) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: null,\n    error_code: 'AUTH_FAILED',\n    error_message: 'Sesion expirada, recarga la app',\n    timings: { total_ms: 0 },\n  }};\n}\n\n// trace_id: vox_<timestamp36>_<rand8>\nconst traceId = 'vox_' + Date.now().toString(36) + '_' +\n  Math.random().toString(36).substring(2, 10);\nconst t_start = Date.now();\n\nconst body = $input.item.json.body || $input.item.json;\nconst contextId = body.context_id || body['context_id'];\nconst rawMeta = body.metadata ?? '{}';\nlet metadata = {};\ntry { metadata = typeof rawMeta === 'string' ? JSON.parse(rawMeta) : rawMeta; } catch {}\n\n// Whitelist de context_id (hardening: solo form_merma en Fase 0)\nconst ALLOWED_CONTEXTS = new Set(['form_merma']);\nif (!contextId || !ALLOWED_CONTEXTS.has(contextId)) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: traceId,\n    error_code: 'INTERNAL_ERROR',\n    error_message: 'context_id desconocido',\n    timings: { total_ms: Date.now() - t_start },\n    meta: { received_context_id: contextId || null },\n  }};\n}\n\n// Audio size guard (hardening). Frontend ya limita a 1MB; aqui defense-in-depth.\nconst bin = $input.item.binary || {};\nconst audioKey = Object.keys(bin)[0];\nconst audio = audioKey ? bin[audioKey] : null;\nif (!audio) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: traceId,\n    error_code: 'INTERNAL_ERROR',\n    error_message: 'audio ausente en el request',\n    timings: { total_ms: Date.now() - t_start },\n  }};\n}\nconst approxBytes = audio.fileSize || (audio.data ? Math.floor(audio.data.length * 0.75) : 0);\nif (approxBytes > 1_000_000) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: traceId,\n    error_code: 'AUDIO_TOO_LARGE',\n    error_message: 'Audio muy largo, max 10 segundos',\n    timings: { total_ms: Date.now() - t_start },\n    meta: { audio_bytes: approxBytes },\n  }};\n}\n\nreturn {\n  json: {\n    trace_id: traceId,\n    context_id: contextId,\n    plaza_id: metadata.plaza_id,\n    user_id: metadata.user_id,\n    canal: metadata.canal,\n    timestamp: body.timestamp,\n    t_start,\n    audio_bytes: approxBytes,\n    audio_key: audioKey,\n  },\n  binary: $input.item.binary,\n};"
+      },
+      "id": "w120-gate",
+      "name": "auth_context_size_gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.__early_exit }}",
+                    "rightValue": true,
+                    "operator": { "type": "boolean", "operation": "true" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "early_exit"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.__early_exit }}",
+                    "rightValue": true,
+                    "operator": { "type": "boolean", "operation": "notEqual" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "continue"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "w120-switch-early",
+      "name": "early_exit_switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepgram.com/v1/listen?model=nova-3&language=es&smart_format=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Token {{ $env.DEEPGRAM_API_KEY }}" },
+            { "name": "Content-Type", "value": "audio/webm" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "={{ $json.audio_key }}",
+        "options": {
+          "timeout": 6000
+        }
+      },
+      "id": "w120-deepgram",
+      "name": "deepgram_stt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - extract_transcript + early exit si empty/low confidence\nconst results = $input.item.json.results;\nconst alt = results?.channels?.[0]?.alternatives?.[0];\nconst transcript = (alt?.transcript || '').trim();\nconst confidence = alt?.confidence ?? 0;\nconst ctx = $('auth_context_size_gate').first().json;\nconst stt_ms = Date.now() - ctx.t_start;\n\nif (transcript.length === 0) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: ctx.trace_id,\n    error_code: 'STT_EMPTY',\n    error_message: 'No detecte voz, intenta de nuevo',\n    timings: { stt_ms, total_ms: stt_ms },\n    meta: { stt_confidence: confidence, transcript: '' },\n  }};\n}\nif (confidence < 0.6) {\n  return { json: {\n    __early_exit: true, ok: false, trace_id: ctx.trace_id,\n    error_code: 'STT_LOW_CONFIDENCE',\n    error_message: 'No se entendio bien, intenta de nuevo',\n    timings: { stt_ms, total_ms: stt_ms },\n    meta: { stt_confidence: confidence, transcript },\n  }};\n}\nreturn { json: { ...ctx, transcript, stt_confidence: confidence, stt_ms } };"
+      },
+      "id": "w120-extract",
+      "name": "extract_transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "stt_failed"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEqual" } }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "transcript_ok"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "w120-switch-stt",
+      "name": "stt_exit_switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1240, 300]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - load_catalog from workflow static data\n// W121 es quien popula. Si no esta (Fase 0 o desync), marcamos fallback.\nconst ctx = $('extract_transcript').first().json;\nconst staticKey = `cat_${ctx.plaza_id}`;\nconst catalog = $getWorkflowStaticData('global')[staticKey];\nconst fallback = !catalog || !Array.isArray(catalog.skus) || catalog.skus.length === 0;\nreturn { json: {\n  ...ctx,\n  catalog: catalog || { skus: [] },\n  catalog_fallback: fallback,\n  catalog_version: catalog?.version || null,\n}};"
+      },
+      "id": "w120-catalog",
+      "name": "load_catalog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.OPENAI_API_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un extractor de datos para registrar mermas de hielo en plaza {{ $json.plaza_id }}. Catalogo: {{ JSON.stringify($json.catalog) }}. Si no identificas SKU con alta confianza, product_id: null y raw_product_name con el nombre dicho. Nunca inventes IDs.\"\n    },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.transcript) }} }\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"merma_payload\",\n      \"strict\": true,\n      \"schema\": {\n        \"type\": \"object\",\n        \"additionalProperties\": false,\n        \"required\": [\"product_id\", \"raw_product_name\", \"cantidad\", \"unidad\", \"motivo\", \"confianza\"],\n        \"properties\": {\n          \"product_id\": { \"type\": [\"integer\", \"null\"] },\n          \"raw_product_name\": { \"type\": \"string\" },\n          \"cantidad\": { \"type\": \"number\" },\n          \"unidad\": { \"type\": \"string\", \"enum\": [\"pza\", \"bolsa\", \"kg\", \"tonelada\"] },\n          \"motivo\": { \"type\": \"string\", \"enum\": [\"derretimiento\", \"contaminacion\", \"golpe\", \"robo\", \"otro\"] },\n          \"confianza\": { \"type\": \"number\", \"minimum\": 0, \"maximum\": 1 }\n        }\n      }\n    }\n  }\n}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "w120-openai",
+      "name": "openai_extract",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 260]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - validate_business_rules (incluye double-check whitelists: hardening aprobado)\nconst ctx = $('load_catalog').first().json;\nconst validation_start = Date.now();\nlet llmRaw;\ntry {\n  const content = $input.item.json.choices?.[0]?.message?.content;\n  llmRaw = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  return { json: {\n    __validation_failed: true, ok: false, trace_id: ctx.trace_id,\n    error_code: 'INTERNAL_ERROR',\n    error_message: 'OpenAI response no parseable',\n    errors: [String(e.message || e)],\n    timings: { stt_ms: ctx.stt_ms, validation_ms: Date.now() - validation_start },\n  }};\n}\nconst llm_ms = Date.now() - ctx.t_start - ctx.stt_ms;\nconst errors = [];\n\n// Whitelists (defense-in-depth vs json_schema)\nconst ALLOWED_UNIDAD = new Set(['pza','bolsa','kg','tonelada']);\nconst ALLOWED_MOTIVO = new Set(['derretimiento','contaminacion','golpe','robo','otro']);\nif (llmRaw.unidad && !ALLOWED_UNIDAD.has(llmRaw.unidad)) {\n  errors.push(`unidad_fuera_whitelist: ${llmRaw.unidad}`);\n}\nif (llmRaw.motivo && !ALLOWED_MOTIVO.has(llmRaw.motivo)) {\n  errors.push(`motivo_fuera_whitelist: ${llmRaw.motivo}`);\n}\n\n// Rango cantidad\nif (typeof llmRaw.cantidad !== 'number' || llmRaw.cantidad < 0.01 || llmRaw.cantidad > 500) {\n  errors.push(`cantidad_fuera_rango: ${llmRaw.cantidad}`);\n}\n\n// Confianza LLM minima\nif (typeof llmRaw.confianza === 'number' && llmRaw.confianza < 0.5) {\n  errors.push(`llm_confianza_baja: ${llmRaw.confianza}`);\n}\n\n// Coherencia unidad vs catalogo\nif (llmRaw.product_id && ctx.catalog?.skus?.length) {\n  const sku = ctx.catalog.skus.find(s => s.id === llmRaw.product_id);\n  if (sku && sku.uom && sku.uom !== llmRaw.unidad) {\n    errors.push(`unidad_incoherente: sku=${sku.uom} llm=${llmRaw.unidad}`);\n  }\n}\n\nconst validation_ms = Date.now() - validation_start;\nif (errors.length > 0) {\n  return { json: {\n    __validation_failed: true, ok: false, trace_id: ctx.trace_id,\n    error_code: 'VALIDATION_FAILED',\n    error_message: 'Revisa los datos manualmente',\n    errors, ai_output: llmRaw,\n    timings: { stt_ms: ctx.stt_ms, llm_ms, validation_ms },\n    meta: { stt_confidence: ctx.stt_confidence, transcript: ctx.transcript, catalog_fallback: ctx.catalog_fallback, catalog_version: ctx.catalog_version },\n  }};\n}\nreturn { json: { ...ctx, ai_output: llmRaw, llm_ms, validation_ms } };"
+      },
+      "id": "w120-validate",
+      "name": "validate_business_rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, 260]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - build_response (success path)\nconst ctx = $input.item.json;\nif (ctx.__validation_failed) return { json: ctx }; // ya es envelope error\n\nconst total_ms = Date.now() - ctx.t_start;\nreturn { json: {\n  ok: true,\n  trace_id: ctx.trace_id,\n  context_id: ctx.context_id,\n  schema_version: 'v1',\n  prompt_version: `${ctx.context_id}_v1.0`,\n  pipeline_version: 'w120_v2.0',\n  data: ctx.ai_output,\n  timings: {\n    stt_ms: ctx.stt_ms,\n    llm_ms: ctx.llm_ms || 0,\n    validation_ms: ctx.validation_ms || 0,\n    total_ms,\n  },\n  meta: {\n    stt_confidence: ctx.stt_confidence,\n    transcript: ctx.transcript,\n    catalog_fallback: !!ctx.catalog_fallback,\n    catalog_version: ctx.catalog_version || null,\n  },\n}};"
+      },
+      "id": "w120-build",
+      "name": "build_response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 260]
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "w120-merge",
+      "name": "merge_envelopes",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2240, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=${process.env.ODOO_URL || ''}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
+        "options": {
+          "timeout": 2000
+        }
+      },
+      "id": "w120-odoo-auth",
+      "name": "odoo_authenticate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 400],
+      "continueOnFail": true,
+      "notes": "Authenticate dinamico: obtiene uid. Best-effort (Continue On Fail) para no bloquear Respond."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ODOO_URL }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.intake.log\",\n      \"log_request\",\n      [{\n        \"trace_id\":          \"{{ $('merge_envelopes').first().json.trace_id }}\",\n        \"context_id\":        \"{{ $('merge_envelopes').first().json.context_id }}\",\n        \"plaza_id\":          \"{{ $('auth_context_size_gate').first().json.plaza_id }}\",\n        \"user_id\":           {{ $('auth_context_size_gate').first().json.user_id || 'false' }},\n        \"canal\":             \"{{ $('auth_context_size_gate').first().json.canal }}\",\n        \"transcript\":        {{ JSON.stringify($('merge_envelopes').first().json.meta?.transcript || '') }},\n        \"stt_confidence\":    {{ $('merge_envelopes').first().json.meta?.stt_confidence || 0 }},\n        \"ai_output_json\":    {{ JSON.stringify($('merge_envelopes').first().json.data || {}) }},\n        \"schema_version\":    \"{{ $('merge_envelopes').first().json.schema_version || 'v1' }}\",\n        \"prompt_version\":    \"{{ $('merge_envelopes').first().json.prompt_version || '' }}\",\n        \"pipeline_version\":  \"w120_v2.0\",\n        \"ok\":                {{ $('merge_envelopes').first().json.ok }},\n        \"error_code\":        \"{{ $('merge_envelopes').first().json.error_code || '' }}\",\n        \"validation_errors\": {{ JSON.stringify($('merge_envelopes').first().json.errors || []) }},\n        \"stt_ms\":            {{ $('merge_envelopes').first().json.timings?.stt_ms || 0 }},\n        \"llm_ms\":            {{ $('merge_envelopes').first().json.timings?.llm_ms || 0 }},\n        \"validation_ms\":     {{ $('merge_envelopes').first().json.timings?.validation_ms || 0 }},\n        \"total_ms\":          {{ $('merge_envelopes').first().json.timings?.total_ms || 0 }}\n      }]\n    ]\n  }\n}",
+        "options": {
+          "timeout": 2000
+        }
+      },
+      "id": "w120-odoo-log",
+      "name": "log_to_odoo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 400],
+      "continueOnFail": true,
+      "notes": "Best-effort. Si Odoo cae no bloquea UX. console.log del fail en nodo siguiente."
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W120 - log_fail_notice: console.log si log_to_odoo fallo (hardening aprobado)\nconst resp = $input.item.json;\nif (resp?.error || resp?.result?.error) {\n  const env = $('merge_envelopes').first().json;\n  const safeTranscript = (env?.meta?.transcript || '').slice(0, 100);\n  console.log('[W120 log_to_odoo FAIL]',\n    'trace_id=' + env?.trace_id,\n    'ok=' + env?.ok,\n    'transcript=\"' + safeTranscript + '\"',\n    'odoo_error=' + JSON.stringify(resp?.error || resp?.result?.error)\n  );\n}\nreturn $input.item;"
+      },
+      "id": "w120-log-notice",
+      "name": "log_fail_notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2840, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "w120-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2440, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "auth_context_size_gate", "type": "main", "index": 0 }]] },
+    "auth_context_size_gate": { "main": [[{ "node": "early_exit_switch", "type": "main", "index": 0 }]] },
+    "early_exit_switch": {
+      "main": [
+        [{ "node": "merge_envelopes", "type": "main", "index": 0 }],
+        [{ "node": "deepgram_stt", "type": "main", "index": 0 }]
+      ]
+    },
+    "deepgram_stt": { "main": [[{ "node": "extract_transcript", "type": "main", "index": 0 }]] },
+    "extract_transcript": { "main": [[{ "node": "stt_exit_switch", "type": "main", "index": 0 }]] },
+    "stt_exit_switch": {
+      "main": [
+        [{ "node": "merge_envelopes", "type": "main", "index": 1 }],
+        [{ "node": "load_catalog", "type": "main", "index": 0 }]
+      ]
+    },
+    "load_catalog": { "main": [[{ "node": "openai_extract", "type": "main", "index": 0 }]] },
+    "openai_extract": { "main": [[{ "node": "validate_business_rules", "type": "main", "index": 0 }]] },
+    "validate_business_rules": { "main": [[{ "node": "build_response", "type": "main", "index": 0 }]] },
+    "build_response": { "main": [[{ "node": "merge_envelopes", "type": "main", "index": 2 }]] },
+    "merge_envelopes": {
+      "main": [[
+        { "node": "Respond", "type": "main", "index": 0 },
+        { "node": "odoo_authenticate", "type": "main", "index": 0 }
+      ]]
+    },
+    "odoo_authenticate": { "main": [[{ "node": "log_to_odoo", "type": "main", "index": 0 }]] },
+    "log_to_odoo": { "main": [[{ "node": "log_fail_notice", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": []
+}

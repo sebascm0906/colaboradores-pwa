@@ -1,0 +1,157 @@
+{
+  "name": "OPS_W122_voice_feedback_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-feedback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "w122-webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "voice-feedback"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W122 - auth_check + normalize_feedback\nconst headers = $input.item.json.headers || {};\nconst authHeader = headers.authorization || headers.Authorization;\nconst expected = `Bearer ${$env.N8N_VOICE_TOKEN}`;\nif (!authHeader || authHeader !== expected) {\n  return { json: { __early_exit: true, ok: false, error_code: 'AUTH_FAILED', error_message: 'Token invalido' } };\n}\n\nconst body = $input.item.json.body || $input.item.json;\nconst trace_id = body.trace_id;\nif (!trace_id) {\n  return { json: { __early_exit: true, ok: false, error_code: 'INTERNAL_ERROR', error_message: 'trace_id requerido' } };\n}\n\nreturn { json: {\n  trace_id,\n  ai_output: body.ai_output || {},\n  final_output: body.final_output || {},\n  confirmed_at: body.confirmed_at || new Date().toISOString(),\n  metadata: body.metadata || {},\n}};"
+      },
+      "id": "w122-normalize",
+      "name": "auth_normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "early_exit"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEqual" } }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "continue"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "w122-switch",
+      "name": "early_exit_switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W122 - compute_diff\nconst ctx = $input.item.json;\nconst ai = ctx.ai_output || {};\nconst final = ctx.final_output || {};\nconst fields = new Set([...Object.keys(ai), ...Object.keys(final)]);\nconst diffs = [];\nfor (const field of fields) {\n  const aiVal = ai[field];\n  const finalVal = final[field];\n  const changed = JSON.stringify(aiVal) !== JSON.stringify(finalVal);\n  diffs.push({ field, ai_value: aiVal, final_value: finalVal, changed });\n}\nconst changed_field_count = diffs.filter(d => d.changed).length;\nconst accuracy_ratio = fields.size > 0 ? (fields.size - changed_field_count) / fields.size : 0;\nreturn { json: { ...ctx, diffs, changed_field_count, accuracy_ratio } };"
+      },
+      "id": "w122-diff",
+      "name": "compute_diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ODOO_URL }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
+        "options": { "timeout": 2000 }
+      },
+      "id": "w122-odoo-auth",
+      "name": "odoo_authenticate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1040, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ODOO_URL }}/jsonrpc",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.feedback.log\",\n      \"log_feedback\",\n      [{\n        \"trace_id\":            \"{{ $('compute_diff').first().json.trace_id }}\",\n        \"context_id\":          \"{{ $('compute_diff').first().json.metadata?.context_id }}\",\n        \"plaza_id\":            \"{{ $('compute_diff').first().json.metadata?.plaza_id }}\",\n        \"user_id\":             {{ $('compute_diff').first().json.metadata?.user_id || 'false' }},\n        \"ai_output_json\":      {{ JSON.stringify($('compute_diff').first().json.ai_output) }},\n        \"final_output_json\":   {{ JSON.stringify($('compute_diff').first().json.final_output) }},\n        \"diffs_json\":          {{ JSON.stringify($('compute_diff').first().json.diffs) }},\n        \"changed_field_count\": {{ $('compute_diff').first().json.changed_field_count }},\n        \"accuracy_ratio\":      {{ $('compute_diff').first().json.accuracy_ratio }}\n      }]\n    ]\n  }\n}",
+        "options": { "timeout": 2000 }
+      },
+      "id": "w122-odoo-log",
+      "name": "log_feedback_odoo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W122 - log_fail_notice (hardening aprobado)\nconst resp = $input.item.json;\nconst ctx = $('compute_diff').first().json;\nif (resp?.error || resp?.result?.error) {\n  console.log('[W122 log_feedback FAIL]',\n    'trace_id=' + ctx?.trace_id,\n    'changed=' + ctx?.changed_field_count,\n    'accuracy=' + ctx?.accuracy_ratio,\n    'odoo_error=' + JSON.stringify(resp?.error || resp?.result?.error)\n  );\n}\nreturn { json: { ok: true, trace_id: ctx.trace_id } };"
+      },
+      "id": "w122-log-notice",
+      "name": "log_fail_notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"ok\": true, \"trace_id\": {{ JSON.stringify($json.trace_id || null) }} }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "w122-respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1640, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "auth_normalize", "type": "main", "index": 0 }]] },
+    "auth_normalize": { "main": [[{ "node": "early_exit_switch", "type": "main", "index": 0 }]] },
+    "early_exit_switch": {
+      "main": [
+        [{ "node": "Respond", "type": "main", "index": 0 }],
+        [{ "node": "compute_diff", "type": "main", "index": 0 }]
+      ]
+    },
+    "compute_diff": { "main": [[{ "node": "odoo_authenticate", "type": "main", "index": 0 }]] },
+    "odoo_authenticate": { "main": [[{ "node": "log_feedback_odoo", "type": "main", "index": 0 }]] },
+    "log_feedback_odoo": { "main": [[{ "node": "log_fail_notice", "type": "main", "index": 0 }]] },
+    "log_fail_notice": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": []
+}
