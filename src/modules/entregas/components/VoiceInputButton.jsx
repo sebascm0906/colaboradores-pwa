@@ -158,9 +158,11 @@ export default function VoiceInputButton({
       rec.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data)
       rec.onstop = async () => {
         const duration = Date.now() - startedAtRef.current
+        // Snapshot de los chunks ANTES de cleanup — cleanup resetea chunksRef.current a [].
+        const chunks = chunksRef.current
         cleanup()
         if (duration < 500) { reportError('AUDIO_TOO_SHORT'); return }
-        const blob = new Blob(chunksRef.current, { type: effectiveMimeType })
+        const blob = new Blob(chunks, { type: effectiveMimeType })
         await uploadAudio(blob, effectiveMimeType)
       }
       startedAtRef.current = Date.now()
