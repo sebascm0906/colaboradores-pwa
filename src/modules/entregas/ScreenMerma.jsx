@@ -3,13 +3,32 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { safeNumber } from '../../lib/safeNumber'
 import { getCedisInventory, createScrap, getScrapHistory, getScrapReasons } from './entregasService'
-import { ScreenShell, ConfirmDialog } from './components'
+import { sendVoiceFeedback } from './voiceFeedback'
+import { ScreenShell, ConfirmDialog, VoiceInputButton } from './components'
 import { logScreenError } from '../shared/logScreenError'
 
 /* ============================================================================
    ScreenMerma — Register shrinkage / damaged products
    Catalogo de motivos viene de Odoo (gf.production.scrap.reason) via getScrapReasons()
+   Voice-to-form (PoC Fase 0): VoiceInputButton -> W120 /voice-intake ->
+   envelope.data hidrata el form. Al confirmar, sendVoiceFeedback -> W122.
 ============================================================================ */
+
+// Mapea el enum `motivo` del LLM (W120 json_schema) al catalogo real de Odoo
+// via substring case-insensitive sobre `reason.name`. Si no matchea, devuelve null
+// y el usuario selecciona manualmente (el catalogo Odoo no cubre todos los enums).
+const LLM_MOTIVO_KEYWORD = {
+  derretimiento: 'derret',      // -> "Derretido"
+  contaminacion: 'contamina',   // -> "Contaminado"
+  golpe:         'roto',        // -> "Roto / dañado"
+  // 'robo' y 'otro' no tienen match fiable en el catalogo actual
+}
+function matchReasonFromLLM(motivoLLM, reasons) {
+  if (!motivoLLM || !Array.isArray(reasons)) return null
+  const keyword = LLM_MOTIVO_KEYWORD[motivoLLM]
+  if (!keyword) return null
+  return reasons.find((r) => (r.name || '').toLowerCase().includes(keyword)) || null
+}
 
 export default function ScreenMerma() {
   const { session } = useSession()
@@ -46,6 +65,11 @@ export default function ScreenMerma() {
   // ── Success / error messages ──────────────────────────────────────────────
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // ── Voice context (PoC Fase 0): captura el ultimo envelope de W120 ─────────
+  // Se usa luego al confirmar para enviar diff AI vs humano a W122.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
   useEffect(() => {
     loadData()
@@ -113,6 +137,27 @@ export default function ScreenMerma() {
         selectedReason.id,
         notes.trim() || undefined
       )
+
+      // Voice feedback best-effort: dispara fire-and-forget a W122 si hubo voz previa.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            product_id: selectedProduct.product_id,
+            cantidad: qty,
+            reason_id: selectedReason.id,
+            reason_name: selectedReason.name,
+            notes: notes.trim() || '',
+          },
+          metadata: {
+            context_id: 'form_merma',
+            plaza_id: session?.plaza_id || null,
+            user_id: employeeId || null,
+          },
+        })
+      }
+
       setSuccess('Merma registrada correctamente')
       clearForm()
       setConfirmOpen(false)
@@ -126,6 +171,62 @@ export default function ScreenMerma() {
     } finally { setSubmitting(false) }
   }
 
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+
+    // Producto: matchea por product_id contra inventory; si no, usa raw_product_name
+    // como search (el usuario elige manualmente). Nunca auto-selecciona un producto
+    // que la IA no identifico con id valido.
+    if (d.product_id) {
+      const match = inventory.find((i) => i.product_id === d.product_id)
+      if (match) {
+        setSelectedProduct(match)
+        setProductSearch(match.product || '')
+        setShowProductList(false)
+      } else {
+        setSelectedProduct(null)
+        setProductSearch(d.raw_product_name || '')
+        setShowProductList(false)
+      }
+    } else if (d.raw_product_name) {
+      setSelectedProduct(null)
+      setProductSearch(d.raw_product_name)
+      setShowProductList(false)
+    }
+
+    // Cantidad
+    if (typeof d.cantidad === 'number' && d.cantidad > 0) {
+      setQty(d.cantidad)
+    }
+
+    // Motivo: fuzzy-match enum LLM -> catalogo Odoo; si no matchea, deja null.
+    const matchedReason = matchReasonFromLLM(d.motivo, reasons)
+    if (matchedReason) setSelectedReason(matchedReason)
+
+    setValidationErrors({})
+
+    // Guardar contexto para feedback al confirmar
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    // Banner de revision (pregunta al humano)
+    const confidence = envelope?.meta?.stt_confidence
+    const transcript = envelope?.meta?.transcript
+    const bits = []
+    if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (!matchedReason && d.motivo) bits.push(`motivo IA "${d.motivo}" sin match — selecciona manual`)
+    if (!d.product_id && d.raw_product_name) bits.push('producto sin match — selecciona manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   function clearForm() {
     setSelectedProduct(null)
     setProductSearch('')
@@ -133,6 +234,8 @@ export default function ScreenMerma() {
     setSelectedReason(null)
     setNotes('')
     setValidationErrors({})
+    setVoiceContext(null)
+    setVoiceNote('')
   }
 
   function selectProduct(item) {
@@ -174,6 +277,32 @@ export default function ScreenMerma() {
               {success}
             </div>
           )}
+
+          {/* ── Voice input (PoC Fase 0) ─────────────────────────────────── */}
+          <div style={{ marginBottom: 12 }}>
+            <VoiceInputButton
+              context_id="form_merma"
+              label="Manten presionado para dictar la merma"
+              metadata={{
+                plaza_id: session?.plaza_id || null,
+                user_id: employeeId || null,
+                canal: 'pwa_colaboradores',
+              }}
+              disabled={loadingInit || submitting}
+              onResult={handleVoiceResult}
+              onError={handleVoiceError}
+            />
+            {voiceNote && (
+              <div style={{
+                marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                  {voiceNote}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* ── Form ─────────────────────────────────────────────────────── */}
           <div style={{ padding: 18, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, marginBottom: 20 }}>
