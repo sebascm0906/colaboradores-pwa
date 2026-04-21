@@ -13,6 +13,12 @@ export function resolveHarvestProduct({ slot = {}, tank = {} } = {}) {
   }
 }
 
+export function resolveHarvestShiftId({ slot = {}, activeShift = {} } = {}) {
+  const slotShiftId = Number(slot?.shift_id || 0)
+  if (slotShiftId) return slotShiftId
+  return Number(activeShift?.id || 0)
+}
+
 export function buildPtReceptionFromHarvest({ slot = {}, tank = {} } = {}) {
   const product = resolveHarvestProduct({ slot, tank })
   const slotName = String(slot?.name || '').trim()

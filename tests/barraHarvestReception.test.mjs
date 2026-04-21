@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildPtReceptionFromHarvest,
   resolveHarvestProduct,
+  resolveHarvestShiftId,
 } from '../src/modules/produccion/barraHarvestReception.js'
 
 test('resolveHarvestProduct prefers slot product over tank product', () => {
@@ -54,4 +55,24 @@ test('buildPtReceptionFromHarvest creates notes mentioning slot and PT reception
 
   assert.match(payload.notes, /B2/)
   assert.match(payload.notes, /Tanque 1/)
+})
+
+test('resolveHarvestShiftId prefers slot shift_id when available', () => {
+  assert.equal(
+    resolveHarvestShiftId({
+      slot: { shift_id: 55 },
+      activeShift: { id: 88 },
+    }),
+    55,
+  )
+})
+
+test('resolveHarvestShiftId falls back to active shift when slot shift_id is missing', () => {
+  assert.equal(
+    resolveHarvestShiftId({
+      slot: { shift_id: null },
+      activeShift: { id: 88 },
+    }),
+    88,
+  )
 })

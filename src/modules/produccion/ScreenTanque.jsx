@@ -16,8 +16,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
-import { harvestWithPtReception } from './api'
-import { buildPtReceptionFromHarvest } from './barraHarvestReception'
+import { getMyShift, harvestWithPtReception } from './api'
+import { buildPtReceptionFromHarvest, resolveHarvestShiftId } from './barraHarvestReception'
 import { getReadingLocalDateKey, getTodayDateKey } from '../supervision/brineReadings'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ export default function ScreenTanque() {
   const [slots, setSlots] = useState([])
   const [tank, setTank] = useState(null)
   const [nextReadyId, setNextReadyId] = useState(null)
+  const [activeShift, setActiveShift] = useState(null)
 
   const [harvestSlot, setHarvestSlot] = useState(null)
   const [harvestTemp, setHarvestTemp] = useState('')
@@ -71,10 +72,14 @@ export default function ScreenTanque() {
   async function load() {
     setLoading(true); setError('')
     try {
-      const res = await listSlots(machineId)
+      const [res, shift] = await Promise.all([
+        listSlots(machineId),
+        getMyShift().catch(() => null),
+      ])
       setSlots(Array.isArray(res?.slots) ? res.slots : [])
       setTank(res?.tank || null)
       setNextReadyId(res?.next_ready_id || null)
+      setActiveShift(shift || null)
     } catch (e) {
       setError(e.message || 'Error al cargar el tanque')
     } finally {
@@ -168,7 +173,7 @@ export default function ScreenTanque() {
     try {
       const result = await harvestWithPtReception({
         slot_id: harvestSlot.id,
-        shift_id: harvestSlot.shift_id || 0,
+        shift_id: resolveHarvestShiftId({ slot: harvestSlot, activeShift }),
         temperature: harvestTemp,
         slot: harvestSlot,
         tank,
