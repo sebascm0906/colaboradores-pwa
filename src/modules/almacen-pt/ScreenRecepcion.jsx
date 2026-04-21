@@ -199,6 +199,7 @@ export default function ScreenRecepcion() {
   const typo = useMemo(() => getTypo(sw), [sw])
 
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
+  const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
 
   const [pending, setPending] = useState({ pending_posting: [], pending_receipt: [] })
   const [loading, setLoading] = useState(true)
@@ -268,7 +269,7 @@ export default function ScreenRecepcion() {
     const receivedLines = buildReceivedLines(selected, receivedQty, notes.trim())
     const payload = {
       warehouse_id: warehouseId,
-      employee_id: session?.employee_id || 0,
+      employee_id: employeeId || undefined,
       shift_id: selected.shift_id || undefined,
       packing_entry_id: selected.packing_entry_id || undefined,
       packing_entry_ids: selected.packing_entry_ids || [],
@@ -287,7 +288,7 @@ export default function ScreenRecepcion() {
         qty_reported: selected.qty_reported,
         qty_received: receivedQty,
         notes: notes.trim(),
-        employee_id: session?.employee_id || 0,
+        employee_id: employeeId || 0,
         warehouse_id: warehouseId,
         backend_id: result?.id || result?.packing_entry_id || null,
       })
