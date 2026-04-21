@@ -4570,13 +4570,17 @@ async function directAlmacenPT(method, path, body) {
             notes: body?.notes || '',
           }]
         : []
-    return odooJson('/api/pt/reception/create', {
+    const envelope = await odooJson('/api/pt/reception/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
       shift_id: Number(body?.shift_id || 0) || undefined,
       packing_entry_ids: packingEntryIds,
       received_lines: receivedLines,
     })
+    if (envelope?.ok === false) {
+      throw new Error(envelope?.message || 'Error confirmando recepción PT')
+    }
+    return envelope?.data ?? envelope
   }
 
   // ── Transformation (Sebastián rollout 2026-04-10) ────────────────────────
