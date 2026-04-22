@@ -44,3 +44,28 @@ export function buildPtReceptionFromHarvest({ slot = {}, tank = {} } = {}) {
     notes: `Cosecha barra ${slotName} · ${tankName}`.trim(),
   }
 }
+
+function normalizeHarvestedProduct(productId, productName, source) {
+  const normalizedId = Number(productId || 0)
+  if (!normalizedId) return null
+  return {
+    product_id: normalizedId,
+    product_name: String(productName || '').trim(),
+    source,
+  }
+}
+
+export function resolvePackedProductFromHarvest({ harvestResult = {}, fallbackProduct = {} } = {}) {
+  const candidates = [
+    normalizeHarvestedProduct(harvestResult?.product_id, harvestResult?.product_name, 'harvest'),
+    normalizeHarvestedProduct(harvestResult?.data?.product_id, harvestResult?.data?.product_name, 'harvest'),
+    normalizeHarvestedProduct(harvestResult?.result?.product_id, harvestResult?.result?.product_name, 'harvest'),
+    normalizeHarvestedProduct(fallbackProduct?.product_id, fallbackProduct?.product_name, 'fallback'),
+  ]
+
+  return candidates.find(Boolean) || {
+    product_id: 0,
+    product_name: '',
+    source: 'missing',
+  }
+}

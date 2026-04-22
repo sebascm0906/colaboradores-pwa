@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildPtReceptionFromHarvest,
   resolveHarvestProduct,
+  resolvePackedProductFromHarvest,
   resolveHarvestShiftId,
 } from '../src/modules/produccion/barraHarvestReception.js'
 
@@ -57,6 +58,41 @@ test('buildPtReceptionFromHarvest creates notes mentioning slot and PT reception
 
   assert.match(payload.notes, /B2/)
   assert.match(payload.notes, /Tanque 1/)
+})
+
+test('resolvePackedProductFromHarvest prefers the product returned by action_cosechar over the preview fallback', () => {
+  const product = resolvePackedProductFromHarvest({
+    harvestResult: {
+      product_id: 725,
+      product_name: 'BARRA DE HIELO CHICA (50KG)',
+    },
+    fallbackProduct: {
+      product_id: 763,
+      product_name: 'MP BARRA DE HIELO',
+    },
+  })
+
+  assert.deepEqual(product, {
+    product_id: 725,
+    product_name: 'BARRA DE HIELO CHICA (50KG)',
+    source: 'harvest',
+  })
+})
+
+test('resolvePackedProductFromHarvest falls back when action_cosechar does not return product info', () => {
+  const product = resolvePackedProductFromHarvest({
+    harvestResult: { success: true },
+    fallbackProduct: {
+      product_id: 763,
+      product_name: 'MP BARRA DE HIELO',
+    },
+  })
+
+  assert.deepEqual(product, {
+    product_id: 763,
+    product_name: 'MP BARRA DE HIELO',
+    source: 'fallback',
+  })
 })
 
 test('resolveHarvestShiftId prefers slot shift_id when available', () => {

@@ -5,7 +5,10 @@ import {
   withExpectedTimingFields,
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming'
-import { buildPtReceptionFromHarvest } from '../modules/produccion/barraHarvestReception.js'
+import {
+  buildPtReceptionFromHarvest,
+  resolvePackedProductFromHarvest,
+} from '../modules/produccion/barraHarvestReception.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -2658,11 +2661,9 @@ async function directProduction(method, path, body) {
     if (!shiftId) throw new Error('shift_id requerido')
 
     const receptionPayload = buildPtReceptionFromHarvest({ slot, tank })
-    const productId = Number(body?.product_id || receptionPayload.product_id || 0)
     const sourceProductId = Number(body?.source_product_id || receptionPayload.source_product_id || 0)
     const qtyReported = Number(body?.qty_reported || receptionPayload.qty_reported || 0)
 
-    if (!productId) throw new Error('product_id requerido para recepcion PT')
     if (!qtyReported || qtyReported <= 0) throw new Error('qty_reported invalido para recepcion PT')
 
     const harvestResult = await createUpdate({
@@ -2689,10 +2690,19 @@ async function directProduction(method, path, body) {
     } catch { /* ignore */ }
 
     try {
+      const packedProduct = resolvePackedProductFromHarvest({
+        harvestResult,
+        fallbackProduct: {
+          product_id: Number(body?.product_id || receptionPayload.product_id || 0),
+          product_name: String(receptionPayload.product_name || '').trim(),
+        },
+      })
+      if (!packedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
+
       const packResult = await odooHttp('POST', '/api/production/pack', {}, {
         shift_id: shiftId,
         cycle_id: 0,
-        product_id: productId,
+        product_id: packedProduct.product_id,
         qty_bags: qtyReported,
         production_order_id: 0,
         line_type: String(body?.line_type || 'barra').trim() || 'barra',
