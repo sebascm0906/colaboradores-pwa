@@ -27,6 +27,7 @@ const ScreenTanque          = lazy(() => import('./modules/produccion/ScreenTanq
 const ScreenIncidenciaRolito = lazy(() => import('./modules/produccion/ScreenIncidenciaRolito'))
 const ScreenCierreRolito     = lazy(() => import('./modules/produccion/ScreenCierreRolito'))
 const ScreenHandoverTurno    = lazy(() => import('./modules/produccion/ScreenHandoverTurno'))
+const ScreenTurnoEntregado   = lazy(() => import('./modules/produccion/ScreenTurnoEntregado'))
 const ScreenReconciliacionPT = lazy(() => import('./modules/produccion/ScreenReconciliacionPT'))
 // Almacén PT V2
 const ScreenAlmacenPT       = lazy(() => import('./modules/almacen-pt/ScreenAlmacenPT'))
@@ -259,6 +260,7 @@ export default function App() {
             <Route path="/produccion/incidencia" element={<PrivateRoute><ScreenIncidenciaRolito /></PrivateRoute>} />
             <Route path="/produccion/cierre" element={<PrivateRoute><ScreenCierreRolito /></PrivateRoute>} />
             <Route path="/produccion/handover" element={<PrivateRoute><ScreenHandoverTurno /></PrivateRoute>} />
+            <Route path="/produccion/turno-entregado" element={<PrivateRoute><ScreenTurnoEntregado /></PrivateRoute>} />
             <Route path="/produccion/reconciliacion" element={<PrivateRoute><ScreenReconciliacionPT /></PrivateRoute>} />
 
             {/* ── Almacén PT V2 ────────────────────────────────────────── */}

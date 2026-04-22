@@ -131,6 +131,11 @@ export function closeShift(data) {
   return api('POST', '/pwa-prod/shift-close', data)
 }
 
+/** Registrar cierre individual de operador en el backend (best-effort, no bloquea UX) */
+export function notifyOperatorClose(data) {
+  return api('POST', '/api/production/shift/operator-close', data)
+}
+
 // ── Barra: Tanques + Slots + Harvest + Incidentes + Salt ────────────────────
 
 /** Listar tanques de salmuera (gf.production.machine, machine_type='tanque_salmuera') */

@@ -20,6 +20,8 @@ import {
   EXPECTED_KG_PER_CYCLE,
 } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
+import { getOperatorCloseState, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
+import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 
 const SHIFT_STATES = {
   draft:       { label: 'Pendiente',   color: TOKENS.colors.textMuted },
@@ -31,6 +33,7 @@ const SHIFT_STATES = {
 export default function ScreenTurnoRolito() {
   const { session } = useSession()
   const navigate = useNavigate()
+  const activeOperatorRole = normalizeOperatorCloseRole(session?.role) || 'operador_rolito'
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -85,6 +88,11 @@ export default function ScreenTurnoRolito() {
   const diagnostics = getCycleDiagnostics(lastDumped) || getCycleDiagnostics(activeCycle)
   const stateInfo = SHIFT_STATES[shift?.state] || SHIFT_STATES.draft
   const totalBagsAvailable = (bagMaterials || []).reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
+  const closeState = shift?.id ? getOperatorCloseState(shift.id, activeOperatorRole, shift) : null
+
+  if (!loading && !error && closeState?.closed) {
+    return <ScreenTurnoEntregado shift={shift} role={activeOperatorRole} closeState={closeState} />
+  }
 
   return (
     <div style={{

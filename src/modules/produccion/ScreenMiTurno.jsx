@@ -8,6 +8,8 @@ import { getMyShift, getCycles, getPackingEntries } from './api'
 import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
 import { getMiTurnoActions } from './miTurnoActions'
 import OpeningStateBanner from './OpeningStateBanner'
+import { getOperatorCloseState } from '../shared/operatorTurnCloseStore'
+import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 
 // V2: Rolito users get redirected to the new guided hub
 import ScreenTurnoRolito from './ScreenTurnoRolito'
@@ -87,6 +89,11 @@ export default function ScreenMiTurno() {
 
   const totalKgPacked = packing.reduce((sum, p) => sum + (p.total_kg || 0), 0)
   const stateInfo = STATES[shift?.state] || STATES.draft
+  const closeState = shift?.id ? getOperatorCloseState(shift.id, activeRole, shift) : null
+
+  if (!loading && !error && closeState?.closed) {
+    return <ScreenTurnoEntregado shift={shift} role={activeRole} closeState={closeState} />
+  }
 
   const ACTIONS = getMiTurnoActions({
     isBarras,

@@ -12,6 +12,7 @@ import {
   getShiftOverview,
   saveBagReconciliation,
 } from './rolitoService'
+import { notifyOperatorClose } from './api'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
 import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
@@ -147,6 +148,12 @@ export default function ScreenCierreRolito() {
       markOperatorTurnClosed(shift.id, activeOperatorRole, {
         employee_name: session?.employee_name || session?.name || session?.user_name || '',
       })
+      notifyOperatorClose({
+        shift_id: shift.id,
+        role: activeOperatorRole,
+        employee_id: session?.employee_id || 0,
+        closed_at: new Date().toISOString(),
+      }).catch(() => {})
       setAlreadyClosed(true)
       setVoiceContext(null)
       setVoiceNote('')
