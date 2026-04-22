@@ -18,6 +18,9 @@ import {
 import { getPackingEntries } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
 import { getMaterialIssues } from '../almacen-pt/materialsService'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import { matchByFuzzyName, matchByNumericId } from '../shared/voice/voiceMatchers'
 
 function getUnpackedCycles(cycles, entries) {
   const coherence = computePackingCoherence(cycles, entries)
@@ -33,6 +36,7 @@ function getUnpackedCycles(cycles, entries) {
 
 export default function ScreenEmpaqueRolito() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -50,6 +54,10 @@ export default function ScreenEmpaqueRolito() {
   // Form state
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [qtyBags, setQtyBags] = useState(0)
+
+  // Voice state (PoC Fase 1): captura el ultimo envelope de W120 para feedback al submit.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
   function setQtyBagsSafe(value) {
     const next = Number.parseInt(String(value || '').replace(/[^\d]/g, ''), 10)
@@ -118,6 +126,66 @@ export default function ScreenEmpaqueRolito() {
   const totalKg = (qtyBags * productWeight).toFixed(1)
   const totalPackedKg = entries.reduce((s, e) => s + (e.total_kg || 0), 0)
 
+  // Metadata para W120 — catalogo truncado a 30 con shape minimo (id/name/kg_per_bag).
+  const voiceMetadata = useMemo(() => ({
+    shift_id: shift?.id || null,
+    user_id: session?.employee_id || null,
+    canal: 'pwa_colaboradores',
+    packing_products: (products || []).slice(0, 30).map(p => ({
+      id: Number(p.id),
+      name: p.name,
+      kg_per_bag: Number(p.weight || p.kg_per_bag || 1),
+    })),
+  }), [shift?.id, session?.employee_id, products])
+
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+
+    // Producto: primero matchea por id (del packing_products), luego fallback por
+    // raw_product_name via fuzzy. Si no matchea, deja el form sin producto y el
+    // usuario selecciona manualmente (submit sigue bloqueado hasta que elija).
+    let matchedProduct = null
+    if (d.product_id) {
+      matchedProduct = matchByNumericId(d.product_id, products, 'id')
+    }
+    if (!matchedProduct && d.raw_product_name) {
+      matchedProduct = matchByFuzzyName(d.raw_product_name, products, 'name')
+    }
+    if (matchedProduct) {
+      setSelectedProduct(matchedProduct)
+    }
+
+    // Cantidad de bolsas
+    if (typeof d.qty_bags === 'number' && d.qty_bags > 0) {
+      setQtyBags(d.qty_bags)
+    }
+
+    // Ciclo: el usuario dice el cycle_number (orden en turno), no el id global.
+    // Matcher prueba cycle_number primero y luego id como fallback.
+    if (typeof d.cycle_num === 'number') {
+      const matchedCycle = matchByNumericId(d.cycle_num, unpackedCycles, 'cycle_number', 'id')
+      if (matchedCycle) setSelectedCycleId(matchedCycle.id)
+    }
+
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (!matchedProduct && d.raw_product_name) bits.push('producto sin match — selecciona manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   async function handleSubmit() {
     if (!selectedProduct || qtyBags <= 0 || !shift?.id) return
     // Bloqueo duro: ciclo obligatorio
@@ -132,6 +200,25 @@ export default function ScreenEmpaqueRolito() {
       const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
       if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
       await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
+
+      // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            product_id: productId,
+            qty_bags: qtyBags,
+            cycle_id: selectedCycleId,
+          },
+          metadata: {
+            context_id: 'form_empaque_rolito',
+            shift_id: shift?.id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setSuccess(`${qtyBags} bolsas registradas (${totalKg} kg)`)
       setQtyBags(0)
       // Reload entries
@@ -140,6 +227,8 @@ export default function ScreenEmpaqueRolito() {
       setSelectedProduct(null)
       const pendingAfterSave = getUnpackedCycles(cycles, ents || [])
       setSelectedCycleId(pendingAfterSave[0]?.id || null)
+      setVoiceContext(null)
+      setVoiceNote('')
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
       setError(e.message || 'Error al registrar empaque')
@@ -184,6 +273,28 @@ export default function ScreenEmpaqueRolito() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* ── Voice input (PoC Fase 1) ──────────────────────────────── */}
+            <div>
+              <VoiceInputButton
+                context_id="form_empaque_rolito"
+                label="Manten presionado para dictar empaque"
+                metadata={voiceMetadata}
+                disabled={loading || saving || products.length === 0}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+              />
+              {voiceNote && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                    {voiceNote}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Total packed today */}
             <div style={{

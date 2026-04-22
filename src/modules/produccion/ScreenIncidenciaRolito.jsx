@@ -4,6 +4,7 @@
 // Backend confirmado en produccion — todos los modelos y campos existen.
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { api } from '../../lib/api'
 import { getMyShift } from './api'
@@ -13,6 +14,9 @@ import {
   getDowntimeCategories,
   getScrapReasons,
 } from './rolitoService'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import { matchByFuzzyName, matchByNumericId } from '../shared/voice/voiceMatchers'
 
 // Fallbacks if Odoo fetch fails
 const FALLBACK_DOWNTIME_CATS = [
@@ -32,6 +36,7 @@ const SCRAP_ICONS = { 'Derretido': '\uD83D\uDCC9', 'Roto': '\u274C', 'Sellado de
 
 export default function ScreenIncidenciaRolito() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -54,6 +59,10 @@ export default function ScreenIncidenciaRolito() {
   const [selectedCategory, setSelectedCategory] = useState(null) // downtime category or scrap reason
   const [kgLost, setKgLost] = useState('')
   const [notes, setNotes] = useState('')
+
+  // Voice state (PoC Fase 1): captura el ultimo envelope de W120 para feedback al submit.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
   useEffect(() => {
     Promise.all([
@@ -86,6 +95,68 @@ export default function ScreenIncidenciaRolito() {
 
   const isMerma = mode === 'merma'
 
+  // Metadata para W120 — shape minimo {id,name} de ambos catalogos.
+  const voiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    canal: 'pwa_colaboradores',
+    downtime_categories: (downtimeCategories || []).map(c => ({ id: Number(c.id), name: c.name })),
+    scrap_reasons: (scrapReasons || []).map(r => ({ id: Number(r.id), name: r.name })),
+  }), [session?.employee_id, downtimeCategories, scrapReasons])
+
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+
+    // mode: schema lo valida como enum['paro','merma']. Auto-seleccionar.
+    let resolvedMode = null
+    if (d.mode === 'paro' || d.mode === 'merma') {
+      resolvedMode = d.mode
+      setMode(resolvedMode)
+    }
+
+    // Categoria: matchea por id en el catalogo del mode; fallback fuzzy por
+    // category_name. Si no matchea, deja null (usuario elige manualmente).
+    const catalog = resolvedMode === 'paro' ? downtimeCategories
+      : resolvedMode === 'merma' ? scrapReasons
+      : null
+    let matchedCategory = null
+    if (catalog) {
+      if (d.category_id !== null && d.category_id !== undefined) {
+        matchedCategory = matchByNumericId(d.category_id, catalog, 'id')
+      }
+      if (!matchedCategory && d.category_name) {
+        matchedCategory = matchByFuzzyName(d.category_name, catalog, 'name')
+      }
+    }
+    setSelectedCategory(matchedCategory)
+
+    // Campos por mode
+    if (resolvedMode === 'merma' && typeof d.kg_lost === 'number' && d.kg_lost > 0) {
+      setKgLost(String(d.kg_lost))
+    }
+    if (typeof d.notas === 'string' && d.notas.trim()) {
+      setNotes(d.notas.trim())
+    }
+
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (!resolvedMode) bits.push('tipo sin match — elige paro o merma')
+    if (resolvedMode && !matchedCategory) bits.push('categoria sin match — selecciona manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   async function handleSubmit() {
     if (!selectedCategory || !shift?.id) return
     if (!lineId) { setError('Selecciona una línea'); return }
@@ -101,11 +172,35 @@ export default function ScreenIncidenciaRolito() {
       } else {
         await registerDowntime(shift.id, selectedCategory.id, notes || selectedCategory.name, 0, lid)
       }
+
+      // Voice feedback best-effort: dispara fire-and-forget a W122 si hubo voz.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            mode,
+            category_id: selectedCategory.id,
+            category_name: selectedCategory.name,
+            kg_lost: isMerma ? parseFloat(kgLost) || 0 : null,
+            notas: notes || '',
+            line_id: lid,
+          },
+          metadata: {
+            context_id: 'form_incidencia_rolito',
+            shift_id: shift?.id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setSuccess('Incidencia registrada')
       setMode(null)
       setSelectedCategory(null)
       setKgLost('')
       setNotes('')
+      setVoiceContext(null)
+      setVoiceNote('')
       setTimeout(() => navigate('/produccion'), 1500)
     } catch (e) {
       setError(e.message || 'Error al registrar incidencia')
@@ -150,6 +245,28 @@ export default function ScreenIncidenciaRolito() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* ── Voice input (PoC Fase 1) ──────────────────────────────── */}
+            <div>
+              <VoiceInputButton
+                context_id="form_incidencia_rolito"
+                label="Manten presionado para dictar incidencia"
+                metadata={voiceMetadata}
+                disabled={loading || saving || (downtimeCategories.length === 0 && scrapReasons.length === 0)}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+              />
+              {voiceNote && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                    {voiceNote}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Mode selection — Paro vs Merma */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 2 }}>TIPO DE INCIDENCIA</p>

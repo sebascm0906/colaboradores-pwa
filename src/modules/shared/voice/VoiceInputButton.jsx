@@ -23,15 +23,18 @@ const S = {
 }
 
 const ERROR_MESSAGES = {
-  AUTH_FAILED:         'Sesion expirada, recarga la app',
-  AUDIO_TOO_SHORT:     'Audio demasiado corto',
-  AUDIO_TOO_LARGE:     'Audio muy largo, max 10 segundos',
-  STT_LOW_CONFIDENCE:  'No se entendio bien, intenta de nuevo',
-  STT_EMPTY:           'No detecte voz, intenta de nuevo',
-  CATALOG_UNAVAILABLE: 'Captura manual por ahora',
-  LLM_TIMEOUT:         'Servicio lento, intenta otra vez',
-  VALIDATION_FAILED:   'Revisa los datos manualmente',
-  INTERNAL_ERROR:      'Error, reporta a soporte',
+  AUTH_FAILED:            'Sesion expirada, recarga la app',
+  MIC_PERMISSION_DENIED:  'Permite el microfono en la configuracion del navegador',
+  AUDIO_TOO_SHORT:        'Audio demasiado corto',
+  AUDIO_TOO_LARGE:        'Audio muy largo, max 10 segundos',
+  STT_LOW_CONFIDENCE:     'No se entendio bien, intenta de nuevo',
+  STT_EMPTY:              'No detecte voz, intenta de nuevo',
+  CATALOG_UNAVAILABLE:    'Captura manual por ahora',
+  EMPTY_CATALOG:          'Catalogo no cargado, intenta de nuevo',
+  MODE_CATEGORY_MISMATCH: 'La categoria no coincide con el tipo, intenta otra vez',
+  LLM_TIMEOUT:            'Servicio lento, intenta otra vez',
+  VALIDATION_FAILED:      'Revisa los datos manualmente',
+  INTERNAL_ERROR:         'Error, reporta a soporte',
 }
 
 const WEBHOOK_URL = import.meta.env.VITE_N8N_VOICE_WEBHOOK_URL
@@ -171,7 +174,7 @@ export default function VoiceInputButton({
       setState(S.RECORDING)
     } catch (err) {
       cleanup()
-      if (err?.name === 'NotAllowedError') reportError('AUTH_FAILED', 'Permiso de microfono denegado')
+      if (err?.name === 'NotAllowedError') reportError('MIC_PERMISSION_DENIED')
       else reportError('INTERNAL_ERROR', err?.message)
     }
   }, [disabled, state, cleanup, uploadAudio, reportError])
