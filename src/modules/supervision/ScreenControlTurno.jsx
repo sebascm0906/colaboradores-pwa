@@ -73,9 +73,9 @@ function isIncidentReadinessItem(item) {
   return code.includes('incident') || text.includes('incidenc')
 }
 
-function buildSupervisorCloseReadiness(rawReadiness, shiftId) {
+function buildSupervisorCloseReadiness(rawReadiness, shiftLike) {
   const base = rawReadiness || { canClose: false, blockers: [], warnings: [] }
-  const operatorSummary = getOperatorCloseSummary(shiftId)
+  const operatorSummary = getOperatorCloseSummary(shiftLike)
   const operatorBlockers = operatorSummary
     .filter((item) => !item.closed)
     .map((item) => `${item.label} pendiente de cerrar su turno`)
@@ -100,7 +100,7 @@ function buildSupervisorCloseReadiness(rawReadiness, shiftId) {
     blockers: [...keptBlockers, ...operatorBlockers],
     warnings,
     operatorSummary,
-    operatorsReady: areRequiredOperatorClosesDone(shiftId),
+    operatorsReady: areRequiredOperatorClosesDone(shiftLike),
   }
 }
 
@@ -236,7 +236,7 @@ export default function ScreenControlTurno() {
     try {
       setOperatorSummary(getOperatorCloseSummary(shift.id))
       const { readiness } = await loadShiftReadiness(shift.id)
-      const effectiveReadiness = buildSupervisorCloseReadiness(readiness, shift.id)
+      const effectiveReadiness = buildSupervisorCloseReadiness(readiness, shift)
       setCloseReadiness(effectiveReadiness)
       return effectiveReadiness
     } catch (e) {
@@ -266,7 +266,7 @@ export default function ScreenControlTurno() {
       if (!result.ok) {
         throw new Error(result.error || 'Error cerrando turno')
       }
-      clearOperatorTurnClosed(shift.id)
+      clearOperatorTurnClosed(shift)
       setMsg({ type: 'success', text: 'Turno cerrado correctamente' })
       setConfirmClose(false)
       setCloseReadiness(null)
@@ -762,7 +762,9 @@ export default function ScreenControlTurno() {
                                   color: item.closed ? TOKENS.colors.success : TOKENS.colors.warning,
                                   fontWeight: 700,
                                 }}>
-                                  {item.closed ? `Cerrado${item.employee_name ? ` · ${item.employee_name}` : ''}` : 'Pendiente'}
+                                  {item.closed
+                                    ? `✅ Turno cerrado${item.employee_name ? ` · ${item.employee_name}` : ''}`
+                                    : '❌ Turno pendiente'}
                                 </span>
                               </div>
                             ))}

@@ -308,7 +308,12 @@ export default function ScreenMiTurno() {
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginTop: 20, marginBottom: 12 }}>ACCIONES</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {ACTIONS.map(action => (
-                <ActionCard key={action.id} action={action} typo={typo} onClick={() => navigate(action.route)} />
+                <ActionCard
+                  key={action.id}
+                  action={action}
+                  typo={typo}
+                  onClick={() => navigate(action.route, { state: { selected_role: activeRole } })}
+                />
               ))}
             </div>
 

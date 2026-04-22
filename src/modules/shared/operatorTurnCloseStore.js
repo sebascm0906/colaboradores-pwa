@@ -8,6 +8,69 @@ const ROLE_LABELS = {
   operador_barra: 'Operador Barra',
 }
 
+function normalizeShiftCode(value) {
+  const numeric = Number(value)
+  if (Number.isFinite(numeric) && numeric > 0) return String(numeric)
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const low = raw.toLowerCase()
+  if (low === 'dia') return '1'
+  if (low === 'noche') return '2'
+  return raw
+}
+
+function extractShiftScopeParts(shiftLike) {
+  if (!shiftLike || typeof shiftLike !== 'object') return null
+
+  const warehouseId = Number(
+    shiftLike.warehouse_id
+      ?? shiftLike.plant_warehouse_id
+      ?? shiftLike.plant_id
+      ?? shiftLike.warehouse?.id
+      ?? 0
+  )
+  const date = String(shiftLike.date || shiftLike.shift_date || '').trim()
+  const shiftCode = normalizeShiftCode(
+    shiftLike.shift_code
+      ?? shiftLike.code
+      ?? shiftLike.turno
+      ?? shiftLike.shift?.shift_code
+  )
+
+  if (!warehouseId || !date || !shiftCode) return null
+  return { warehouseId, date, shiftCode }
+}
+
+function buildScopeKey(shiftLike) {
+  const parts = extractShiftScopeParts(shiftLike)
+  if (!parts) return ''
+  return `scope:${parts.warehouseId}:${parts.date}:${parts.shiftCode}`
+}
+
+function buildLegacyKey(shiftLike) {
+  const rawId =
+    typeof shiftLike === 'object'
+      ? shiftLike?.id ?? shiftLike?.shift_id ?? shiftLike?.shift?.id
+      : shiftLike
+  const value = String(rawId || '').trim()
+  return value ? `id:${value}` : ''
+}
+
+function resolveLookupKeys(shiftLike) {
+  const keys = []
+  const scopeKey = buildScopeKey(shiftLike)
+  if (scopeKey) keys.push(scopeKey)
+
+  const legacyKey = buildLegacyKey(shiftLike)
+  if (legacyKey) {
+    keys.push(legacyKey)
+    const rawLegacyId = legacyKey.slice(3)
+    if (rawLegacyId) keys.push(rawLegacyId)
+  }
+
+  return Array.from(new Set(keys.filter(Boolean)))
+}
+
 function readStore() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
@@ -20,38 +83,28 @@ function writeStore(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
-export function normalizeOperatorCloseRole(role) {
-  const value = String(role || '').toLowerCase()
-  if (value.includes('rolito')) return 'operador_rolito'
-  if (value.includes('barra')) return 'operador_barra'
-  return value
+function readShiftEntry(shiftLike) {
+  const store = readStore()
+  const keys = resolveLookupKeys(shiftLike)
+  for (const key of keys) {
+    if (store[key]) return { key, data: store[key] }
+  }
+  return { key: buildScopeKey(shiftLike) || buildLegacyKey(shiftLike) || '', data: {} }
 }
 
 function isShiftClosedState(state) {
   return CLOSED_SHIFT_STATES.has(String(state || '').toLowerCase())
 }
 
-function getShiftEntry(shiftId, role) {
-  const normalizedRole = normalizeOperatorCloseRole(role)
-  const key = String(shiftId || '')
-  const store = readStore()
-  const entry = store?.[key]?.[normalizedRole]
-  return {
-    key,
-    normalizedRole,
-    entry,
-    store,
-  }
-}
-
-function buildSummaryItem(role, data = {}) {
+function buildSummaryItem(role, data = {}, key = '') {
+  const rawShiftId = data?.shift_id ?? (String(key || '').startsWith('id:') ? String(key).slice(3) : null)
   return {
     role,
     label: ROLE_LABELS[role] || role,
     closed: Boolean(data?.closed),
     closed_at: data?.closed_at || null,
     employee_name: data?.employee_name || '',
-    shift_id: data?.shift_id || null,
+    shift_id: rawShiftId || null,
     shift_state: data?.shift_state || null,
     shift_name: data?.shift_name || '',
     shift_date: data?.shift_date || '',
@@ -59,16 +112,21 @@ function buildSummaryItem(role, data = {}) {
   }
 }
 
-export function getOperatorCloseRecord(shiftId, role) {
-  const { normalizedRole, entry, key } = getShiftEntry(shiftId, role)
-  return buildSummaryItem(normalizedRole, {
-    ...(entry || {}),
-    shift_id: key || null,
-  })
+export function normalizeOperatorCloseRole(role) {
+  const value = String(role || '').toLowerCase()
+  if (value.includes('rolito')) return 'operador_rolito'
+  if (value.includes('barra')) return 'operador_barra'
+  return value
 }
 
-export function getOperatorCloseState(shiftId, role, currentShift = null) {
-  const record = getOperatorCloseRecord(shiftId, role)
+export function getOperatorCloseRecord(shiftLike, role) {
+  const normalizedRole = normalizeOperatorCloseRole(role)
+  const { key, data } = readShiftEntry(shiftLike)
+  return buildSummaryItem(normalizedRole, data?.[normalizedRole] || {}, key)
+}
+
+export function getOperatorCloseState(shiftLike, role, currentShift = null) {
+  const record = getOperatorCloseRecord(shiftLike, role)
   const currentShiftId = currentShift?.id != null ? String(currentShift.id) : null
   const currentShiftState = String(currentShift?.state || '').toLowerCase()
   const matchesCurrentShift = Boolean(currentShiftId && String(record.shift_id || '') === currentShiftId)
@@ -85,76 +143,107 @@ export function getOperatorCloseState(shiftId, role, currentShift = null) {
   }
 }
 
-export function getOperatorCloseSummary(shiftId) {
-  const key = String(shiftId || '')
-  const data = readStore()[key] || {}
-  return REQUIRED_OPERATOR_ROLES.map((role) => buildSummaryItem(role, {
-    ...(data?.[role] || {}),
-    shift_id: key || null,
-  }))
+export function getOperatorCloseSummary(shiftLike) {
+  const { key, data } = readShiftEntry(shiftLike)
+  return REQUIRED_OPERATOR_ROLES.map((role) => buildSummaryItem(role, data?.[role] || {}, key))
 }
 
-export function markOperatorTurnClosed(shiftId, role, payload = {}) {
+export function markOperatorTurnClosed(shiftLike, role, payload = {}) {
   const normalizedRole = normalizeOperatorCloseRole(role)
-  if (!shiftId || !REQUIRED_OPERATOR_ROLES.includes(normalizedRole)) return false
+  if (!REQUIRED_OPERATOR_ROLES.includes(normalizedRole)) return false
+
+  const keys = resolveLookupKeys(shiftLike)
+  if (keys.length === 0) return false
+
+  const shiftId =
+    typeof shiftLike === 'object'
+      ? shiftLike?.id ?? shiftLike?.shift_id ?? shiftLike?.shift?.id
+      : shiftLike
+
+  const shiftState =
+    payload.shift_state
+      || (typeof shiftLike === 'object' ? shiftLike?.state || '' : '')
+  const shiftName =
+    payload.shift_name
+      || (typeof shiftLike === 'object' ? shiftLike?.name || '' : '')
+  const shiftDate =
+    payload.shift_date
+      || (typeof shiftLike === 'object' ? shiftLike?.date || shiftLike?.shift_date || '' : '')
+  const shiftCode =
+    payload.shift_code
+      || (typeof shiftLike === 'object' ? shiftLike?.shift_code ?? shiftLike?.code ?? null : null)
 
   const store = readStore()
-  const key = String(shiftId)
-  store[key] = {
-    ...(store[key] || {}),
-    [normalizedRole]: {
-      closed: true,
-      closed_at: payload.closed_at || new Date().toISOString(),
-      employee_name: payload.employee_name || '',
-      shift_id: key,
-      shift_state: payload.shift_state || '',
-      shift_name: payload.shift_name || '',
-      shift_date: payload.shift_date || '',
-      shift_code: payload.shift_code || null,
-    },
+  const nextValue = {
+    closed: true,
+    closed_at: payload.closed_at || new Date().toISOString(),
+    employee_name: payload.employee_name || '',
+    shift_id: shiftId != null ? String(shiftId) : null,
+    shift_state: shiftState,
+    shift_name: shiftName,
+    shift_date: shiftDate,
+    shift_code: shiftCode,
+  }
+
+  for (const key of keys) {
+    store[key] = {
+      ...(store[key] || {}),
+      [normalizedRole]: nextValue,
+    }
   }
   writeStore(store)
   return true
 }
 
-export function isOperatorTurnClosed(shiftId, role) {
-  return getOperatorCloseRecord(shiftId, role).closed
+export function isOperatorTurnClosed(shiftLike, role) {
+  return getOperatorCloseRecord(shiftLike, role).closed
 }
 
-export function reopenOperatorTurnClosed(shiftId, role, options = {}) {
+export function reopenOperatorTurnClosed(shiftLike, role, options = {}) {
   const normalizedRole = normalizeOperatorCloseRole(role)
-  if (!shiftId || !REQUIRED_OPERATOR_ROLES.includes(normalizedRole)) return false
+  if (!REQUIRED_OPERATOR_ROLES.includes(normalizedRole)) return false
 
   const currentShift = options.currentShift || options.shift || null
-  if (currentShift?.id != null) {
-    const currentShiftId = String(currentShift.id)
-    if (currentShiftId !== String(shiftId)) return false
-    if (isShiftClosedState(currentShift.state)) return false
-  }
+  const currentShiftId = currentShift?.id != null ? String(currentShift.id) : null
+  const keys = resolveLookupKeys(shiftLike)
+  if (keys.length === 0) return false
 
   const store = readStore()
-  const key = String(shiftId)
-  const nextEntry = { ...(store[key] || {}) }
-  if (!nextEntry[normalizedRole]) return false
-  delete nextEntry[normalizedRole]
-  if (Object.keys(nextEntry).length > 0) {
-    store[key] = nextEntry
-  } else {
-    delete store[key]
+  let removed = false
+
+  for (const key of keys) {
+    const nextEntry = { ...(store[key] || {}) }
+    const record = nextEntry[normalizedRole]
+    if (!record) continue
+
+    if (currentShiftId) {
+      if (String(record.shift_id || '') !== currentShiftId) continue
+      if (isShiftClosedState(currentShift.state)) return false
+    }
+
+    delete nextEntry[normalizedRole]
+    if (Object.keys(nextEntry).length > 0) {
+      store[key] = nextEntry
+    } else {
+      delete store[key]
+    }
+    removed = true
   }
+
+  if (!removed) return false
   writeStore(store)
   return true
 }
 
-export function areRequiredOperatorClosesDone(shiftId) {
-  const summary = getOperatorCloseSummary(shiftId)
+export function areRequiredOperatorClosesDone(shiftLike) {
+  const summary = getOperatorCloseSummary(shiftLike)
   return summary.every((item) => item.closed)
 }
 
-export function clearOperatorTurnClosed(shiftId) {
-  const key = String(shiftId || '')
-  if (!key) return
+export function clearOperatorTurnClosed(shiftLike) {
+  const keys = resolveLookupKeys(shiftLike)
+  if (keys.length === 0) return
   const store = readStore()
-  delete store[key]
+  for (const key of keys) delete store[key]
   writeStore(store)
 }

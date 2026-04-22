@@ -5,9 +5,11 @@
 //   action_close → se intenta, con fallback a state='done'
 //   Checklist entrega: local-only (template no existe en Odoo aun)
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { getModuleById } from '../registry'
+import { resolveModuleContextRole } from '../../lib/roleContext'
 import {
   getShiftOverview,
   saveBagReconciliation,
@@ -20,10 +22,18 @@ import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { session } = useSession()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const activeOperatorRole = normalizeOperatorCloseRole(session?.role)
+  const activeOperatorRole = normalizeOperatorCloseRole(
+    resolveModuleContextRole(
+      session,
+      getModuleById('registro_produccion'),
+      location.state?.selected_role,
+    ) || session?.role
+  )
+  const isBarraOperator = activeOperatorRole === 'operador_barra'
 
   const [data, setData] = useState({ shift: null, cycles: [], packing: [], kpis: null })
   const [loading, setLoading] = useState(true)
@@ -52,7 +62,7 @@ export default function ScreenCierreRolito() {
     try {
       const result = await getShiftOverview()
       setData(result)
-      setAlreadyClosed(Boolean(result.shift?.id && isOperatorTurnClosed(result.shift.id, activeOperatorRole)))
+      setAlreadyClosed(Boolean(result.shift && isOperatorTurnClosed(result.shift, activeOperatorRole)))
     } catch {
       setError('Error cargando datos')
     } finally {
@@ -125,12 +135,12 @@ export default function ScreenCierreRolito() {
     setError('')
     try {
       // Save bag reconciliation if operator entered data
-      if (bagsReceivedNum > 0) {
+      if (!isBarraOperator && bagsReceivedNum > 0) {
         await saveBagReconciliation(shift.id, bagsReceivedNum, bagsRemainingNum)
       }
 
       // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
-      if (voiceContext?.trace_id) {
+      if (!isBarraOperator && voiceContext?.trace_id) {
         sendVoiceFeedback({
           trace_id: voiceContext.trace_id,
           ai_output: voiceContext.ai_output || {},
@@ -147,7 +157,7 @@ export default function ScreenCierreRolito() {
         })
       }
 
-      markOperatorTurnClosed(shift.id, activeOperatorRole, {
+      markOperatorTurnClosed(shift, activeOperatorRole, {
         employee_name: session?.employee_name || session?.name || session?.user_name || '',
       })
       notifyOperatorClose({
@@ -271,7 +281,7 @@ export default function ScreenCierreRolito() {
             </div>
 
             {/* ── AVISOS OPERATIVOS (no bloquean) ─────────────── */}
-            {coherenceHeadline && (
+            {!isBarraOperator && coherenceHeadline && (
               <div style={{
                 padding: '12px 14px', borderRadius: TOKENS.radius.md,
                 background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
@@ -334,32 +344,35 @@ export default function ScreenCierreRolito() {
             )}
 
             {/* ── Voice input (Batch B) ──────────────────────────────── */}
-            <div>
-              <VoiceInputButton
-                context_id="form_cierre_bolsas"
-                label="Manten presionado para dictar bolsas"
-                metadata={voiceMetadata}
-                disabled={closing || alreadyClosed || !shift?.id}
-                onResult={handleVoiceResult}
-                onError={handleVoiceError}
-              />
-              {voiceNote && (
-                <div style={{
-                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
-                }}>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
-                    {voiceNote}
-                  </p>
-                </div>
-              )}
-            </div>
+            {!isBarraOperator && (
+              <div>
+                <VoiceInputButton
+                  context_id="form_cierre_bolsas"
+                  label="Manten presionado para dictar bolsas"
+                  metadata={voiceMetadata}
+                  disabled={closing || alreadyClosed || !shift?.id}
+                  onResult={handleVoiceResult}
+                  onError={handleVoiceError}
+                />
+                {voiceNote && (
+                  <div style={{
+                    marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                      {voiceNote}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ── CUADRATURA BOLSAS ───────────────────────────── */}
-            <div style={{
-              padding: 16, borderRadius: TOKENS.radius.xl,
-              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-            }}>
+            {!isBarraOperator && (
+              <div style={{
+                padding: 16, borderRadius: TOKENS.radius.xl,
+                background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+              }}>
               <div style={{ marginBottom: 12 }}>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>CONTEO DE BOLSAS</p>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
@@ -423,7 +436,8 @@ export default function ScreenCierreRolito() {
                   </div>
                 )}
               </div>
-            </div>
+              </div>
+            )}
 
             {/* ── CHECKLIST ENTREGA ───────────────────────────── */}
             <div style={{

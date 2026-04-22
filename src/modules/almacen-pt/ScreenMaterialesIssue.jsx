@@ -14,6 +14,7 @@ import { getMaterialIssues, stateLabel, lineOf } from './materialsService'
 import { buildMaterialesNavState, resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
+import { normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
 
 const LINE_ORDER = ['BARRA', 'ROLITO', 'OTRO']
 
@@ -33,6 +34,8 @@ export default function ScreenMaterialesIssue() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
   const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt', session?.role)
+  const activeRole = normalizeOperatorCloseRole(location.state?.selected_role || session?.role)
+  const canCreateIssue = activeRole !== 'operador_rolito'
 
   const [shift, setShift] = useState(null)
   const [items, setItems] = useState([])
@@ -82,7 +85,7 @@ export default function ScreenMaterialesIssue() {
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <Header title="Materiales del turno" subtitle={shift?.id ? `Turno #${shift.id}` : ''} onBack={() => navigate(backTo)} onReload={loadData} typo={typo} />
 
-        {shift?.id && (
+        {shift?.id && canCreateIssue && (
           <button
             onClick={() => navigate('/almacen-pt/materiales/crear', {
               state: buildMaterialesNavState(location.state, '/almacen-pt/materiales', session?.role),
