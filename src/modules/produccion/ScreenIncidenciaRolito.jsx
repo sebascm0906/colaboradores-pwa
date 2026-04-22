@@ -17,19 +17,16 @@ import {
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 import { matchByFuzzyName, matchByNumericId } from '../shared/voice/voiceMatchers'
+import {
+  DOWNTIME_CATEGORIES_PRODUCTION,
+  SCRAP_REASONS_PRODUCTION,
+} from '../shared/voice/catalogs'
 
-// Fallbacks if Odoo fetch fails
-const FALLBACK_DOWNTIME_CATS = [
-  { id: 1, name: 'Falta de agua' },
-  { id: 2, name: 'Corte de energia' },
-  { id: 3, name: 'Falla de maquina' },
-  { id: 4, name: 'Paro por calidad' },
-]
-const FALLBACK_SCRAP_REASONS = [
-  { id: 1, name: 'Derretido' },
-  { id: 2, name: 'Roto' },
-  { id: 3, name: 'Sellado deficiente' },
-]
+// Fallbacks: provienen de src/modules/shared/voice/catalogs/ (fuente de verdad).
+// Las screens siguen usando el shape legacy {id, name} — mapeo minimo del catalogo
+// compartido {id, label} para no cambiar el resto del JSX ni las APIs.
+const FALLBACK_DOWNTIME_CATS = DOWNTIME_CATEGORIES_PRODUCTION.map(c => ({ id: c.id, name: c.label }))
+const FALLBACK_SCRAP_REASONS = SCRAP_REASONS_PRODUCTION.map(r => ({ id: r.id, name: r.label }))
 
 const PARO_ICONS = { 'Falta de agua': '\uD83D\uDCA7', 'Corte de energia': '\u26A1', 'Falla de maquina': '\u2699' }
 const SCRAP_ICONS = { 'Derretido': '\uD83D\uDCC9', 'Roto': '\u274C', 'Sellado deficiente': '\u26A0' }
