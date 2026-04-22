@@ -4600,7 +4600,10 @@ async function directAlmacenPT(method, path, body) {
     const envelope = await odooJson('/api/pt/reception/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
-      shift_id: Number(body?.shift_id || 0) || undefined,
+      // Do not force shift scope when packing_entry_ids already identify the
+      // receipt target. PT almacenista operates by pending entries, not by the
+      // production shift attached to the operator session.
+      shift_id: packingEntryIds.length > 0 ? undefined : (Number(body?.shift_id || 0) || undefined),
       packing_entry_ids: packingEntryIds,
       received_lines: receivedLines,
     })

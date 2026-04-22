@@ -270,7 +270,6 @@ export default function ScreenRecepcion() {
     const payload = {
       warehouse_id: warehouseId,
       employee_id: employeeId || undefined,
-      shift_id: selected.shift_id || undefined,
       packing_entry_id: selected.packing_entry_id || undefined,
       packing_entry_ids: selected.packing_entry_ids || [],
       product_id: selected.product_id || undefined,
