@@ -210,7 +210,9 @@ export default function ScreenMerma() {
     const confidence = envelope?.meta?.stt_confidence
     const transcript = envelope?.meta?.transcript
     const bits = []
-    if (transcript) bits.push(`"${transcript}"`)
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
     if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
     if (!matchedReason && d.motivo) bits.push(`motivo IA "${d.motivo}" sin match — selecciona manual`)
     if (!d.product_id && d.raw_product_name) bits.push('producto sin match — selecciona manual')

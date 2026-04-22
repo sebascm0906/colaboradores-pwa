@@ -105,7 +105,9 @@ export default function ScreenCierreRolito() {
     const bits = []
     const transcript = envelope?.meta?.transcript
     const confidence = envelope?.meta?.stt_confidence
-    if (transcript) bits.push(`"${transcript}"`)
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
     if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
     if (d.bags_received === null && d.bags_remaining === null) bits.push('sin datos — captura manual')
     setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
