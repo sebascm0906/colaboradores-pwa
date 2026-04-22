@@ -4188,20 +4188,38 @@ async function directAlmacenPT(method, path, body) {
     }
 
     // 1) Resolver ubicaciones PT del warehouse dinámicamente
-    const locDomain = [
-      ['warehouse_id', '=', warehouseId || 76],
-      ['usage', '=', 'internal'],
-      ['name', '=like', 'PT-%'],
-    ]
-    const locRaw = await readModelSorted('stock.location', {
+    //    Fase A: locaciones con prefijo PT-% (warehouses de producción).
+    //    Fase B (fallback CEDIS): si no hay PT-%, usar TODAS las internas del
+    //    warehouse. CEDIS como CIGU tienen `WH/Existencias`, `WH/STOCK` (sin
+    //    prefijo PT-) pero solo stockean Producto Terminado, así que el filtro
+    //    posterior por categ_id child_of=97 mantiene la corrección estructural.
+    const locFieldsAndSort = {
       fields: ['id', 'name', 'complete_name', 'warehouse_id'],
-      domain: locDomain,
       sort_column: 'complete_name',
       sort_desc: false,
       limit: 50,
       sudo: 1,
+    }
+    let locRaw = await readModelSorted('stock.location', {
+      ...locFieldsAndSort,
+      domain: [
+        ['warehouse_id', '=', warehouseId || 76],
+        ['usage', '=', 'internal'],
+        ['name', '=like', 'PT-%'],
+      ],
     })
-    const locRows = pickListResponse(locRaw)
+    let locRows = pickListResponse(locRaw)
+    if (!locRows.length) {
+      // Fallback CEDIS: todas las locaciones internas del warehouse.
+      locRaw = await readModelSorted('stock.location', {
+        ...locFieldsAndSort,
+        domain: [
+          ['warehouse_id', '=', warehouseId || 76],
+          ['usage', '=', 'internal'],
+        ],
+      })
+      locRows = pickListResponse(locRaw)
+    }
     const ptLocations = locRows.map((r) => ({
       id: r.id,
       name: r.name || r.complete_name || '',
