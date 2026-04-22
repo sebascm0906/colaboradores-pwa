@@ -32,6 +32,7 @@
           "values": [
             {
               "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
                 "conditions": [
                   { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
                 ],
@@ -42,8 +43,9 @@
             },
             {
               "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
                 "conditions": [
-                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEqual" } }
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEquals" } }
                 ],
                 "combinator": "and"
               },
@@ -78,8 +80,9 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
         "options": { "timeout": 2000 }
       },
       "id": "w122-odoo-auth",
@@ -90,13 +93,25 @@
     },
     {
       "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W122 - build_log_body (pre-build JSON-RPC body para evitar parser fallback con multiples JSON.stringify anidados)\nconst ctx = $('compute_diff').first().json;\nconst uid = $('odoo_authenticate').first().json.result;\nconst body = JSON.stringify({\n  jsonrpc: '2.0',\n  method: 'call',\n  params: {\n    service: 'object',\n    method: 'execute_kw',\n    args: [\n      $env.ODOO_DB,\n      uid,\n      $env.ODOO_PASSWORD,\n      'kold.voice.feedback.log',\n      'log_feedback',\n      [{\n        trace_id:            ctx.trace_id,\n        context_id:          ctx.metadata?.context_id || '',\n        plaza_id:            ctx.metadata?.plaza_id || '',\n        user_id:             ctx.metadata?.user_id || false,\n        ai_output_json:      ctx.ai_output,\n        final_output_json:   ctx.final_output,\n        diffs_json:          ctx.diffs,\n        changed_field_count: ctx.changed_field_count,\n        accuracy_ratio:      ctx.accuracy_ratio,\n      }]\n    ]\n  }\n});\nreturn { json: { ...ctx, log_body: body } };"
+      },
+      "id": "w122-build-log",
+      "name": "build_log_body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{ $env.ODOO_URL }}/jsonrpc",
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.feedback.log\",\n      \"log_feedback\",\n      [{\n        \"trace_id\":            \"{{ $('compute_diff').first().json.trace_id }}\",\n        \"context_id\":          \"{{ $('compute_diff').first().json.metadata?.context_id }}\",\n        \"plaza_id\":            \"{{ $('compute_diff').first().json.metadata?.plaza_id }}\",\n        \"user_id\":             {{ $('compute_diff').first().json.metadata?.user_id || 'false' }},\n        \"ai_output_json\":      {{ JSON.stringify($('compute_diff').first().json.ai_output) }},\n        \"final_output_json\":   {{ JSON.stringify($('compute_diff').first().json.final_output) }},\n        \"diffs_json\":          {{ JSON.stringify($('compute_diff').first().json.diffs) }},\n        \"changed_field_count\": {{ $('compute_diff').first().json.changed_field_count }},\n        \"accuracy_ratio\":      {{ $('compute_diff').first().json.accuracy_ratio }}\n      }]\n    ]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.log_body }}",
         "options": { "timeout": 2000 }
       },
       "id": "w122-odoo-log",
@@ -142,7 +157,8 @@
       ]
     },
     "compute_diff": { "main": [[{ "node": "odoo_authenticate", "type": "main", "index": 0 }]] },
-    "odoo_authenticate": { "main": [[{ "node": "log_feedback_odoo", "type": "main", "index": 0 }]] },
+    "odoo_authenticate": { "main": [[{ "node": "build_log_body", "type": "main", "index": 0 }]] },
+    "build_log_body": { "main": [[{ "node": "log_feedback_odoo", "type": "main", "index": 0 }]] },
     "log_feedback_odoo": { "main": [[{ "node": "log_fail_notice", "type": "main", "index": 0 }]] },
     "log_fail_notice": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
   },

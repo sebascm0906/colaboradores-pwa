@@ -33,8 +33,9 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
         "options": { "timeout": 3000 }
       },
       "id": "w121-auth",
@@ -45,13 +46,25 @@
     },
     {
       "parameters": {
+        "language": "javaScript",
+        "jsCode": "// W121 - build_search_body (pre-build JSON-RPC body para evitar parser de n8n con arrays anidados)\nconst plaza = $('load_plaza_list').item.json;\nconst uid = $('odoo_authenticate').first().json.result;\nconst body = JSON.stringify({\n  jsonrpc: '2.0',\n  method: 'call',\n  params: {\n    service: 'object',\n    method: 'execute_kw',\n    args: [\n      $env.ODOO_DB,\n      uid,\n      $env.ODOO_PASSWORD,\n      'product.product',\n      'search_read',\n      [[['company_id', '=', plaza.company_id], ['sale_ok', '=', true]]],\n      { fields: ['id', 'name', 'default_code', 'uom_id', 'barcode'], limit: 500 }\n    ]\n  }\n});\nreturn { json: { ...plaza, search_body: body } };"
+      },
+      "id": "w121-build-search",
+      "name": "build_search_body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "={{ $env.ODOO_URL }}/jsonrpc",
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"product.product\",\n      \"search_read\",\n      [[[\"company_id\",\"=\",{{ $('load_plaza_list').item.json.company_id }}], [\"sale_ok\",\"=\",true]]],\n      {\"fields\":[\"id\",\"name\",\"default_code\",\"uom_id\",\"barcode\"],\"limit\":500}\n    ]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.search_body }}",
         "options": { "timeout": 8000 }
       },
       "id": "w121-search-products",
@@ -63,7 +76,7 @@
     {
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// W121 - enrich_with_aliases (normaliza + agrega aliases simples)\nconst plaza = $('load_plaza_list').item.json;\nconst products = $input.item.json.result || [];\n\nfunction aliasesFor(name) {\n  const n = (name || '').toLowerCase();\n  const tokens = n.split(/[\\s\\-\\/]+/).filter(Boolean);\n  return Array.from(new Set(tokens));\n}\n\nconst skus = products.map(p => ({\n  id: p.id,\n  name: p.name,\n  code: p.default_code || null,\n  uom: p.uom_id?.[1] || null,\n  aliases: aliasesFor(p.name),\n}));\n\nreturn { json: {\n  plaza_id: plaza.plaza_id,\n  company_id: plaza.company_id,\n  version: new Date().toISOString(),\n  skus,\n  sku_count: skus.length,\n}};"
+        "jsCode": "// W121 - enrich_with_aliases + pre-build upsert_body (uid disponible desde odoo_authenticate)\nconst plaza = $('load_plaza_list').item.json;\nconst uid = $('odoo_authenticate').first().json.result;\nconst products = $input.item.json.result || [];\n\nfunction aliasesFor(name) {\n  const n = (name || '').toLowerCase();\n  const tokens = n.split(/[\\s\\-\\/]+/).filter(Boolean);\n  return Array.from(new Set(tokens));\n}\n\nconst skus = products.map(p => ({\n  id: p.id,\n  name: p.name,\n  code: p.default_code || null,\n  uom: p.uom_id?.[1] || null,\n  aliases: aliasesFor(p.name),\n}));\n\nconst payload = {\n  plaza_id: plaza.plaza_id,\n  company_id: plaza.company_id,\n  version: new Date().toISOString(),\n  skus,\n  sku_count: skus.length,\n};\n\nconst upsert_body = JSON.stringify({\n  jsonrpc: '2.0',\n  method: 'call',\n  params: {\n    service: 'object',\n    method: 'execute_kw',\n    args: [\n      $env.ODOO_DB,\n      uid,\n      $env.ODOO_PASSWORD,\n      'kold.voice.catalog',\n      'upsert_by_plaza',\n      [plaza.plaza_id, plaza.company_id, payload]\n    ]\n  }\n});\n\nreturn { json: { ...payload, upsert_body } };"
       },
       "id": "w121-enrich",
       "name": "enrich_with_aliases",
@@ -78,8 +91,9 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.catalog\",\n      \"upsert_by_plaza\",\n      [\n        \"{{ $json.plaza_id }}\",\n        {{ $json.company_id }},\n        {{ JSON.stringify($json) }}\n      ]\n    ]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.upsert_body }}",
         "options": { "timeout": 4000 }
       },
       "id": "w121-upsert",
@@ -93,7 +107,7 @@
     {
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// W121 - set_static_data + anomaly detection\nconst p = $('enrich_with_aliases').item.json;\nconst upsertResp = $input.item.json?.result;\nconst dropPct = Number(upsertResp?.drop_pct ?? 0);\nconst prevCount = Number(upsertResp?.previous_sku_count ?? 0);\n\n// Cache en static data del workflow (cache rapido para W120 read)\nconst data = $getWorkflowStaticData('global');\ndata[`cat_${p.plaza_id}`] = p;\n\n// Log si falla upsert\nif ($input.item.json?.error) {\n  console.log('[W121 upsert FAIL]', 'plaza=' + p.plaza_id, 'error=' + JSON.stringify($input.item.json.error));\n}\n\nreturn { json: {\n  plaza_id: p.plaza_id,\n  sku_count: p.sku_count,\n  prev_sku_count: prevCount,\n  drop_pct: dropPct,\n  alert: dropPct > 30,\n}};"
+        "jsCode": "// W121 - set_static_data + anomaly detection\nconst p = $('enrich_with_aliases').item.json;\nconst upsertResp = $input.item.json?.result;\nconst dropPct = Number(upsertResp?.drop_pct ?? 0);\nconst prevCount = Number(upsertResp?.previous_sku_count ?? 0);\n\n// Cache en static data del workflow (cache rapido para W120 read).\n// Nota: solo persistimos los campos del catalogo, NO upsert_body (transient).\nconst { upsert_body, ...catalogPayload } = p;\nconst data = $getWorkflowStaticData('global');\ndata[`cat_${p.plaza_id}`] = catalogPayload;\n\n// Log si falla upsert\nif ($input.item.json?.error) {\n  console.log('[W121 upsert FAIL]', 'plaza=' + p.plaza_id, 'error=' + JSON.stringify($input.item.json.error));\n}\n\nreturn { json: {\n  plaza_id: p.plaza_id,\n  sku_count: p.sku_count,\n  prev_sku_count: prevCount,\n  drop_pct: dropPct,\n  alert: dropPct > 30,\n}};"
       },
       "id": "w121-set-static",
       "name": "set_static_data",
@@ -130,8 +144,9 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $env.KOLD_ADMIN_WA_NUMBER }}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"ALERTA catalogo voz: plaza {{ $json.plaza_id }} bajo {{ $json.drop_pct }}% ({{ $json.prev_sku_count }} -> {{ $json.sku_count }} SKUs)\" }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $env.KOLD_ADMIN_WA_NUMBER }}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"ALERTA catalogo voz: plaza {{ $json.plaza_id }} bajo {{ $json.drop_pct }}% ({{ $json.prev_sku_count }} -> {{ $json.sku_count }} SKUs)\" }\n}",
         "options": { "timeout": 5000 }
       },
       "id": "w121-wa-alert",
@@ -145,7 +160,8 @@
   "connections": {
     "Schedule": { "main": [[{ "node": "load_plaza_list", "type": "main", "index": 0 }]] },
     "load_plaza_list": { "main": [[{ "node": "odoo_authenticate", "type": "main", "index": 0 }]] },
-    "odoo_authenticate": { "main": [[{ "node": "search_products", "type": "main", "index": 0 }]] },
+    "odoo_authenticate": { "main": [[{ "node": "build_search_body", "type": "main", "index": 0 }]] },
+    "build_search_body": { "main": [[{ "node": "search_products", "type": "main", "index": 0 }]] },
     "search_products": { "main": [[{ "node": "enrich_with_aliases", "type": "main", "index": 0 }]] },
     "enrich_with_aliases": { "main": [[{ "node": "upsert_catalog_odoo", "type": "main", "index": 0 }]] },
     "upsert_catalog_odoo": { "main": [[{ "node": "set_static_data", "type": "main", "index": 0 }]] },
