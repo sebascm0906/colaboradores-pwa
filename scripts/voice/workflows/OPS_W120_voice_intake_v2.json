@@ -55,7 +55,7 @@
                   {
                     "leftValue": "={{ $json.__early_exit }}",
                     "rightValue": true,
-                    "operator": { "type": "boolean", "operation": "notEqual" }
+                    "operator": { "type": "boolean", "operation": "notEquals" }
                   }
                 ],
                 "combinator": "and"
@@ -114,6 +114,7 @@
           "values": [
             {
               "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
                 "conditions": [
                   { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
                 ],
@@ -124,8 +125,9 @@
             },
             {
               "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
                 "conditions": [
-                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEqual" } }
+                  { "leftValue": "={{ $json.__early_exit }}", "rightValue": true, "operator": { "type": "boolean", "operation": "notEquals" } }
                 ],
                 "combinator": "and"
               },
@@ -145,7 +147,7 @@
     {
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// W120 - load_catalog from workflow static data\n// W121 es quien popula. Si no esta (Fase 0 o desync), marcamos fallback.\nconst ctx = $('extract_transcript').first().json;\nconst staticKey = `cat_${ctx.plaza_id}`;\nconst catalog = $getWorkflowStaticData('global')[staticKey];\nconst fallback = !catalog || !Array.isArray(catalog.skus) || catalog.skus.length === 0;\nreturn { json: {\n  ...ctx,\n  catalog: catalog || { skus: [] },\n  catalog_fallback: fallback,\n  catalog_version: catalog?.version || null,\n}};"
+        "jsCode": "// W120 - load_catalog + pre-build OpenAI request body as string (n8n expression parser no maneja JSON deeply nested con expressions).\nconst ctx = $('extract_transcript').first().json;\nconst staticKey = `cat_${ctx.plaza_id}`;\nconst catalog = $getWorkflowStaticData('global')[staticKey] || { skus: [] };\nconst fallback = !Array.isArray(catalog.skus) || catalog.skus.length === 0;\n\n// Construir body completo para OpenAI Chat Completions\nconst openai_body = JSON.stringify({\n  model: 'gpt-4o-mini',\n  temperature: 0,\n  messages: [\n    {\n      role: 'system',\n      content: `Eres un extractor de datos para registrar mermas de hielo en plaza ${ctx.plaza_id || 'desconocida'}. Catalogo: ${JSON.stringify(catalog)}. Si no identificas SKU con alta confianza, product_id: null y raw_product_name con el nombre dicho. Nunca inventes IDs.`,\n    },\n    { role: 'user', content: ctx.transcript || '' },\n  ],\n  response_format: {\n    type: 'json_schema',\n    json_schema: {\n      name: 'merma_payload',\n      strict: true,\n      schema: {\n        type: 'object',\n        additionalProperties: false,\n        required: ['product_id', 'raw_product_name', 'cantidad', 'unidad', 'motivo', 'confianza'],\n        properties: {\n          product_id: { type: ['integer', 'null'] },\n          raw_product_name: { type: 'string' },\n          cantidad: { type: 'number' },\n          unidad: { type: 'string', enum: ['pza', 'bolsa', 'kg', 'tonelada'] },\n          motivo: { type: 'string', enum: ['derretimiento', 'contaminacion', 'golpe', 'robo', 'otro'] },\n          confianza: { type: 'number', minimum: 0, maximum: 1 },\n        },\n      },\n    },\n  },\n});\n\nreturn { json: {\n  ...ctx,\n  catalog,\n  catalog_fallback: fallback,\n  catalog_version: catalog.version || null,\n  openai_body,\n}};"
       },
       "id": "w120-catalog",
       "name": "load_catalog",
@@ -165,8 +167,9 @@
           ]
         },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un extractor de datos para registrar mermas de hielo en plaza {{ $json.plaza_id }}. Catalogo: {{ JSON.stringify($json.catalog) }}. Si no identificas SKU con alta confianza, product_id: null y raw_product_name con el nombre dicho. Nunca inventes IDs.\"\n    },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.transcript) }} }\n  ],\n  \"response_format\": {\n    \"type\": \"json_schema\",\n    \"json_schema\": {\n      \"name\": \"merma_payload\",\n      \"strict\": true,\n      \"schema\": {\n        \"type\": \"object\",\n        \"additionalProperties\": false,\n        \"required\": [\"product_id\", \"raw_product_name\", \"cantidad\", \"unidad\", \"motivo\", \"confianza\"],\n        \"properties\": {\n          \"product_id\": { \"type\": [\"integer\", \"null\"] },\n          \"raw_product_name\": { \"type\": \"string\" },\n          \"cantidad\": { \"type\": \"number\" },\n          \"unidad\": { \"type\": \"string\", \"enum\": [\"pza\", \"bolsa\", \"kg\", \"tonelada\"] },\n          \"motivo\": { \"type\": \"string\", \"enum\": [\"derretimiento\", \"contaminacion\", \"golpe\", \"robo\", \"otro\"] },\n          \"confianza\": { \"type\": \"number\", \"minimum\": 0, \"maximum\": 1 }\n        }\n      }\n    }\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.openai_body }}",
         "options": {
           "timeout": 8000
         }
@@ -206,8 +209,9 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
         "options": {
           "timeout": 2000
         }
@@ -227,8 +231,9 @@
         "sendHeaders": true,
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
-        "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.intake.log\",\n      \"log_request\",\n      [{\n        \"trace_id\":          \"{{ $('build_response').first().json.trace_id }}\",\n        \"context_id\":        \"{{ $('build_response').first().json.context_id }}\",\n        \"plaza_id\":          \"{{ $('auth_context_size_gate').first().json.plaza_id }}\",\n        \"user_id\":           {{ $('auth_context_size_gate').first().json.user_id || 'false' }},\n        \"canal\":             \"{{ $('auth_context_size_gate').first().json.canal }}\",\n        \"transcript\":        {{ JSON.stringify($('build_response').first().json.meta?.transcript || '') }},\n        \"stt_confidence\":    {{ $('build_response').first().json.meta?.stt_confidence || 0 }},\n        \"ai_output_json\":    {{ JSON.stringify($('build_response').first().json.data || {}) }},\n        \"schema_version\":    \"{{ $('build_response').first().json.schema_version || 'v1' }}\",\n        \"prompt_version\":    \"{{ $('build_response').first().json.prompt_version || '' }}\",\n        \"pipeline_version\":  \"w120_v2.0\",\n        \"ok\":                {{ $('build_response').first().json.ok }},\n        \"error_code\":        \"{{ $('build_response').first().json.error_code || '' }}\",\n        \"validation_errors\": {{ JSON.stringify($('build_response').first().json.errors || []) }},\n        \"stt_ms\":            {{ $('build_response').first().json.timings?.stt_ms || 0 }},\n        \"llm_ms\":            {{ $('build_response').first().json.timings?.llm_ms || 0 }},\n        \"validation_ms\":     {{ $('build_response').first().json.timings?.validation_ms || 0 }},\n        \"total_ms\":          {{ $('build_response').first().json.timings?.total_ms || 0 }}\n      }]\n    ]\n  }\n}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.intake.log\",\n      \"log_request\",\n      [{\n        \"trace_id\":          \"{{ $('build_response').first().json.trace_id }}\",\n        \"context_id\":        \"{{ $('build_response').first().json.context_id }}\",\n        \"plaza_id\":          \"{{ $('auth_context_size_gate').first().json.plaza_id }}\",\n        \"user_id\":           {{ $('auth_context_size_gate').first().json.user_id || 'false' }},\n        \"canal\":             \"{{ $('auth_context_size_gate').first().json.canal }}\",\n        \"transcript\":        {{ JSON.stringify($('build_response').first().json.meta?.transcript || '') }},\n        \"stt_confidence\":    {{ $('build_response').first().json.meta?.stt_confidence || 0 }},\n        \"ai_output_json\":    {{ JSON.stringify($('build_response').first().json.data || {}) }},\n        \"schema_version\":    \"{{ $('build_response').first().json.schema_version || 'v1' }}\",\n        \"prompt_version\":    \"{{ $('build_response').first().json.prompt_version || '' }}\",\n        \"pipeline_version\":  \"w120_v2.0\",\n        \"ok\":                {{ $('build_response').first().json.ok }},\n        \"error_code\":        \"{{ $('build_response').first().json.error_code || '' }}\",\n        \"validation_errors\": {{ JSON.stringify($('build_response').first().json.errors || []) }},\n        \"stt_ms\":            {{ $('build_response').first().json.timings?.stt_ms || 0 }},\n        \"llm_ms\":            {{ $('build_response').first().json.timings?.llm_ms || 0 }},\n        \"validation_ms\":     {{ $('build_response').first().json.timings?.validation_ms || 0 }},\n        \"total_ms\":          {{ $('build_response').first().json.timings?.total_ms || 0 }}\n      }]\n    ]\n  }\n}",
         "options": {
           "timeout": 2000
         }

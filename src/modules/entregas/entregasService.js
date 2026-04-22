@@ -221,11 +221,28 @@ export async function getPendingTickets(warehouseId) {
 
 /**
  * Stock actual del CEDIS.
+ * El BFF /pwa-pt/inventory cambió a forma canónica { warehouse_id, items: [...] }
+ * (rebuild 2026-04-11). Este wrapper extrae items[] para que los consumers
+ * (ScreenMerma, ScreenCierreTurno, ScreenOperacionDia) sigan recibiendo array.
+ * Tolera shapes legacy (array directo) y respuestas envueltas en {data}.
  * @param {number} warehouseId
  * @returns {Promise<Array>}
  */
 export async function getCedisInventory(warehouseId) {
-  return api('GET', `/pwa-pt/inventory?warehouse_id=${warehouseId}`)
+  const result = await api('GET', `/pwa-pt/inventory?warehouse_id=${warehouseId}`)
+  const items = Array.isArray(result?.items) ? result.items
+    : Array.isArray(result?.data?.items) ? result.data.items
+    : Array.isArray(result) ? result
+    : Array.isArray(result?.data) ? result.data
+    : []
+  // Alias legacy: las pantallas (ScreenMerma, ScreenCierreTurno, ScreenOperacionDia)
+  // referencian `item.product` y `item.weight`. El BFF v2 (2026-04-11) renombró a
+  // `product_name` y `weight_per_unit`. Mapeo aquí (sin tocar shape canónica).
+  return items.map((it) => ({
+    ...it,
+    product: it.product ?? it.product_name ?? '',
+    weight: it.weight ?? it.weight_per_unit ?? 1,
+  }))
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
