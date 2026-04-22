@@ -14,11 +14,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
 import { getMyShift, harvestWithPtReception } from './api'
 import { buildPtReceptionFromHarvest, resolveHarvestShiftId } from './barraHarvestReception'
 import { getReadingLocalDateKey, getTodayDateKey } from '../supervision/brineReadings'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
 const STATE_META = {
@@ -38,6 +41,7 @@ function parseSlotName(name) {
 
 export default function ScreenTanque() {
   const navigate = useNavigate()
+  const { session } = useSession()
   const { machineId: machineIdParam } = useParams()
   const machineId = Number(machineIdParam) || 0
   const [sw] = useState(window.innerWidth)
@@ -54,6 +58,11 @@ export default function ScreenTanque() {
   const [harvestSlot, setHarvestSlot] = useState(null)
   const [harvestTemp, setHarvestTemp] = useState('')
   const [harvestBusy, setHarvestBusy] = useState(false)
+
+  // Voice state (piloto barra 1): scoped al modal de cosecha. Se resetea al
+  // cancelar o al submit exitoso del modal.
+  const [harvestVoiceContext, setHarvestVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [harvestVoiceNote, setHarvestVoiceNote] = useState('')         // banner informativo
 
   const [incidentOpen, setIncidentOpen] = useState(false)
   const [incidentType, setIncidentType] = useState(INCIDENT_TYPES[0].id)
@@ -132,6 +141,41 @@ export default function ScreenTanque() {
   const saltThreshold = tank?.min_salt_level_for_harvest  // e.g., 65 ppm
   const saltUnit = tank?.salt_level_unit || 'ppm'
 
+  // Metadata para W120 — form_harvest_barra no requiere catalogo externo.
+  const harvestVoiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    shift_id: activeShift?.id || null,
+    machine_id: machineId || null,
+    slot_id: harvestSlot?.id || null,
+    canal: 'pwa_colaboradores',
+  }), [session?.employee_id, activeShift?.id, machineId, harvestSlot?.id])
+
+  // ── Voice-to-form handlers (modal de cosecha) ─────────────────────────────
+  function handleHarvestVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+    // Temperatura: 0 y negativos son VALIDOS (salmuera tipica -10 a -15 °C).
+    if (typeof d.temperature === 'number' && !isNaN(d.temperature)) {
+      setHarvestTemp(String(d.temperature))
+    }
+    setHarvestVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (typeof d.temperature !== 'number') bits.push('sin temperatura — captura manual')
+    setHarvestVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleHarvestVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setHarvestVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   function getHarvestWarnings() {
     const warnings = []
     // 1) Temperatura — solo advertir si se capturó y excede umbral
@@ -191,9 +235,30 @@ export default function ScreenTanque() {
         return
       }
 
+      // Voice feedback best-effort: dispatch fire-and-forget si hubo voz.
+      if (harvestVoiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: harvestVoiceContext.trace_id,
+          ai_output: harvestVoiceContext.ai_output || {},
+          final_output: {
+            temperature: parseFloat(harvestTemp) || 0,
+            slot_id: harvestSlot.id,
+            slot_name: harvestSlot.name,
+            machine_id: machineId,
+          },
+          metadata: {
+            context_id: 'form_harvest_barra',
+            shift_id: activeShift?.id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setSuccess(`Canastilla ${harvestSlot.name} cosechada y recepción PT generada`)
       setHarvestSlot(null)
       setHarvestTemp('')
+      setHarvestVoiceContext(null)
+      setHarvestVoiceNote('')
       await load()
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
@@ -514,7 +579,12 @@ export default function ScreenTanque() {
 
       {/* Modal Cosecha */}
       {harvestSlot && (
-        <Modal onClose={() => !harvestBusy && setHarvestSlot(null)}>
+        <Modal onClose={() => {
+          if (harvestBusy) return
+          setHarvestSlot(null)
+          setHarvestVoiceContext(null)
+          setHarvestVoiceNote('')
+        }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.blue3, margin: 0 }}>COSECHAR CANASTILLA</p>
           <p style={{ ...typo.h1, color: 'white', margin: 0, marginTop: 4 }}>{harvestSlot.name}</p>
 
@@ -555,6 +625,29 @@ export default function ScreenTanque() {
             <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
               Temperatura de salmuera (°C)
             </label>
+
+            {/* Voice input (piloto barra 1) — arriba del input numerico */}
+            <div style={{ marginBottom: 10 }}>
+              <VoiceInputButton
+                context_id="form_harvest_barra"
+                label="Manten presionado para dictar temperatura"
+                metadata={harvestVoiceMetadata}
+                disabled={harvestBusy}
+                onResult={handleHarvestVoiceResult}
+                onError={handleHarvestVoiceError}
+              />
+              {harvestVoiceNote && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                    {harvestVoiceNote}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <input
               type="number" inputMode="decimal" step="0.1"
               value={harvestTemp}
@@ -606,7 +699,7 @@ export default function ScreenTanque() {
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button
-              onClick={() => setHarvestSlot(null)} disabled={harvestBusy}
+              onClick={() => { setHarvestSlot(null); setHarvestVoiceContext(null); setHarvestVoiceNote('') }} disabled={harvestBusy}
               style={{
                 flex: 1, padding: '12px', borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
