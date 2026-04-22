@@ -22,6 +22,8 @@ import { buildPtReceptionFromHarvest, resolveHarvestShiftId } from './barraHarve
 import { getReadingLocalDateKey, getTodayDateKey } from '../supervision/brineReadings'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import { matchByFuzzyName } from '../shared/voice/voiceMatchers'
+import { TANK_INCIDENTS } from '../shared/voice/catalogs'
 
 // ── Colores por estado ───────────────────────────────────────────────────────
 const STATE_META = {
@@ -68,6 +70,10 @@ export default function ScreenTanque() {
   const [incidentType, setIncidentType] = useState(INCIDENT_TYPES[0].id)
   const [incidentDesc, setIncidentDesc] = useState('')
   const [incidentBusy, setIncidentBusy] = useState(false)
+
+  // Voice state (piloto barra 2): scoped al modal de incidente.
+  const [incidentVoiceContext, setIncidentVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [incidentVoiceNote, setIncidentVoiceNote] = useState('')
 
   useEffect(() => {
     if (!machineId) {
@@ -268,15 +274,86 @@ export default function ScreenTanque() {
     }
   }
 
+  // Metadata para W120 — form_tank_incident_barra pasa el catalogo en metadata.
+  const incidentVoiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    shift_id: activeShift?.id || null,
+    machine_id: machineId || null,
+    canal: 'pwa_colaboradores',
+    tank_incidents: TANK_INCIDENTS.map(t => ({ id: t.id, label: t.label, aliases: t.aliases || [] })),
+  }), [session?.employee_id, activeShift?.id, machineId])
+
+  // ── Voice-to-form handlers (modal de incidente) ───────────────────────────
+  function handleIncidentVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+
+    // Tipo: primero matchea por incident_type_id directo (string id del catalogo),
+    // fallback matchByFuzzyName(incident_type, catalog, 'label').
+    let matchedId = null
+    if (d.incident_type_id && TANK_INCIDENTS.some(t => t.id === d.incident_type_id)) {
+      matchedId = d.incident_type_id
+    } else if (d.incident_type) {
+      const fuzzy = matchByFuzzyName(d.incident_type, TANK_INCIDENTS, 'label')
+      if (fuzzy) matchedId = fuzzy.id
+    }
+    if (matchedId) setIncidentType(matchedId)
+
+    // Descripcion: hidratar solo si trae algo util.
+    if (typeof d.description === 'string' && d.description.trim()) {
+      setIncidentDesc(d.description.trim())
+    }
+
+    setIncidentVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (!matchedId) bits.push('tipo sin match — selecciona manual')
+    setIncidentVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleIncidentVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setIncidentVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   async function confirmIncident() {
     if (!incidentType) return
     setIncidentBusy(true); setError('')
     try {
       await reportIncident(machineId, incidentType, incidentDesc)
+
+      // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
+      if (incidentVoiceContext?.trace_id) {
+        const matchedEntry = TANK_INCIDENTS.find(t => t.id === incidentType)
+        sendVoiceFeedback({
+          trace_id: incidentVoiceContext.trace_id,
+          ai_output: incidentVoiceContext.ai_output || {},
+          final_output: {
+            incident_type_id: incidentType,
+            incident_type: matchedEntry?.label || incidentType,
+            description: incidentDesc,
+            machine_id: machineId,
+          },
+          metadata: {
+            context_id: 'form_tank_incident_barra',
+            shift_id: activeShift?.id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setSuccess('Incidencia reportada')
       setIncidentOpen(false)
       setIncidentType(INCIDENT_TYPES[0].id)
       setIncidentDesc('')
+      setIncidentVoiceContext(null)
+      setIncidentVoiceNote('')
       setTimeout(() => setSuccess(''), 2500)
     } catch (e) {
       setError(e.message || 'Error al reportar incidencia')
@@ -722,11 +799,38 @@ export default function ScreenTanque() {
 
       {/* Modal Incidencia */}
       {incidentOpen && (
-        <Modal onClose={() => !incidentBusy && setIncidentOpen(false)}>
+        <Modal onClose={() => {
+          if (incidentBusy) return
+          setIncidentOpen(false)
+          setIncidentVoiceContext(null)
+          setIncidentVoiceNote('')
+        }}>
           <p style={{ ...typo.overline, color: TOKENS.colors.warning, margin: 0 }}>INCIDENCIA DE TANQUE</p>
           <p style={{ ...typo.h2, color: 'white', margin: 0, marginTop: 4 }}>
             {tank?.display_name || 'Reportar'}
           </p>
+
+          {/* Voice input (piloto barra 2) — arriba del tipo + descripcion */}
+          <div style={{ marginTop: 14 }}>
+            <VoiceInputButton
+              context_id="form_tank_incident_barra"
+              label="Manten presionado para dictar incidente"
+              metadata={incidentVoiceMetadata}
+              disabled={incidentBusy}
+              onResult={handleIncidentVoiceResult}
+              onError={handleIncidentVoiceError}
+            />
+            {incidentVoiceNote && (
+              <div style={{
+                marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                  {incidentVoiceNote}
+                </p>
+              </div>
+            )}
+          </div>
 
           <div style={{ marginTop: 16 }}>
             <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>Tipo</label>
@@ -778,7 +882,7 @@ export default function ScreenTanque() {
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button
-              onClick={() => setIncidentOpen(false)} disabled={incidentBusy}
+              onClick={() => { setIncidentOpen(false); setIncidentVoiceContext(null); setIncidentVoiceNote('') }} disabled={incidentBusy}
               style={{
                 flex: 1, padding: '12px', borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,

@@ -14,4 +14,5 @@
 
 export { SCRAP_REASONS_PRODUCTION, scrapReasonsProductionCatalog } from './scrapReasons.catalog.js'
 export { DOWNTIME_CATEGORIES_PRODUCTION, downtimeCategoriesProductionCatalog } from './downtimeCategories.catalog.js'
+export { TANK_INCIDENTS, tankIncidentsCatalog } from './tankIncidents.catalog.js'
 export { CATALOG_SHAPE_VERSION } from './_shape.js'
