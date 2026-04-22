@@ -201,16 +201,6 @@
     },
     {
       "parameters": {
-        "numberInputs": 3
-      },
-      "id": "w120-merge",
-      "name": "merge_envelopes",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [2240, 400]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "=${process.env.ODOO_URL || ''}/jsonrpc",
         "sendHeaders": true,
@@ -238,7 +228,7 @@
         "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }] },
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.intake.log\",\n      \"log_request\",\n      [{\n        \"trace_id\":          \"{{ $('merge_envelopes').first().json.trace_id }}\",\n        \"context_id\":        \"{{ $('merge_envelopes').first().json.context_id }}\",\n        \"plaza_id\":          \"{{ $('auth_context_size_gate').first().json.plaza_id }}\",\n        \"user_id\":           {{ $('auth_context_size_gate').first().json.user_id || 'false' }},\n        \"canal\":             \"{{ $('auth_context_size_gate').first().json.canal }}\",\n        \"transcript\":        {{ JSON.stringify($('merge_envelopes').first().json.meta?.transcript || '') }},\n        \"stt_confidence\":    {{ $('merge_envelopes').first().json.meta?.stt_confidence || 0 }},\n        \"ai_output_json\":    {{ JSON.stringify($('merge_envelopes').first().json.data || {}) }},\n        \"schema_version\":    \"{{ $('merge_envelopes').first().json.schema_version || 'v1' }}\",\n        \"prompt_version\":    \"{{ $('merge_envelopes').first().json.prompt_version || '' }}\",\n        \"pipeline_version\":  \"w120_v2.0\",\n        \"ok\":                {{ $('merge_envelopes').first().json.ok }},\n        \"error_code\":        \"{{ $('merge_envelopes').first().json.error_code || '' }}\",\n        \"validation_errors\": {{ JSON.stringify($('merge_envelopes').first().json.errors || []) }},\n        \"stt_ms\":            {{ $('merge_envelopes').first().json.timings?.stt_ms || 0 }},\n        \"llm_ms\":            {{ $('merge_envelopes').first().json.timings?.llm_ms || 0 }},\n        \"validation_ms\":     {{ $('merge_envelopes').first().json.timings?.validation_ms || 0 }},\n        \"total_ms\":          {{ $('merge_envelopes').first().json.timings?.total_ms || 0 }}\n      }]\n    ]\n  }\n}",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{ $env.ODOO_DB }}\",\n      {{ $('odoo_authenticate').first().json.result }},\n      \"{{ $env.ODOO_PASSWORD }}\",\n      \"kold.voice.intake.log\",\n      \"log_request\",\n      [{\n        \"trace_id\":          \"{{ $('build_response').first().json.trace_id }}\",\n        \"context_id\":        \"{{ $('build_response').first().json.context_id }}\",\n        \"plaza_id\":          \"{{ $('auth_context_size_gate').first().json.plaza_id }}\",\n        \"user_id\":           {{ $('auth_context_size_gate').first().json.user_id || 'false' }},\n        \"canal\":             \"{{ $('auth_context_size_gate').first().json.canal }}\",\n        \"transcript\":        {{ JSON.stringify($('build_response').first().json.meta?.transcript || '') }},\n        \"stt_confidence\":    {{ $('build_response').first().json.meta?.stt_confidence || 0 }},\n        \"ai_output_json\":    {{ JSON.stringify($('build_response').first().json.data || {}) }},\n        \"schema_version\":    \"{{ $('build_response').first().json.schema_version || 'v1' }}\",\n        \"prompt_version\":    \"{{ $('build_response').first().json.prompt_version || '' }}\",\n        \"pipeline_version\":  \"w120_v2.0\",\n        \"ok\":                {{ $('build_response').first().json.ok }},\n        \"error_code\":        \"{{ $('build_response').first().json.error_code || '' }}\",\n        \"validation_errors\": {{ JSON.stringify($('build_response').first().json.errors || []) }},\n        \"stt_ms\":            {{ $('build_response').first().json.timings?.stt_ms || 0 }},\n        \"llm_ms\":            {{ $('build_response').first().json.timings?.llm_ms || 0 }},\n        \"validation_ms\":     {{ $('build_response').first().json.timings?.validation_ms || 0 }},\n        \"total_ms\":          {{ $('build_response').first().json.timings?.total_ms || 0 }}\n      }]\n    ]\n  }\n}",
         "options": {
           "timeout": 2000
         }
@@ -254,7 +244,7 @@
     {
       "parameters": {
         "language": "javaScript",
-        "jsCode": "// W120 - log_fail_notice: console.log si log_to_odoo fallo (hardening aprobado)\nconst resp = $input.item.json;\nif (resp?.error || resp?.result?.error) {\n  const env = $('merge_envelopes').first().json;\n  const safeTranscript = (env?.meta?.transcript || '').slice(0, 100);\n  console.log('[W120 log_to_odoo FAIL]',\n    'trace_id=' + env?.trace_id,\n    'ok=' + env?.ok,\n    'transcript=\"' + safeTranscript + '\"',\n    'odoo_error=' + JSON.stringify(resp?.error || resp?.result?.error)\n  );\n}\nreturn $input.item;"
+        "jsCode": "// W120 - log_fail_notice: console.log si log_to_odoo fallo (hardening aprobado)\nconst resp = $input.item.json;\nif (resp?.error || resp?.result?.error) {\n  const env = $('build_response').first().json || {};\n  const safeTranscript = (env?.meta?.transcript || '').slice(0, 100);\n  console.log('[W120 log_to_odoo FAIL]',\n    'trace_id=' + env?.trace_id,\n    'ok=' + env?.ok,\n    'transcript=\"' + safeTranscript + '\"',\n    'odoo_error=' + JSON.stringify(resp?.error || resp?.result?.error)\n  );\n}\nreturn $input.item;"
       },
       "id": "w120-log-notice",
       "name": "log_fail_notice",
@@ -264,7 +254,7 @@
     },
     {
       "parameters": {
-        "respondWith": "allIncomingItems",
+        "respondWith": "firstIncomingItem",
         "options": {
           "responseCode": 200
         }
@@ -281,7 +271,7 @@
     "auth_context_size_gate": { "main": [[{ "node": "early_exit_switch", "type": "main", "index": 0 }]] },
     "early_exit_switch": {
       "main": [
-        [{ "node": "merge_envelopes", "type": "main", "index": 0 }],
+        [{ "node": "Respond", "type": "main", "index": 0 }],
         [{ "node": "deepgram_stt", "type": "main", "index": 0 }]
       ]
     },
@@ -289,15 +279,14 @@
     "extract_transcript": { "main": [[{ "node": "stt_exit_switch", "type": "main", "index": 0 }]] },
     "stt_exit_switch": {
       "main": [
-        [{ "node": "merge_envelopes", "type": "main", "index": 1 }],
+        [{ "node": "Respond", "type": "main", "index": 0 }],
         [{ "node": "load_catalog", "type": "main", "index": 0 }]
       ]
     },
     "load_catalog": { "main": [[{ "node": "openai_extract", "type": "main", "index": 0 }]] },
     "openai_extract": { "main": [[{ "node": "validate_business_rules", "type": "main", "index": 0 }]] },
     "validate_business_rules": { "main": [[{ "node": "build_response", "type": "main", "index": 0 }]] },
-    "build_response": { "main": [[{ "node": "merge_envelopes", "type": "main", "index": 2 }]] },
-    "merge_envelopes": {
+    "build_response": {
       "main": [[
         { "node": "Respond", "type": "main", "index": 0 },
         { "node": "odoo_authenticate", "type": "main", "index": 0 }
