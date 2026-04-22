@@ -6,6 +6,7 @@ import { getCedisInventory, createScrap, getScrapHistory, getScrapReasons } from
 import { sendVoiceFeedback } from './voiceFeedback'
 import { ScreenShell, ConfirmDialog, VoiceInputButton } from './components'
 import { logScreenError } from '../shared/logScreenError'
+import { matchByKeyword } from '../shared/voice/voiceMatchers'
 
 /* ============================================================================
    ScreenMerma — Register shrinkage / damaged products
@@ -22,12 +23,6 @@ const LLM_MOTIVO_KEYWORD = {
   contaminacion: 'contamina',   // -> "Contaminado"
   golpe:         'roto',        // -> "Roto / dañado"
   // 'robo' y 'otro' no tienen match fiable en el catalogo actual
-}
-function matchReasonFromLLM(motivoLLM, reasons) {
-  if (!motivoLLM || !Array.isArray(reasons)) return null
-  const keyword = LLM_MOTIVO_KEYWORD[motivoLLM]
-  if (!keyword) return null
-  return reasons.find((r) => (r.name || '').toLowerCase().includes(keyword)) || null
 }
 
 export default function ScreenMerma() {
@@ -202,7 +197,7 @@ export default function ScreenMerma() {
     }
 
     // Motivo: fuzzy-match enum LLM -> catalogo Odoo; si no matchea, deja null.
-    const matchedReason = matchReasonFromLLM(d.motivo, reasons)
+    const matchedReason = matchByKeyword(d.motivo, reasons, LLM_MOTIVO_KEYWORD)
     if (matchedReason) setSelectedReason(matchedReason)
 
     setValidationErrors({})
