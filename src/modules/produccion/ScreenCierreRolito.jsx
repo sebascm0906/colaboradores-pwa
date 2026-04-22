@@ -14,6 +14,8 @@ import {
 } from './rolitoService'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
 import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
@@ -32,6 +34,10 @@ export default function ScreenCierreRolito() {
   // Bag reconciliation — persisted via POST /api/production/shift/bag-reconciliation
   const [bagsReceived, setBagsReceived] = useState('')
   const [bagsRemaining, setBagsRemaining] = useState('')
+
+  // Voice state (Batch B): captura el ultimo envelope de W120 para feedback al submit.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
   // Entrega checklist — local-only (no backend template yet)
   const [checks, setChecks] = useState([
@@ -77,6 +83,39 @@ export default function ScreenCierreRolito() {
     setChecks(prev => prev.map(c => c.id === id ? { ...c, done: !c.done } : c))
   }
 
+  // Metadata para W120 — form_cierre_bolsas no requiere catalogo externo.
+  const voiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    shift_id: shift?.id || null,
+    canal: 'pwa_colaboradores',
+  }), [session?.employee_id, shift?.id])
+
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+    if (typeof d.bags_received === 'number' && d.bags_received >= 0) {
+      setBagsReceived(String(d.bags_received))
+    }
+    if (typeof d.bags_remaining === 'number' && d.bags_remaining >= 0) {
+      setBagsRemaining(String(d.bags_remaining))
+    }
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (d.bags_received === null && d.bags_remaining === null) bits.push('sin datos — captura manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setError(''), 3500)
+  }
+
   async function handleClose() {
     if (!shift?.id) return
     setClosing(true)
@@ -87,10 +126,30 @@ export default function ScreenCierreRolito() {
         await saveBagReconciliation(shift.id, bagsReceivedNum, bagsRemainingNum)
       }
 
+      // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            bags_received: bagsReceivedNum || null,
+            bags_remaining: bagsRemainingNum || null,
+            total_bags_used: totalBagsUsed,
+          },
+          metadata: {
+            context_id: 'form_cierre_bolsas',
+            shift_id: shift.id,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       markOperatorTurnClosed(shift.id, activeOperatorRole, {
         employee_name: session?.employee_name || session?.name || session?.user_name || '',
       })
       setAlreadyClosed(true)
+      setVoiceContext(null)
+      setVoiceNote('')
       setSuccess('Tu cierre fue entregado al supervisor. El cierre final del turno lo realiza supervision.')
       setTimeout(() => navigate('/produccion'), 1800)
     } catch (e) {
@@ -264,6 +323,28 @@ export default function ScreenCierreRolito() {
                 </div>
               </div>
             )}
+
+            {/* ── Voice input (Batch B) ──────────────────────────────── */}
+            <div>
+              <VoiceInputButton
+                context_id="form_cierre_bolsas"
+                label="Manten presionado para dictar bolsas"
+                metadata={voiceMetadata}
+                disabled={closing || alreadyClosed || !shift?.id}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+              />
+              {voiceNote && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                    {voiceNote}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* ── CUADRATURA BOLSAS ───────────────────────────── */}
             <div style={{

@@ -20,6 +20,8 @@ import {
   getCachedReconciliation,
 } from '../shared/reconciliationPT'
 import { logScreenError } from '../shared/logScreenError'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 export default function ScreenReconciliacionPT() {
   const { session } = useSession()
@@ -33,6 +35,10 @@ export default function ScreenReconciliacionPT() {
   const [msg, setMsg] = useState(null)
   const [reconciliation, setReconciliation] = useState(null)
   const [ptReceivedKg, setPtReceivedKg] = useState('')
+
+  // Voice state (Batch B): captura el ultimo envelope de W120 para feedback al submit.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
   useEffect(() => { loadData() }, [])
   useEffect(() => {
@@ -63,6 +69,36 @@ export default function ScreenReconciliacionPT() {
   const manualKgValid = !isNaN(manualKgParsed) && manualKgParsed >= 0
   const canSubmit = !!shift?.id && manualKgValid && !submitting
 
+  // Metadata para W120 — form_reconciliacion_pt no requiere catalogo externo.
+  const voiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    shift_id: shift?.id || null,
+    canal: 'pwa_colaboradores',
+  }), [session?.employee_id, shift?.id])
+
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setMsg(null)
+    if (typeof d.pt_received_kg === 'number' && d.pt_received_kg >= 0) {
+      setPtReceivedKg(String(d.pt_received_kg))
+    }
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+    const bits = []
+    const transcript = envelope?.meta?.transcript
+    const confidence = envelope?.meta?.stt_confidence
+    if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (d.pt_received_kg === null) bits.push('sin cantidad — captura manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, errMsg) {
+    setMsg({ type: 'error', text: `${error_code}: ${errMsg}` })
+    setVoiceNote('')
+    setTimeout(() => setMsg(null), 3500)
+  }
+
   async function handleSubmit() {
     if (!canSubmit) return
     setSubmitting(true)
@@ -74,6 +110,25 @@ export default function ScreenReconciliacionPT() {
       const result = await submitReconciliation(payload)
       if (result.ok && result.data) {
         setReconciliation(result.data)
+
+        // Voice feedback best-effort si hubo voz previa.
+        if (voiceContext?.trace_id) {
+          sendVoiceFeedback({
+            trace_id: voiceContext.trace_id,
+            ai_output: voiceContext.ai_output || {},
+            final_output: {
+              pt_received_kg: manualKgParsed,
+            },
+            metadata: {
+              context_id: 'form_reconciliacion_pt',
+              shift_id: shift.id,
+              user_id: session?.employee_id || null,
+            },
+          })
+          setVoiceContext(null)
+          setVoiceNote('')
+        }
+
         setMsg({
           type: result.data.consistent ? 'success' : 'warning',
           text: result.data.consistent
@@ -287,6 +342,29 @@ export default function ScreenReconciliacionPT() {
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 10px' }}>
                 {reconciliation ? 'ACTUALIZAR DATO' : 'DATO MANUAL (REQUERIDO)'}
               </p>
+
+              {/* Voice input (Batch B) — arriba del input numerico */}
+              <div style={{ marginBottom: 12 }}>
+                <VoiceInputButton
+                  context_id="form_reconciliacion_pt"
+                  label="Manten presionado para dictar kilos recibidos"
+                  metadata={voiceMetadata}
+                  disabled={submitting || !shift?.id}
+                  onResult={handleVoiceResult}
+                  onError={handleVoiceError}
+                />
+                {voiceNote && (
+                  <div style={{
+                    marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                      {voiceNote}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginBottom: 12 }}>
                 <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>
                   Kilos recibidos de produccion *
