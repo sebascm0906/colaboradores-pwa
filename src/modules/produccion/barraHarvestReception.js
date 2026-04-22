@@ -1,19 +1,19 @@
 export function resolveHarvestProduct({ slot = {}, tank = {} } = {}) {
-  const tankId = Number(tank?.product_id || 0)
-  if (tankId) {
-    return {
-      product_id: tankId,
-      product_name: String(tank?.product_name || '').trim(),
-      source: 'tank',
-    }
-  }
-
   const slotId = Number(slot?.product_id || 0)
   if (slotId) {
     return {
       product_id: slotId,
       product_name: String(slot?.product_name || '').trim(),
       source: 'slot',
+    }
+  }
+
+  const tankId = Number(tank?.product_id || 0)
+  if (tankId) {
+    return {
+      product_id: tankId,
+      product_name: String(tank?.product_name || '').trim(),
+      source: 'tank',
     }
   }
 
