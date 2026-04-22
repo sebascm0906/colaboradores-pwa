@@ -9,6 +9,10 @@ import {
   buildPtReceptionFromHarvest,
   resolvePackedProductFromHarvest,
 } from '../modules/produccion/barraHarvestReception.js'
+import {
+  normalizeChecklistNumericCheck,
+  normalizeChecklistNumericRange,
+} from '../modules/produccion/checklistNumericRange.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -1807,6 +1811,7 @@ async function directProduction(method, path, body) {
             })
             const cts = Array.isArray(ctRes?.response) ? ctRes.response : []
             for (const ct of cts) {
+              const normalizedRange = normalizeChecklistNumericRange(ct)
               await createUpdate({
                 model: 'gf.haccp.check',
                 method: 'create',
@@ -1815,8 +1820,8 @@ async function directProduction(method, path, body) {
                   check_template_id: ct.id,
                   name: ct.name,
                   check_type: ct.check_type,
-                  min_value: Number(ct.min_value || 0),
-                  max_value: Number(ct.max_value || 0),
+                  min_value: Number(normalizedRange.min_value || 0),
+                  max_value: Number(normalizedRange.max_value || 0),
                 },
                 sudo: 1,
                 app: 'pwa_colaboradores',
@@ -1851,7 +1856,7 @@ async function directProduction(method, path, body) {
         limit: 100,
         sudo: 1,
       })
-      checks = (Array.isArray(checksRes?.response) ? checksRes.response : []).map(c => ({
+      const rawChecks = (Array.isArray(checksRes?.response) ? checksRes.response : []).map(c => normalizeChecklistNumericCheck({
         id: c.id,
         name: c.name,
         check_type: c.check_type,
@@ -1863,6 +1868,23 @@ async function directProduction(method, path, body) {
         result_photo: c.result_photo || null,
         passed: c.passed,
       }))
+
+      const invertedChecks = rawChecks.filter((check) => check._range_was_inverted)
+      for (const check of invertedChecks) {
+        await createUpdate({
+          model: 'gf.haccp.check',
+          method: 'update',
+          ids: [check.id],
+          dict: {
+            min_value: Number(check.min_value || 0),
+            max_value: Number(check.max_value || 0),
+          },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        }).catch(() => null)
+      }
+
+      checks = rawChecks.map(({ _range_was_inverted, ...check }) => check)
     }
 
     return {
