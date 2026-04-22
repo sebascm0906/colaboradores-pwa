@@ -87,7 +87,9 @@ export default function ScreenReconciliacionPT() {
     const bits = []
     const transcript = envelope?.meta?.transcript
     const confidence = envelope?.meta?.stt_confidence
-    if (transcript) bits.push(`"${transcript}"`)
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
     if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
     if (d.pt_received_kg === null) bits.push('sin cantidad — captura manual')
     setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')

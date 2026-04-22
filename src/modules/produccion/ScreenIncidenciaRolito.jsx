@@ -141,7 +141,9 @@ export default function ScreenIncidenciaRolito() {
     const bits = []
     const transcript = envelope?.meta?.transcript
     const confidence = envelope?.meta?.stt_confidence
-    if (transcript) bits.push(`"${transcript}"`)
+    const confirmationText = envelope?.meta?.confirmation_text
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
     if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
     if (!resolvedMode) bits.push('tipo sin match — elige paro o merma')
     if (resolvedMode && !matchedCategory) bits.push('categoria sin match — selecciona manual')
