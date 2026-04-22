@@ -126,6 +126,7 @@ export default function ScreenControlTurno() {
   const [brineErrors, setBrineErrors] = useState({})
   const [savingBrine, setSavingBrine] = useState(false)
   const [brineSaveError, setBrineSaveError] = useState('')
+  const [operatorSummary, setOperatorSummary] = useState([])
   // Incidentes
   const [incidents, setIncidents] = useState([])
   const [showIncidentForm, setShowIncidentForm] = useState(false)
@@ -194,6 +195,7 @@ export default function ScreenControlTurno() {
     try {
       const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
+      setOperatorSummary(s?.id ? getOperatorCloseSummary(s.id) : [])
       if (s?.id) {
         loadIncidents(s.id).then(setIncidents)
         if (s.state === 'draft') {
@@ -232,6 +234,7 @@ export default function ScreenControlTurno() {
     if (!shift?.id) return null
     setLoadingReadiness(true)
     try {
+      setOperatorSummary(getOperatorCloseSummary(shift.id))
       const { readiness } = await loadShiftReadiness(shift.id)
       const effectiveReadiness = buildSupervisorCloseReadiness(readiness, shift.id)
       setCloseReadiness(effectiveReadiness)
@@ -386,6 +389,29 @@ export default function ScreenControlTurno() {
     }
   }, [msg])
 
+  useEffect(() => {
+    if (!shift?.id) {
+      setOperatorSummary([])
+      return
+    }
+
+    setOperatorSummary(getOperatorCloseSummary(shift.id))
+    const intervalId = window.setInterval(() => {
+      setOperatorSummary(getOperatorCloseSummary(shift.id))
+    }, 3000)
+
+    function handleStorage(event) {
+      if (event.key && event.key !== 'gfsc.operator_turn_close.v1') return
+      setOperatorSummary(getOperatorCloseSummary(shift.id))
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [shift?.id])
+
   return (
     <div style={{
       minHeight: '100dvh',
@@ -483,6 +509,61 @@ export default function ScreenControlTurno() {
                   </p>
                 </div>
               </div>
+
+              {operatorSummary.length > 0 && (
+                <div style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  borderRadius: TOKENS.radius.md,
+                  background: 'rgba(43,143,224,0.08)',
+                  border: '1px solid rgba(43,143,224,0.22)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                    <p style={{ ...typo.overline, color: TOKENS.colors.blue2, margin: 0 }}>
+                      ESTADO DE OPERADORES
+                    </p>
+                    <span style={{ ...typo.caption, color: operatorSummary.every((item) => item.closed) ? TOKENS.colors.success : TOKENS.colors.warning, fontWeight: 700 }}>
+                      {operatorSummary.filter((item) => item.closed).length}/{operatorSummary.length} entregados
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {operatorSummary.map((item) => (
+                      <div
+                        key={item.role}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: TOKENS.radius.sm,
+                          background: item.closed ? 'rgba(34,197,94,0.08)' : 'rgba(245,158,11,0.08)',
+                          border: `1px solid ${item.closed ? 'rgba(34,197,94,0.22)' : 'rgba(245,158,11,0.22)'}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700, margin: 0 }}>
+                            {item.label}
+                          </p>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                            {item.closed
+                              ? `${item.employee_name || 'Operador'} entregó${item.closed_at ? ` · ${new Date(item.closed_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                              : 'Pendiente de entregar turno'}
+                          </p>
+                        </div>
+                        <span style={{
+                          ...typo.caption,
+                          color: item.closed ? TOKENS.colors.success : TOKENS.colors.warning,
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {item.closed ? 'ENTREGADO' : 'PENDIENTE'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {shift.state === 'draft' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

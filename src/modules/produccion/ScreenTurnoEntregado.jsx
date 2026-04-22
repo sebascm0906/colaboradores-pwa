@@ -70,7 +70,10 @@ export default function ScreenTurnoEntregado({ shift: shiftProp = null, role: ro
 
   const effectiveShift = shift || shiftProp || location.state?.shift || null
   const validationShift = currentShift || null
-  const closeState = closeStateProp || (effectiveShift?.id ? getOperatorCloseState(effectiveShift.id, role, validationShift) : null)
+  const fallbackCloseState = closeStateProp || (effectiveShift?.id ? getOperatorCloseState(effectiveShift.id, role, effectiveShift) : null)
+  const closeState = validationShift?.id && effectiveShift?.id
+    ? getOperatorCloseState(effectiveShift.id, role, validationShift)
+    : fallbackCloseState
   const deliveryTime = formatDeliveryTime(closeState?.closed_at)
   const title = effectiveShift?.name || (effectiveShift?.shift_code != null ? `Turno ${effectiveShift.shift_code}` : 'Turno entregado')
   const shiftLabel = effectiveShift?.shift_code ? (TURNO_LABELS[effectiveShift.shift_code] || `Turno ${effectiveShift.shift_code}`) : ''

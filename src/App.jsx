@@ -1,8 +1,12 @@
 import { lazy, Suspense, Component } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import { normalizeSessionRoleContext } from './lib/roleContext'
+import { api } from './lib/api'
+import { getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
+import { getModuleById } from './modules/registry'
+import { resolveModuleContextRole } from './lib/roleContext'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -123,6 +127,75 @@ function getStoredSession() {
 function PrivateRoute({ children }) {
   const { session } = useSession()
   if (!session) return <Navigate to="/login" replace />
+  return children
+}
+
+function ProductionOperatorRoute({ children, allowDelivered = false }) {
+  const { session } = useSession()
+  const location = useLocation()
+  const [loading, setLoading] = useState(true)
+  const [blockedState, setBlockedState] = useState(null)
+
+  useEffect(() => {
+    let active = true
+
+    async function validate() {
+      if (!session) {
+        if (active) {
+          setBlockedState(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      const productionRole = resolveModuleContextRole(
+        session,
+        getModuleById('registro_produccion'),
+        location.state?.selected_role,
+      ) || String(session?.role || '').trim()
+
+      const normalizedRole = String(productionRole || '').trim().toLowerCase()
+      if (normalizedRole !== 'operador_barra' && normalizedRole !== 'operador_rolito') {
+        if (active) {
+          setBlockedState(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      setLoading(true)
+      try {
+        const shift = await api('GET', '/pwa-prod/my-shift')
+        if (!active) return
+        if (!shift?.id) {
+          setBlockedState(null)
+          setLoading(false)
+          return
+        }
+
+        const closeState = getOperatorCloseState(shift.id, normalizedRole, shift)
+        if (closeState?.closed) {
+          setBlockedState({ shift, role: normalizedRole, closeState })
+        } else {
+          setBlockedState(null)
+        }
+      } catch {
+        if (!active) return
+        setBlockedState(null)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    validate()
+    return () => { active = false }
+  }, [session, location.state?.selected_role, location.pathname])
+
+  if (!session) return <Navigate to="/login" replace />
+  if (loading) return <PageLoader />
+  if (blockedState?.closeState?.closed && !allowDelivered) {
+    return <Navigate to="/produccion/turno-entregado" replace state={blockedState} />
+  }
   return children
 }
 
@@ -249,19 +322,19 @@ export default function App() {
             <Route path="/profile" element={<PrivateRoute><ScreenProfile /></PrivateRoute>} />
 
             {/* ── Producción — Operadores ─────────────────────────────────── */}
-            <Route path="/produccion" element={<PrivateRoute><ScreenMiTurno /></PrivateRoute>} />
-            <Route path="/produccion/checklist" element={<PrivateRoute><ScreenChecklist /></PrivateRoute>} />
-            <Route path="/produccion/ciclo" element={<PrivateRoute><ScreenCiclo /></PrivateRoute>} />
-            <Route path="/produccion/empaque" element={<PrivateRoute><ScreenEmpaque /></PrivateRoute>} />
-            <Route path="/produccion/corte" element={<PrivateRoute><ScreenCorte /></PrivateRoute>} />
-            <Route path="/produccion/transformacion" element={<PrivateRoute><ScreenTransformacion /></PrivateRoute>} />
-            <Route path="/produccion/tanque" element={<PrivateRoute><ScreenTanqueLista /></PrivateRoute>} />
-            <Route path="/produccion/tanque/:machineId" element={<PrivateRoute><ScreenTanque /></PrivateRoute>} />
-            <Route path="/produccion/incidencia" element={<PrivateRoute><ScreenIncidenciaRolito /></PrivateRoute>} />
-            <Route path="/produccion/cierre" element={<PrivateRoute><ScreenCierreRolito /></PrivateRoute>} />
-            <Route path="/produccion/handover" element={<PrivateRoute><ScreenHandoverTurno /></PrivateRoute>} />
-            <Route path="/produccion/turno-entregado" element={<PrivateRoute><ScreenTurnoEntregado /></PrivateRoute>} />
-            <Route path="/produccion/reconciliacion" element={<PrivateRoute><ScreenReconciliacionPT /></PrivateRoute>} />
+            <Route path="/produccion" element={<ProductionOperatorRoute><ScreenMiTurno /></ProductionOperatorRoute>} />
+            <Route path="/produccion/checklist" element={<ProductionOperatorRoute><ScreenChecklist /></ProductionOperatorRoute>} />
+            <Route path="/produccion/ciclo" element={<ProductionOperatorRoute><ScreenCiclo /></ProductionOperatorRoute>} />
+            <Route path="/produccion/empaque" element={<ProductionOperatorRoute><ScreenEmpaque /></ProductionOperatorRoute>} />
+            <Route path="/produccion/corte" element={<ProductionOperatorRoute><ScreenCorte /></ProductionOperatorRoute>} />
+            <Route path="/produccion/transformacion" element={<ProductionOperatorRoute><ScreenTransformacion /></ProductionOperatorRoute>} />
+            <Route path="/produccion/tanque" element={<ProductionOperatorRoute><ScreenTanqueLista /></ProductionOperatorRoute>} />
+            <Route path="/produccion/tanque/:machineId" element={<ProductionOperatorRoute><ScreenTanque /></ProductionOperatorRoute>} />
+            <Route path="/produccion/incidencia" element={<ProductionOperatorRoute><ScreenIncidenciaRolito /></ProductionOperatorRoute>} />
+            <Route path="/produccion/cierre" element={<ProductionOperatorRoute><ScreenCierreRolito /></ProductionOperatorRoute>} />
+            <Route path="/produccion/handover" element={<ProductionOperatorRoute><ScreenHandoverTurno /></ProductionOperatorRoute>} />
+            <Route path="/produccion/turno-entregado" element={<ProductionOperatorRoute allowDelivered><ScreenTurnoEntregado /></ProductionOperatorRoute>} />
+            <Route path="/produccion/reconciliacion" element={<ProductionOperatorRoute><ScreenReconciliacionPT /></ProductionOperatorRoute>} />
 
             {/* ── Almacén PT V2 ────────────────────────────────────────── */}
             <Route path="/almacen-pt" element={<PrivateRoute><ScreenAlmacenPT /></PrivateRoute>} />
