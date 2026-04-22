@@ -36,7 +36,7 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"{{ $env.ODOO_DB }}\", \"{{ $env.ODOO_USER }}\", \"{{ $env.ODOO_PASSWORD }}\", {}]\n  }\n}",
-        "options": { "timeout": 3000 }
+        "options": { "timeout": 10000 }
       },
       "id": "w121-auth",
       "name": "odoo_authenticate",
@@ -65,7 +65,7 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ $json.search_body }}",
-        "options": { "timeout": 8000 }
+        "options": { "timeout": 15000 }
       },
       "id": "w121-search-products",
       "name": "search_products",
@@ -94,7 +94,7 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ $json.upsert_body }}",
-        "options": { "timeout": 4000 }
+        "options": { "timeout": 10000 }
       },
       "id": "w121-upsert",
       "name": "upsert_catalog_odoo",
