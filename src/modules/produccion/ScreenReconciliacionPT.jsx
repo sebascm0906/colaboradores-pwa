@@ -215,7 +215,7 @@ export default function ScreenReconciliacionPT() {
 
             <InfoCard typo={typo}>
               Esta pantalla valida fisicamente lo que ya existe en PT. No da entrada a Entregas.
-              Para generar el pendiente del siguiente almacenista usa <strong>Traspaso a CEDIS</strong>;
+              Para generar el pendiente del siguiente almacenista usa <strong>Traspaso a almacen de entregas</strong>;
               Entregas lo recibira despues en su propia pantalla.
             </InfoCard>
 
@@ -257,7 +257,7 @@ export default function ScreenReconciliacionPT() {
                   background: 'rgba(43,143,224,0.1)', border: '1px solid rgba(43,143,224,0.28)',
                 }}
               >
-                Continuar a Traspaso a CEDIS
+                Continuar a traspaso a almacen de entregas
               </button>
               <button
                 onClick={() => navigate('/almacen-pt/recepcion')}
@@ -274,7 +274,7 @@ export default function ScreenReconciliacionPT() {
               <div style={{ ...cardStyle(), marginBottom: 28 }}>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 8px' }}>TRASPASOS DE HOY</p>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
-                  {transfers.length} movimiento(s) generados hacia CEDIS. La recepcion final depende del almacenista de Entregas.
+                  {transfers.length} movimiento(s) generados hacia almacen de entregas. La recepcion final depende del almacenista de Entregas.
                 </p>
               </div>
             )}

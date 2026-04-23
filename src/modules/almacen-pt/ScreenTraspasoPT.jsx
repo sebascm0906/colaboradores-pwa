@@ -9,7 +9,8 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import {
   getInventory,
-  getCedisList,
+  getEntregasDestination,
+  getPendingPtTransfers,
   createTransfer,
   logTransferLocal,
   getTodayTransfers,
@@ -28,7 +29,7 @@ export default function ScreenTraspasoPT() {
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
 
   const [inventory, setInventory] = useState([])
-  const [cedisList, setCedisList] = useState([])
+  const [destination, setDestination] = useState(null)
   const [todayTransfers, setTodayTransfers] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -37,7 +38,6 @@ export default function ScreenTraspasoPT() {
 
   // Form: lines to transfer
   const [lines, setLines] = useState([])
-  const [selectedCedis, setSelectedCedis] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -45,18 +45,20 @@ export default function ScreenTraspasoPT() {
     setLoading(true)
     setError('')
     try {
-      const [inv, cedis, history] = await Promise.all([
+      const [inv, destinationInfo, history] = await Promise.all([
         getInventory(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getInventory', e); return [] }),
-        getCedisList().catch((e) => { logScreenError('ScreenTraspasoPT', 'getCedisList', e); return [] }),
+        getEntregasDestination().catch((e) => { logScreenError('ScreenTraspasoPT', 'getEntregasDestination', e); return null }),
         getTodayTransfers(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getTodayTransfers', e); return [] }),
       ])
       // El BFF ya dedup + filtra MP + excluye stock ≤ 0. La pantalla solo
       // consume la lista plana.
       setInventory(Array.isArray(inv) ? inv : [])
-      setCedisList(cedis || [])
+      setDestination(destinationInfo)
       setTodayTransfers(Array.isArray(history) ? history : [])
       if (!inv.length) {
         setError('No hay inventario disponible para traspasar.')
+      } else if (!destinationInfo?.id) {
+        setError('No se pudo resolver el almacen destino CIGU/Existencias.')
       }
     } catch (e) {
       logScreenError('ScreenTraspasoPT', 'loadData', e)
@@ -98,11 +100,11 @@ export default function ScreenTraspasoPT() {
 
   const totalQty = lines.reduce((s, l) => s + (Number(l.qty) || 0), 0)
   const totalKg = lines.reduce((s, l) => s + ((Number(l.qty) || 0) * l.weight), 0)
-  const selectedCedisObj = cedisList.find(c => c.id === selectedCedis)
+  const selectedCedisObj = destination?.id ? { ...destination, name: destination.name || 'CIGU/Existencias' } : null
   const employeeId = Number(session?.employee_id || session?.employee?.id || 0) || 0
 
   async function handleSave() {
-    if (!selectedCedis || lines.length === 0 || totalQty <= 0) return
+    if (!destination?.id || lines.length === 0 || totalQty <= 0) return
     setSaving(true)
     setError('')
 
@@ -122,16 +124,18 @@ export default function ScreenTraspasoPT() {
     try {
       const result = await createTransfer({
         warehouse_id: warehouseId,
-        cedis_id: selectedCedis,
+        cedis_id: destination.id,
+        destination_warehouse_id: destination.id,
         employee_id: employeeId || undefined,
         lines: validLines.map(l => ({ product_id: l.product_id, qty: l.qty })),
+        notes: `PWA PT -> Entregas ${destination.name || 'CIGU/Existencias'}`,
       })
 
       const backendId = result?.picking_id || result?.id || null
       logTransferLocal({
         backend_id: backendId,
-        cedis_id: selectedCedis,
-        cedis_name: selectedCedisObj?.name || 'CEDIS',
+        cedis_id: destination.id,
+        cedis_name: destination.name || 'CIGU/Existencias',
         warehouse_id: warehouseId,
         lines: validLines,
         total_qty: validLines.reduce((s, l) => s + l.qty, 0),
@@ -140,9 +144,17 @@ export default function ScreenTraspasoPT() {
         employee_name: session?.name || '',
       })
 
-      setSuccess(`Traspaso confirmado: ${validLines.length} productos → ${selectedCedisObj?.name || 'CEDIS'}`)
+      setSuccess(`Traspaso confirmado: ${validLines.length} productos -> ${selectedCedisObj?.name || 'CIGU/Existencias'}`)
+      const pending = await getPendingPtTransfers(destination.id).catch((e) => {
+        logScreenError('ScreenTraspasoPT', 'getPendingPtTransfers(after-create)', e)
+        return []
+      })
+      setSuccess(
+        pending.length > 0
+          ? `Pendiente generado: ${validLines.length} productos -> ${destination.name || 'CIGU/Existencias'}`
+          : `Traspaso enviado al backend hacia ${destination.name || 'CIGU/Existencias'}. Si no aparece en Entregas, falta revisar Odoo.`
+      )
       setLines([])
-      setSelectedCedis(null)
       refreshTodayTransfers()
       setTimeout(() => setSuccess(''), 4000)
     } catch (e) {
@@ -152,7 +164,7 @@ export default function ScreenTraspasoPT() {
     }
   }
 
-  const canSave = selectedCedis && lines.some(l => Number(l.qty) > 0) && !saving
+  const canSave = destination?.id && lines.some(l => Number(l.qty) > 0) && !saving
   const availableToAdd = inventory.filter(i => !lines.find(l => l.product_id === (i.product_id || i.id)) && (i.quantity || 0) > 0)
 
   return (
@@ -181,7 +193,7 @@ export default function ScreenTraspasoPT() {
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Traspasar a CEDIS</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Transferir a almacen de entregas</span>
         </div>
 
         {loading ? (
@@ -191,22 +203,20 @@ export default function ScreenTraspasoPT() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-            {/* CEDIS selector */}
+            {/* Fixed destination */}
             <div>
               <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>DESTINO</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {cedisList.map(c => (
-                  <button key={c.id} onClick={() => setSelectedCedis(selectedCedis === c.id ? null : c.id)}
-                    style={{
-                      padding: '10px 16px', borderRadius: TOKENS.radius.md,
-                      background: selectedCedis === c.id ? 'rgba(34,197,94,0.12)' : TOKENS.colors.surfaceSoft,
-                      border: `1px solid ${selectedCedis === c.id ? 'rgba(34,197,94,0.3)' : TOKENS.colors.border}`,
-                    }}>
-                    <span style={{ ...typo.caption, color: selectedCedis === c.id ? TOKENS.colors.success : TOKENS.colors.textSoft, fontWeight: 600 }}>
-                      {c.name}
-                    </span>
-                  </button>
-                ))}
+              <div style={{
+                padding: 14, borderRadius: TOKENS.radius.lg,
+                background: 'rgba(43,143,224,0.08)',
+                border: '1px solid rgba(43,143,224,0.24)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 800 }}>
+                  {destination?.name || 'CIGU/Existencias'}
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  SOLUCIONES EN PRODUCCION GLACIEM. Este destino no es editable para almacen PT.
+                </p>
               </div>
             </div>
 
@@ -291,7 +301,7 @@ export default function ScreenTraspasoPT() {
             )}
 
             {/* Total summary */}
-            {totalQty > 0 && selectedCedis && (
+            {totalQty > 0 && destination?.id && (
               <div style={{
                 padding: 14, borderRadius: TOKENS.radius.lg,
                 background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)',
@@ -299,7 +309,7 @@ export default function ScreenTraspasoPT() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>
-                      {lines.filter(l => Number(l.qty) > 0).length} productos → {selectedCedisObj?.name}
+                      {lines.filter(l => Number(l.qty) > 0).length} productos -> {selectedCedisObj?.name}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -335,7 +345,7 @@ export default function ScreenTraspasoPT() {
                     // Normalize backend row vs local-log row
                     const rawDate = t.date || t.date_done || t.scheduled_date || t.timestamp || null
                     const time = rawDate ? new Date(rawDate).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''
-                    const destName = t.destination || t.cedis_name || t.partner_id?.[1] || t.name || 'CEDIS'
+                    const destName = t.destination || t.cedis_name || t.partner_id?.[1] || t.name || 'Entregas'
                     const linesCount = Array.isArray(t.lines) ? t.lines.length
                                      : Array.isArray(t.move_lines) ? t.move_lines.length
                                      : Number(t.lines_count || 0)

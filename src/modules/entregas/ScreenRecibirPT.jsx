@@ -3,6 +3,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingTransfers, acceptTransfer, rejectTransfer } from './entregasService'
+import { getEntregasDestination } from '../almacen-pt/ptService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
 
@@ -30,13 +31,23 @@ export default function ScreenRecibirPT() {
 
   // Toast
   const [toast, setToast] = useState(null)
+  const [fixedDestination, setFixedDestination] = useState(null)
 
-  const warehouseId = softWarehouse(session)
+  const sessionWarehouseId = softWarehouse(session)
+  const warehouseId = fixedDestination?.id || sessionWarehouseId
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
     window.addEventListener('resize', h)
     return () => window.removeEventListener('resize', h)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    getEntregasDestination()
+      .then((dest) => { if (active && dest?.id) setFixedDestination(dest) })
+      .catch(() => { if (active) setFixedDestination(null) })
+    return () => { active = false }
   }, [])
 
   const loadData = useCallback(async () => {

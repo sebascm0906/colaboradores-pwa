@@ -75,7 +75,7 @@ export default function ScreenAlmacenPT() {
       icon: 'check',
     },
     {
-      id: 'traspaso', label: 'Traspasar a CEDIS',
+      id: 'traspaso', label: 'Transferir a Entregas',
       desc: todayTransfers.length > 0 ? `${todayTransfers.length} traspasos hoy` : 'Surtir a almacén de entregas',
       route: '/almacen-pt/traspaso',
       color: TOKENS.colors.success,

@@ -4479,6 +4479,33 @@ async function directAlmacenPT(method, path, body) {
     }))
   }
 
+  if (cleanPath === '/pwa-pt/entregas-destination' && method === 'GET') {
+    const result = await readModelSorted('stock.warehouse', {
+      fields: ['id', 'name', 'code', 'company_id', 'lot_stock_id'],
+      domain: ['|', ['code', '=', 'CIGU'], ['name', 'ilike', 'CIGU']],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 10,
+      sudo: 1,
+    })
+    const rows = pickListResponse(result)
+    const row = rows.find((r) => String(r.code || '').toUpperCase() === 'CIGU') || rows[0]
+    if (!row?.id) {
+      throw new Error('No se encontro el almacen destino CIGU/Existencias')
+    }
+    return {
+      id: row.id,
+      warehouse_id: row.id,
+      name: row.name || 'CIGU',
+      code: row.code || 'CIGU',
+      display_name: 'CIGU/Existencias',
+      company_id: row.company_id?.[0] || 0,
+      company_name: row.company_id?.[1] || 'SOLUCIONES EN PRODUCCION GLACIEM',
+      lot_stock_location_id: row.lot_stock_id?.[0] || row.lot_stock_id || 0,
+      lot_stock_location_name: row.lot_stock_id?.[1] || 'Existencias',
+    }
+  }
+
   // ── Dashboard summary (Sebastián commit fa20403) ──────────────────────────
   if (cleanPath === '/pwa-pt/dashboard-summary' && method === 'GET') {
     const result = await odooHttp('GET', '/api/pt/dashboard/summary', {
@@ -4492,7 +4519,7 @@ async function directAlmacenPT(method, path, body) {
   if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
     const envelope = await odooJson('/gf/salesops/pt/transfer/orchestrate', {
       warehouse_id: body?.warehouse_id || warehouseId,
-      cedis_id: body?.cedis_id || 0,
+      cedis_id: body?.destination_warehouse_id || body?.cedis_id || 0,
       employee_id: body?.employee_id || getEmployeeId() || 0,
       lines: body?.lines || [],
       notes: body?.notes || '',

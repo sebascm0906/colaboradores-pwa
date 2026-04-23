@@ -28,6 +28,10 @@ import { api } from '../../lib/api'
 /** Default warehouse: Planta Iguala */
 export const DEFAULT_WAREHOUSE_ID = 76
 
+/** Destino operativo fijo para PT -> Entregas. Backend resuelve el ID real. */
+export const ENTREGAS_DESTINATION_LABEL = 'CIGU/Existencias'
+export const ENTREGAS_DESTINATION_COMPANY = 'SOLUCIONES EN PRODUCCION GLACIEM'
+
 /** FIFO thresholds (days) */
 export const FIFO_THRESHOLDS = { ok: 3, warn: 7 }
 
@@ -220,6 +224,30 @@ export async function getCedisList() {
   return api('GET', '/pwa-pt/cedis-list')
 }
 
+/**
+ * Warehouse destino fijo para el flujo PT -> almacen de entregas.
+ * El frontend no debe dejar que el almacenista PT elija un CEDIS manualmente.
+ */
+export async function getEntregasDestination() {
+  const result = await api('GET', '/pwa-pt/entregas-destination')
+  const payload = result?.data || result || {}
+  return {
+    id: Number(payload.id || payload.warehouse_id || 0),
+    warehouse_id: Number(payload.warehouse_id || payload.id || 0),
+    name: payload.display_name || payload.name || ENTREGAS_DESTINATION_LABEL,
+    code: payload.code || 'CIGU',
+    company_id: payload.company_id || 0,
+    company_name: payload.company_name || ENTREGAS_DESTINATION_COMPANY,
+  }
+}
+
+export async function getPendingPtTransfers(warehouseId) {
+  const result = await api('GET', `/pwa-pt/pending-transfers?warehouse_id=${warehouseId}`)
+  const payload = result?.data || result || {}
+  const pickings = payload?.pickings || payload?.items || payload
+  return Array.isArray(pickings) ? pickings : []
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Day Summary (backend + fallback from stock.quant)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -354,7 +382,7 @@ export function getNextAction(summary) {
     return { action: 'recepcion', label: 'Recibir de producción', route: '/almacen-pt/recepcion', color: '#f59e0b', count: summary.pending_receptions }
   }
   if (summary.pending_transfers > 0) {
-    return { action: 'traspaso', label: 'Surtir a CEDIS', route: '/almacen-pt/traspaso', color: '#2B8FE0', count: summary.pending_transfers }
+    return { action: 'traspaso', label: 'Transferir a Entregas', route: '/almacen-pt/traspaso', color: '#2B8FE0', count: summary.pending_transfers }
   }
   if (summary.pending_transformations > 0) {
     return { action: 'transformacion', label: 'Transformar producto', route: '/almacen-pt/transformacion', color: '#f59e0b', count: summary.pending_transformations }
@@ -425,6 +453,7 @@ export async function createTransfer(transfer) {
   const result = await api('POST', '/pwa-pt/transfer-orchestrate', {
     warehouse_id: transfer.warehouse_id,
     cedis_id: transfer.cedis_id,
+    destination_warehouse_id: transfer.destination_warehouse_id || transfer.cedis_id,
     employee_id: transfer.employee_id,
     lines: transfer.lines || [],
     notes: transfer.notes || '',
