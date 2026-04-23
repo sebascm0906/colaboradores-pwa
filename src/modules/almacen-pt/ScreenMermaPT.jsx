@@ -13,6 +13,9 @@ import {
 } from './ptService'
 import { ScreenShell, ConfirmDialog } from '../entregas/components'
 import { logScreenError } from '../shared/logScreenError'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { PT_SCRAP_REASONS } from '../shared/voice/catalogs'
 
 // Scrap reasons catálogo real en backend (Sebastián audit 2026-04-10):
 //   {damage, expired, shortage, contamination, other}
@@ -51,6 +54,10 @@ export default function ScreenMermaPT() {
   const [success, setSuccess] = useState('')
   const [validationErrors, setValidationErrors] = useState({})
 
+  // Voice context (PoC Batch B+): ultimo envelope W120 para feedback a W122.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')         // banner informativo
+
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
@@ -80,6 +87,24 @@ export default function ScreenMermaPT() {
     ? inventory.filter(i => i.product?.toLowerCase().includes(productSearch.toLowerCase()))
     : inventory
 
+  // Metadata enviada a W120 (context_id=almacen_pt_merma):
+  // - scrap_reasons: las 5 razones con aliases para matching del LLM.
+  // - skus: primeros 40 productos del inventario local para que el LLM
+  //   identifique product_id con alta confianza. Topamos en 40 para mantener
+  //   el prompt chico (OpenAI strict structured output con catalog grande
+  //   degrada latencia).
+  const voiceMetadata = useMemo(() => ({
+    plaza_id: session?.plaza_id || null,
+    user_id: employeeId || null,
+    canal: 'pwa_colaboradores',
+    scrap_reasons: PT_SCRAP_REASONS.map((r) => ({
+      id: r.id, label: r.label, aliases: r.aliases || [],
+    })),
+    skus: inventory.slice(0, 40).map((i) => ({
+      id: i.product_id, name: i.product,
+    })),
+  }), [session?.plaza_id, employeeId, inventory])
+
   function validate() {
     const errs = {}
     if (!selectedProduct) errs.product = 'Selecciona un producto'
@@ -106,6 +131,26 @@ export default function ScreenMermaPT() {
         selectedReason, // id del gf.production.scrap.reason
         notes.trim() || undefined
       )
+
+      // Voice feedback fire-and-forget: diff AI vs humano -> W122.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            product_id: selectedProduct.product_id,
+            qty,
+            reason_id: selectedReason,
+            notes: notes.trim() || '',
+          },
+          metadata: {
+            context_id: 'almacen_pt_merma',
+            plaza_id: session?.plaza_id || null,
+            user_id: employeeId || null,
+          },
+        })
+      }
+
       setSuccess('Merma registrada correctamente')
       clearForm()
       setConfirmOpen(false)
@@ -128,6 +173,68 @@ export default function ScreenMermaPT() {
     setSelectedReason(null)
     setNotes('')
     setValidationErrors({})
+    setVoiceContext(null)
+    setVoiceNote('')
+  }
+
+  // ── Voice-to-form handlers ────────────────────────────────────────────────
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setError('')
+
+    // Producto: match por product_id contra inventory. Si no, usa raw_product_name
+    // como hint en el search (usuario elige manual).
+    if (d.product_id) {
+      const match = inventory.find((i) => i.product_id === d.product_id)
+      if (match) {
+        setSelectedProduct(match)
+        setProductSearch(match.product || '')
+        setShowProductList(false)
+      } else {
+        setSelectedProduct(null)
+        setProductSearch(d.raw_product_name || '')
+        setShowProductList(false)
+      }
+    } else if (d.raw_product_name) {
+      setSelectedProduct(null)
+      setProductSearch(d.raw_product_name)
+      setShowProductList(false)
+    }
+
+    // Cantidad
+    if (typeof d.qty === 'number' && d.qty > 0) {
+      setQty(d.qty)
+    }
+
+    // Motivo: reason_id del LLM mapea directo al tag del catalogo PT
+    const validReason = d.reason_id && PT_SCRAP_REASONS.some((r) => r.id === d.reason_id)
+    if (validReason) setSelectedReason(d.reason_id)
+
+    // Notas
+    if (typeof d.notes === 'string' && d.notes.trim()) {
+      setNotes(d.notes.trim())
+    }
+
+    setValidationErrors({})
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    // Banner de revision
+    const confidence = envelope?.meta?.stt_confidence
+    const transcript = envelope?.meta?.transcript
+    const confirmationText = envelope?.meta?.confirmation_text
+    const bits = []
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (!d.product_id && d.raw_product_name) bits.push('producto sin match — selecciona manual')
+    if (d.reason_id && !validReason) bits.push(`motivo IA "${d.reason_id}" sin match — selecciona manual`)
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setError(''), 3500)
   }
 
   function selectProduct(item) {
@@ -169,6 +276,28 @@ export default function ScreenMermaPT() {
               {success}
             </div>
           )}
+
+          {/* ── Voice input (PoC almacen_pt_merma) ───────────────────────── */}
+          <div style={{ marginBottom: 12 }}>
+            <VoiceInputButton
+              context_id="almacen_pt_merma"
+              label="Manten presionado para dictar la merma"
+              metadata={voiceMetadata}
+              disabled={loadingInit || submitting}
+              onResult={handleVoiceResult}
+              onError={handleVoiceError}
+            />
+            {voiceNote && (
+              <div style={{
+                marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                  {voiceNote}
+                </p>
+              </div>
+            )}
+          </div>
 
           <div style={{ padding: 18, borderRadius: TOKENS.radius.xl, background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`, marginBottom: 20 }}>
             <div style={{ marginBottom: 16 }}>
