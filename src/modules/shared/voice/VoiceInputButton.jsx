@@ -62,11 +62,14 @@ export default function VoiceInputButton({
     chunksRef.current = []
   }, [])
 
-  const reportError = useCallback((error_code, fallbackMsg) => {
+  const reportError = useCallback((error_code, fallbackMsg, envelope = null) => {
     const msg = ERROR_MESSAGES[error_code] || fallbackMsg || 'Error desconocido'
     setUserMsg(msg)
     setState(S.ERROR)
-    onError?.(error_code, msg)
+    // Tercer arg (envelope) permite al padre rescatar el transcript cuando STT
+    // funciono pero el parser del context_id fallo (p.ej. VALIDATION_FAILED).
+    // Consumidores antiguos que aceptan solo (code, msg) ignoran el extra sin romperse.
+    onError?.(error_code, msg, envelope)
     setTimeout(() => setState(S.IDLE), 2500)
   }, [onError])
 
@@ -104,7 +107,7 @@ export default function VoiceInputButton({
         return
       }
       if (!envelope.ok) {
-        reportError(envelope.error_code || 'INTERNAL_ERROR', envelope.error_message)
+        reportError(envelope.error_code || 'INTERNAL_ERROR', envelope.error_message, envelope)
         return
       }
       setState(S.SUCCESS)
