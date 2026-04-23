@@ -14,6 +14,7 @@ import {
 import { listTanks } from '../produccion/barraService'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 // Hub de Supervisor — backend-first.
 //
@@ -62,6 +63,9 @@ export default function ScreenSupervision() {
   const [formErrors, setFormErrors] = useState({})
   const [savingReading, setSavingReading] = useState(false)
   const [saveError, setSaveError] = useState('')
+  // Voice context (PoC supervisor piloto 1): ultimo envelope W120 para feedback a W122.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -106,6 +110,8 @@ export default function ScreenSupervision() {
     setReadingForm(getInitialBrineReadingForm(tank))
     setFormErrors({})
     setSaveError('')
+    setVoiceContext(null)
+    setVoiceNote('')
   }
 
   function closeBrineReading() {
@@ -113,6 +119,55 @@ export default function ScreenSupervision() {
     setSelectedTank(null)
     setFormErrors({})
     setSaveError('')
+    setVoiceContext(null)
+    setVoiceNote('')
+  }
+
+  // Metadata enviada a W120 (context_id=form_brine_reading). Sin catalogo externo:
+  // el prompt no necesita skus ni enums; solo identifica el tanque para el feedback.
+  const voiceMetadata = useMemo(() => ({
+    plaza_id: session?.plaza_id || null,
+    user_id: session?.employee_id || null,
+    canal: 'pwa_colaboradores',
+    machine_id: selectedTank?.id || null,
+  }), [session?.plaza_id, session?.employee_id, selectedTank?.id])
+
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setSaveError('')
+
+    // Nivel de sal (saltLevel): LLM devuelve number o null.
+    if (typeof d.saltLevel === 'number' && Number.isFinite(d.saltLevel)) {
+      setReadingForm((prev) => ({ ...prev, saltLevel: String(d.saltLevel) }))
+      setFormErrors((prev) => ({ ...prev, saltLevel: '' }))
+    }
+    // Temperatura de salmuera (brineTemp): LLM devuelve number (posible negativo) o null.
+    if (typeof d.brineTemp === 'number' && Number.isFinite(d.brineTemp)) {
+      setReadingForm((prev) => ({ ...prev, brineTemp: String(d.brineTemp) }))
+      setFormErrors((prev) => ({ ...prev, brineTemp: '' }))
+    }
+
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    // Banner: prioriza confirmation_text del backend.
+    const confidence = envelope?.meta?.stt_confidence
+    const transcript = envelope?.meta?.transcript
+    const confirmationText = envelope?.meta?.confirmation_text
+    const bits = []
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    const saltNull = typeof d.saltLevel !== 'number'
+    const tempNull = typeof d.brineTemp !== 'number'
+    if (saltNull && !tempNull) bits.push('solo temperatura — captura sal manual')
+    if (!saltNull && tempNull) bits.push('solo sal — captura temperatura manual')
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, msg) {
+    setSaveError(`${error_code}: ${msg}`)
+    setVoiceNote('')
+    setTimeout(() => setSaveError(''), 3500)
   }
 
   function updateReadingField(field, value) {
@@ -134,8 +189,32 @@ export default function ScreenSupervision() {
     try {
       const updatedTank = await createBrineReading(buildBrineReadingPayload(readingForm))
       setTanks((prev) => prev.map((tank) => tank.id === updatedTank?.id ? updatedTank : tank))
+
+      // Voice feedback fire-and-forget: diff AI vs humano -> W122.
+      if (voiceContext?.trace_id) {
+        const saltNum = Number(readingForm.saltLevel)
+        const tempRaw = String(readingForm.brineTemp || '').trim()
+        const tempNum = tempRaw === '' ? null : Number(tempRaw)
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            saltLevel: Number.isFinite(saltNum) ? saltNum : null,
+            brineTemp: (tempNum !== null && Number.isFinite(tempNum)) ? tempNum : null,
+            machine_id: selectedTank?.id || null,
+          },
+          metadata: {
+            context_id: 'form_brine_reading',
+            plaza_id: session?.plaza_id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setSelectedTank(null)
       setFormErrors({})
+      setVoiceContext(null)
+      setVoiceNote('')
     } catch (e) {
       logScreenError('ScreenSupervision', 'createBrineReading', e)
       setSaveError(e.message || 'No se pudo guardar la lectura')
@@ -275,6 +354,10 @@ export default function ScreenSupervision() {
           onChange={updateReadingField}
           onCancel={closeBrineReading}
           onSave={handleSaveBrineReading}
+          voiceMetadata={voiceMetadata}
+          voiceNote={voiceNote}
+          onVoiceResult={handleVoiceResult}
+          onVoiceError={handleVoiceError}
         />
       )}
     </div>
