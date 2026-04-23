@@ -377,7 +377,7 @@ export default function ScreenRecepcion() {
         ) : !hasPending ? (
           <EmptyState
             typo={typo}
-            onNext={() => navigate('/produccion/reconciliacion')}
+            onNext={() => navigate('/produccion/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
           />
         ) : (
           <>
@@ -405,7 +405,7 @@ export default function ScreenRecepcion() {
             {/* Next-step hint */}
             <NextStepHint
               typo={typo}
-              onNext={() => navigate('/produccion/reconciliacion')}
+              onNext={() => navigate('/produccion/reconciliacion', { state: { backTo: '/almacen-pt/recepcion' } })}
             />
             <div style={{ height: 32 }} />
           </>

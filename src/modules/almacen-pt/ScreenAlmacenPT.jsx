@@ -97,8 +97,9 @@ export default function ScreenAlmacenPT() {
     },
     {
       id: 'reconciliacion', label: 'Verificar inventario',
-      desc: 'Cuadre de produccion vs almacen',
+      desc: 'Conteo fisico por producto PT',
       route: '/produccion/reconciliacion',
+      state: { backTo: '/almacen-pt' },
       color: TOKENS.colors.blue2,
       icon: 'check',
     },
