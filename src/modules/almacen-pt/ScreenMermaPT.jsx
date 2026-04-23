@@ -87,7 +87,7 @@ export default function ScreenMermaPT() {
     ? inventory.filter(i => i.product?.toLowerCase().includes(productSearch.toLowerCase()))
     : inventory
 
-  // Metadata enviada a W120 (context_id=almacen_pt_merma):
+  // Metadata enviada a W120 (context_id=form_almacen_pt_merma):
   // - scrap_reasons: las 5 razones con aliases para matching del LLM.
   // - skus: primeros 40 productos del inventario local para que el LLM
   //   identifique product_id con alta confianza. Topamos en 40 para mantener
@@ -144,7 +144,7 @@ export default function ScreenMermaPT() {
             notes: notes.trim() || '',
           },
           metadata: {
-            context_id: 'almacen_pt_merma',
+            context_id: 'form_almacen_pt_merma',
             plaza_id: session?.plaza_id || null,
             user_id: employeeId || null,
           },
@@ -277,10 +277,10 @@ export default function ScreenMermaPT() {
             </div>
           )}
 
-          {/* ── Voice input (PoC almacen_pt_merma) ───────────────────────── */}
+          {/* ── Voice input (PoC form_almacen_pt_merma) ───────────────────────── */}
           <div style={{ marginBottom: 12 }}>
             <VoiceInputButton
-              context_id="almacen_pt_merma"
+              context_id="form_almacen_pt_merma"
               label="Manten presionado para dictar la merma"
               metadata={voiceMetadata}
               disabled={loadingInit || submitting}

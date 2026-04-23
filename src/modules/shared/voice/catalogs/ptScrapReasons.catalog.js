@@ -7,7 +7,7 @@
    /gf/logistics/api/employee/warehouse_scrap/create espera (confirmados por
    Sebastián audit 2026-04-10 — ver comentario en ScreenMermaPT.jsx).
 
-   Aliases se envian al LLM (W120 context_id=almacen_pt_merma) para matching
+   Aliases se envian al LLM (W120 context_id=form_almacen_pt_merma) para matching
    robusto por modismos del almacenista.
 ============================================================================ */
 
