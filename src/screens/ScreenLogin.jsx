@@ -167,6 +167,7 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
     api_key: result?.api_key || "",
     odoo_api_key: result?.api_key || "",
     odoo_employee_token: result?.gf_employee_token || "",
+    gf_salesops_token: result?.gf_salesops_token || result?.salesops_api_token || "",
     odoo_employee_session_id: result?.gf_employee_session_id || null,
     odoo_employee_session_expires_at: result?.gf_employee_session_expires_at || "",
     employee_has_user: Boolean(result?.employee_has_user),

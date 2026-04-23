@@ -61,6 +61,15 @@ function getEmployeeToken() {
   return session.odoo_employee_token || session.gf_employee_token || ''
 }
 
+function getSalesOpsToken() {
+  const session = getSession()
+  return session.gf_salesops_token
+    || session.salesops_api_token
+    || session.x_gf_token
+    || import.meta.env.VITE_GF_SALESOPS_TOKEN
+    || ''
+}
+
 function getEmployeeId() {
   const session = getSession()
   return Number(session.employee_id || session.employee?.id || 0) || 0
@@ -106,7 +115,7 @@ function expireSession() {
   }
 }
 
-function buildBaseHeaders() {
+function buildBaseHeaders(path = '') {
   const headers = {
     'Content-Type': 'application/json',
   }
@@ -116,6 +125,10 @@ function buildBaseHeaders() {
   if (apiKey) headers['Api-Key'] = apiKey
   const employeeToken = getEmployeeToken()
   if (employeeToken) headers['X-GF-Employee-Token'] = employeeToken
+  if (String(path || '').startsWith('/gf/salesops/')) {
+    const salesOpsToken = getSalesOpsToken()
+    if (salesOpsToken) headers['X-GF-Token'] = salesOpsToken
+  }
   return headers
 }
 
@@ -310,7 +323,7 @@ function pickListResponse(payload) {
 async function odooJson(path, params = {}) {
   const res = await fetch(`${ODOO_BASE}${path}`, {
     method: 'POST',
-    headers: buildBaseHeaders(),
+    headers: buildBaseHeaders(path),
     body: JSON.stringify(buildJsonRpcPayload(params)),
   })
 
@@ -339,7 +352,7 @@ async function odooHttp(method, path, query = {}, body) {
 
   const opts = {
     method,
-    headers: buildBaseHeaders(),
+    headers: buildBaseHeaders(path),
   }
   if (body !== undefined) {
     opts.body = typeof body === 'string' ? body : JSON.stringify(body)
@@ -4517,6 +4530,9 @@ async function directAlmacenPT(method, path, body) {
 
   // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
   if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
+    if (!getSalesOpsToken()) {
+      throw new Error('Falta configurar X-GF-Token para SalesOps. Revisa gf_salesops.api_token en la PWA.')
+    }
     const envelope = await odooJson('/gf/salesops/pt/transfer/orchestrate', {
       warehouse_id: body?.warehouse_id || warehouseId,
       cedis_id: body?.destination_warehouse_id || body?.cedis_id || 0,
@@ -4524,8 +4540,18 @@ async function directAlmacenPT(method, path, body) {
       lines: body?.lines || [],
       notes: body?.notes || '',
     })
-    if (envelope?.ok === false) {
-      throw new Error(envelope?.message || envelope?.error || 'No se pudo crear el traspaso PT')
+    if (
+      envelope?.ok === false
+      || envelope?.status === 'error'
+      || envelope?.code === 'UNAUTHORIZED'
+      || envelope?.error
+    ) {
+      throw new Error(
+        envelope?.user_message
+        || envelope?.message
+        || envelope?.error
+        || 'No se pudo crear el traspaso PT'
+      )
     }
     return envelope?.data ?? envelope
   }
