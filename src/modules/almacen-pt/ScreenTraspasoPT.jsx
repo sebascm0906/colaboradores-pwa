@@ -90,7 +90,7 @@ export default function ScreenTraspasoPT() {
     const existing = lines.find(l => l.product_id === (item.product_id || item.id))
     if (existing) return
     const currentReserved = Number(reservationMap[item.product_id || item.id] || 0)
-    const availableNow = Math.max(0, Number(item.quantity || 0) - currentReserved)
+    const availableNow = Number(item.quantity || 0)
     setLines(prev => [...prev, {
       product_id: item.product_id || item.id,
       product_name: item.product || item.product_name,
@@ -193,7 +193,7 @@ export default function ScreenTraspasoPT() {
       return {
         ...item,
         pending_validation: pendingValidation,
-        available_to_transfer: Math.max(0, stockQty - pendingValidation),
+        available_to_transfer: stockQty,
       }
     })
   ), [inventory, reservationMap])
@@ -201,7 +201,7 @@ export default function ScreenTraspasoPT() {
     () => Object.values(reservationMap).reduce((sum, qty) => sum + Number(qty || 0), 0),
     [reservationMap]
   )
-  const availableToAdd = inventoryView.filter(i => !lines.find(l => l.product_id === (i.product_id || i.id)) && Number(i.available_to_transfer || 0) > 0)
+  const availableToAdd = inventoryView.filter(i => !lines.find(l => l.product_id === (i.product_id || i.id)) && Number(i.quantity || 0) > 0)
 
   return (
     <div style={{
