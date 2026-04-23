@@ -1,4 +1,5 @@
 import { TOKENS } from '../../tokens'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
 
 export default function BrineReadingModal({
   tank,
@@ -10,6 +11,11 @@ export default function BrineReadingModal({
   onChange,
   onCancel,
   onSave,
+  // Voice props (PoC supervisor piloto 1):
+  voiceMetadata,
+  voiceNote,
+  onVoiceResult,
+  onVoiceError,
 }) {
   if (!tank) return null
 
@@ -48,6 +54,30 @@ export default function BrineReadingModal({
         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
           Registra la lectura operativa del tanque para habilitar la cosecha del día.
         </p>
+
+        {/* Voice input (PoC form_brine_reading) — hidrata ambos inputs */}
+        {onVoiceResult && (
+          <div style={{ marginTop: 14 }}>
+            <VoiceInputButton
+              context_id="form_brine_reading"
+              label="Manten presionado para dictar sal y temperatura"
+              metadata={voiceMetadata || {}}
+              disabled={saving}
+              onResult={onVoiceResult}
+              onError={onVoiceError}
+            />
+            {voiceNote && (
+              <div style={{
+                marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)',
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>
+                  {voiceNote}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ marginTop: 16 }}>
           <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
