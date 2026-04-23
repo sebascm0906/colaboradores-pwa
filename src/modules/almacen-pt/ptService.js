@@ -473,6 +473,10 @@ export function logTransferLocal(entry) {
   const row = {
     id: entry.backend_id || Date.now(),
     ...entry,
+    destination_warehouse_id: entry.destination_warehouse_id || entry.cedis_id || 0,
+    pending_validation: entry.pending_validation ?? true,
+    sync_state: entry.sync_state || (entry.backend_id ? 'backend_pending' : 'local_pending_only'),
+    resolved_at: entry.resolved_at || null,
     timestamp: new Date().toISOString(),
   }
   existing.unshift(row)
@@ -489,6 +493,43 @@ export function getTodayTransfersLocal() {
   const all = JSON.parse(localStorage.getItem(key) || '[]')
   const today = new Date().toISOString().slice(0, 10)
   return all.filter(t => t.timestamp?.startsWith(today))
+}
+
+export function getPendingTransferReservationMap({ warehouseId, destinationWarehouseId } = {}) {
+  const items = getTodayTransfersLocal().filter((row) => {
+    if (warehouseId && Number(row.warehouse_id || 0) !== Number(warehouseId)) return false
+    if (destinationWarehouseId && Number(row.destination_warehouse_id || row.cedis_id || 0) !== Number(destinationWarehouseId)) return false
+    return row.pending_validation !== false
+  })
+  const reservation = {}
+  for (const row of items) {
+    for (const line of Array.isArray(row.lines) ? row.lines : []) {
+      const productId = Number(line.product_id || 0)
+      const qty = Number(line.qty || line.quantity || 0)
+      if (productId > 0 && qty > 0) {
+        reservation[productId] = (reservation[productId] || 0) + qty
+      }
+    }
+  }
+  return reservation
+}
+
+export function resolveLocalTransferByPicking(pickingId, action = 'accepted') {
+  const key = 'gf_pt_transfers'
+  const all = JSON.parse(localStorage.getItem(key) || '[]')
+  let changed = false
+  const next = all.map((row) => {
+    if (Number(row.backend_id || row.id || 0) !== Number(pickingId || 0)) return row
+    changed = true
+    return {
+      ...row,
+      pending_validation: false,
+      resolved_action: action,
+      resolved_at: new Date().toISOString(),
+    }
+  })
+  if (changed) localStorage.setItem(key, JSON.stringify(next))
+  return changed
 }
 
 /**

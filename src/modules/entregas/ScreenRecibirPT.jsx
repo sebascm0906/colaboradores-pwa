@@ -3,7 +3,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingTransfers, acceptTransfer, rejectTransfer } from './entregasService'
-import { getEntregasDestination } from '../almacen-pt/ptService'
+import { getEntregasDestination, resolveLocalTransferByPicking } from '../almacen-pt/ptService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
 
@@ -109,6 +109,7 @@ export default function ScreenRecibirPT() {
         showToast(`Error: ${friendlyError(res.error)}`, 'error')
         return
       }
+      resolveLocalTransferByPicking(pickingId, 'accepted')
       showToast('Transferencia aceptada y picking validado')
       await loadData()
     } catch (e) {
@@ -132,6 +133,7 @@ export default function ScreenRecibirPT() {
         showToast(`Error: ${friendlyError(res.error)}`, 'error')
         return
       }
+      resolveLocalTransferByPicking(pickingId, 'rejected')
       showToast('Transferencia rechazada')
       await loadData()
     } catch (e) {

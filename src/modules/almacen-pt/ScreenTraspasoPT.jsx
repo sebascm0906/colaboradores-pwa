@@ -12,6 +12,7 @@ import {
   getEntregasDestination,
   getPendingPtTransfers,
   createTransfer,
+  getPendingTransferReservationMap,
   logTransferLocal,
   getTodayTransfers,
   fmtNum,
@@ -31,6 +32,7 @@ export default function ScreenTraspasoPT() {
   const [inventory, setInventory] = useState([])
   const [destination, setDestination] = useState(null)
   const [todayTransfers, setTodayTransfers] = useState([])
+  const [reservationMap, setReservationMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -55,6 +57,10 @@ export default function ScreenTraspasoPT() {
       setInventory(Array.isArray(inv) ? inv : [])
       setDestination(destinationInfo)
       setTodayTransfers(Array.isArray(history) ? history : [])
+      setReservationMap(getPendingTransferReservationMap({
+        warehouseId,
+        destinationWarehouseId: destinationInfo?.id,
+      }))
       if (!inv.length) {
         setError('No hay inventario disponible para traspasar.')
       } else if (!destinationInfo?.id) {
@@ -71,6 +77,10 @@ export default function ScreenTraspasoPT() {
     try {
       const history = await getTodayTransfers(warehouseId)
       setTodayTransfers(Array.isArray(history) ? history : [])
+      setReservationMap(getPendingTransferReservationMap({
+        warehouseId,
+        destinationWarehouseId: destination?.id,
+      }))
     } catch (e) {
       logScreenError('ScreenTraspasoPT', 'refreshTodayTransfers', e)
     }
@@ -79,10 +89,14 @@ export default function ScreenTraspasoPT() {
   function addLine(item) {
     const existing = lines.find(l => l.product_id === (item.product_id || item.id))
     if (existing) return
+    const currentReserved = Number(reservationMap[item.product_id || item.id] || 0)
+    const availableNow = Math.max(0, Number(item.quantity || 0) - currentReserved)
     setLines(prev => [...prev, {
       product_id: item.product_id || item.id,
       product_name: item.product || item.product_name,
-      available: item.quantity || 0,
+      available: availableNow,
+      pending_validation: currentReserved,
+      stock_qty: Number(item.quantity || 0),
       weight: item.weight_per_unit || 1,
       qty: '',
     }])
@@ -131,10 +145,20 @@ export default function ScreenTraspasoPT() {
         notes: `PWA PT -> Entregas ${destination.name || 'CIGU/Existencias'}`,
       })
 
+      const pending = await getPendingPtTransfers(destination.id).catch((e) => {
+        logScreenError('ScreenTraspasoPT', 'getPendingPtTransfers(after-create)', e)
+        return []
+      })
       const backendId = result?.picking_id || result?.id || null
+      const syncState = pending.length > 0 ? 'backend_pending' : 'local_pending_only'
+      if (pending.length === 0) {
+        setError('Odoo no publico aun un pendiente visible para Entregas. La PWA dejara la cantidad apartada como pendiente local de validacion.')
+      }
+
       logTransferLocal({
         backend_id: backendId,
         cedis_id: destination.id,
+        destination_warehouse_id: destination.id,
         cedis_name: destination.name || 'CIGU/Existencias',
         warehouse_id: warehouseId,
         lines: validLines,
@@ -142,17 +166,13 @@ export default function ScreenTraspasoPT() {
         total_kg: validLines.reduce((s, l) => s + l.total_kg, 0),
         employee_id: employeeId,
         employee_name: session?.name || '',
-      })
-
-      setSuccess(`Traspaso confirmado: ${validLines.length} productos -> ${selectedCedisObj?.name || 'CIGU/Existencias'}`)
-      const pending = await getPendingPtTransfers(destination.id).catch((e) => {
-        logScreenError('ScreenTraspasoPT', 'getPendingPtTransfers(after-create)', e)
-        return []
+        sync_state: syncState,
+        pending_validation: true,
       })
       setSuccess(
         pending.length > 0
           ? `Pendiente generado: ${validLines.length} productos -> ${destination.name || 'CIGU/Existencias'}`
-          : `Traspaso enviado al backend hacia ${destination.name || 'CIGU/Existencias'}. Si no aparece en Entregas, falta revisar Odoo.`
+          : `Reserva local creada: ${validLines.length} productos pendientes por validar en Entregas`
       )
       setLines([])
       refreshTodayTransfers()
@@ -165,7 +185,23 @@ export default function ScreenTraspasoPT() {
   }
 
   const canSave = destination?.id && lines.some(l => Number(l.qty) > 0) && !saving
-  const availableToAdd = inventory.filter(i => !lines.find(l => l.product_id === (i.product_id || i.id)) && (i.quantity || 0) > 0)
+  const inventoryView = useMemo(() => (
+    inventory.map((item) => {
+      const productId = item.product_id || item.id
+      const pendingValidation = Number(reservationMap[productId] || 0)
+      const stockQty = Number(item.quantity || 0)
+      return {
+        ...item,
+        pending_validation: pendingValidation,
+        available_to_transfer: Math.max(0, stockQty - pendingValidation),
+      }
+    })
+  ), [inventory, reservationMap])
+  const totalPendingValidation = useMemo(
+    () => Object.values(reservationMap).reduce((sum, qty) => sum + Number(qty || 0), 0),
+    [reservationMap]
+  )
+  const availableToAdd = inventoryView.filter(i => !lines.find(l => l.product_id === (i.product_id || i.id)) && Number(i.available_to_transfer || 0) > 0)
 
   return (
     <div style={{
@@ -220,6 +256,21 @@ export default function ScreenTraspasoPT() {
               </div>
             </div>
 
+            {totalPendingValidation > 0 && (
+              <div style={{
+                padding: 14, borderRadius: TOKENS.radius.lg,
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.24)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: 0, fontWeight: 800 }}>
+                  {fmtNum(totalPendingValidation)} uds pendientes por validacion en Entregas
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  Estas cantidades siguen en PT, pero estan apartadas visualmente hasta que Entregas las valide.
+                </p>
+              </div>
+            )}
+
             {/* Lines to transfer */}
             {lines.length > 0 && (
               <div>
@@ -237,6 +288,9 @@ export default function ScreenTraspasoPT() {
                           </p>
                           <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                             Disponible: {fmtNum(line.available)} · {line.weight} kg/ud
+                          </p>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>
+                            En PT {fmtNum(line.stock_qty || line.available)} · Pendiente {fmtNum(line.pending_validation || 0)} · Nuevo traspaso {fmtNum(line.available)}
                           </p>
                         </div>
                         <button onClick={() => removeLine(line.product_id)} style={{
@@ -292,7 +346,7 @@ export default function ScreenTraspasoPT() {
                         + {item.product || item.product_name || ''}
                       </p>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 1 }}>
-                        {fmtNum(item.quantity)} uds
+                        En PT {fmtNum(item.quantity)} · Pend. {fmtNum(item.pending_validation || 0)} · Nuevo traspaso {fmtNum(item.available_to_transfer || 0)}
                       </p>
                     </button>
                   ))}
