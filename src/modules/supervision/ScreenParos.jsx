@@ -7,6 +7,8 @@ import { resolveSupervisionWarehouseId } from './shiftContext'
 import { loadMachines } from '../shared/machineService'
 import { loadLines } from '../shared/lineService'
 import { logScreenError } from '../shared/logScreenError'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 
 // Fallback estatico de lineas si el endpoint no responde.
 // Eliminar cuando /api/production/lines sea estable.
@@ -46,6 +48,9 @@ export default function ScreenParos() {
   }))
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
+  // Voice context (PoC supervisor piloto 2): ultimo envelope W120 para feedback a W122.
+  const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
+  const [voiceNote, setVoiceNote] = useState('')
 
   useEffect(() => { loadData() }, [])
 
@@ -102,15 +107,106 @@ export default function ScreenParos() {
       if (formData.comment) payload.comment = formData.comment.trim()
 
       await createDowntime(payload)
+
+      // Voice feedback fire-and-forget: diff AI vs humano -> W122.
+      if (voiceContext?.trace_id) {
+        sendVoiceFeedback({
+          trace_id: voiceContext.trace_id,
+          ai_output: voiceContext.ai_output || {},
+          final_output: {
+            category_id: payload.category_id,
+            machine_id: payload.machine_id || null,
+            reason: payload.reason,
+            comment: payload.comment || '',
+          },
+          metadata: {
+            context_id: 'form_supervisor_paro',
+            plaza_id: session?.plaza_id || null,
+            user_id: session?.employee_id || null,
+          },
+        })
+      }
+
       setMsg({ type: 'success', text: 'Paro registrado' })
       setShowForm(false)
       setFormData({
         ...INITIAL_FORM,
         responsible: session?.employee_name || session?.name || '',
       })
+      setVoiceContext(null)
+      setVoiceNote('')
       await loadData()
     } catch (e) { setMsg({ type: 'error', text: e.message || 'Error al crear paro' }) }
     finally { setSubmitting(false) }
+  }
+
+  // Metadata enviada a W120 (context_id=form_supervisor_paro).
+  // Categorias son pocas y estables. Machines puede tener muchas — topamos a 40.
+  const voiceMetadata = useMemo(() => ({
+    plaza_id: session?.plaza_id || null,
+    user_id: session?.employee_id || null,
+    canal: 'pwa_colaboradores',
+    categories: categories.map((c) => ({ id: c.id, name: c.name })),
+    machines: machines.slice(0, 40).map((m) => ({ id: m.id, name: m.name, type: m.type || '' })),
+  }), [session?.plaza_id, session?.employee_id, categories, machines])
+
+  function handleVoiceResult(envelope) {
+    const d = envelope?.data || {}
+    setMsg(null)
+
+    // category_id: si el LLM devuelve un id valido contra el catalogo, lo hidrata.
+    if (d.category_id != null) {
+      const cid = Number(d.category_id)
+      if (categories.some((c) => Number(c.id) === cid)) {
+        setFormData((prev) => ({ ...prev, category_id: String(cid) }))
+      }
+    }
+
+    // machine_id (opcional)
+    if (d.machine_id != null) {
+      const mid = Number(d.machine_id)
+      if (machines.some((m) => Number(m.id) === mid)) {
+        setFormData((prev) => ({ ...prev, machine_id: String(mid) }))
+      }
+    }
+
+    // reason: texto corto
+    if (typeof d.reason === 'string' && d.reason.trim()) {
+      setFormData((prev) => ({ ...prev, reason: d.reason.trim() }))
+    }
+
+    // comment: texto libre
+    if (typeof d.comment === 'string' && d.comment.trim()) {
+      setFormData((prev) => ({ ...prev, comment: d.comment.trim() }))
+    }
+
+    setVoiceContext({ trace_id: envelope.trace_id, ai_output: d })
+
+    const confidence = envelope?.meta?.stt_confidence
+    const transcript = envelope?.meta?.transcript
+    const confirmationText = envelope?.meta?.confirmation_text
+    const bits = []
+    if (confirmationText) bits.push(confirmationText)
+    else if (transcript) bits.push(`"${transcript}"`)
+    if (typeof confidence === 'number') bits.push(`confianza ${(confidence * 100).toFixed(0)}%`)
+    if (d.category_id != null && !categories.some((c) => Number(c.id) === Number(d.category_id))) {
+      bits.push(`categoria "${d.category_name || d.category_id}" sin match — selecciona manual`)
+    }
+    if (d.machine_id != null && !machines.some((m) => Number(m.id) === Number(d.machine_id))) {
+      bits.push(`maquina "${d.machine_name || d.machine_id}" sin match — selecciona manual`)
+    }
+    if (d.category_id == null && typeof d.category_name === 'string' && d.category_name.trim()) {
+      bits.push(`IA propone categoria "${d.category_name}" — selecciona manual`)
+    }
+    if (d.machine_id == null && typeof d.machine_name === 'string' && d.machine_name.trim()) {
+      bits.push(`IA propone maquina "${d.machine_name}" — selecciona manual`)
+    }
+    setVoiceNote(bits.length ? `IA: ${bits.join(' · ')}` : 'IA proceso la voz — revisa y confirma')
+  }
+
+  function handleVoiceError(error_code, err_msg) {
+    setMsg({ type: 'error', text: `${error_code}: ${err_msg}` })
+    setVoiceNote('')
   }
 
   useEffect(() => {
@@ -206,6 +302,26 @@ export default function ScreenParos() {
               }}>
                 <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 12px' }}>Nuevo Paro</p>
 
+                {/* Voice input (PoC form_supervisor_paro) — hidrata categoria, maquina, motivo y comentario */}
+                <div style={{ marginBottom: 14 }}>
+                  <VoiceInputButton
+                    context_id="form_supervisor_paro"
+                    label="Manten presionado para dictar el paro"
+                    metadata={voiceMetadata}
+                    disabled={submitting}
+                    onResult={handleVoiceResult}
+                    onError={handleVoiceError}
+                  />
+                  {voiceNote && (
+                    <div style={{
+                      marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)',
+                    }}>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0 }}>{voiceNote}</p>
+                    </div>
+                  )}
+                </div>
+
                 <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 4 }}>Categoria</label>
                 <select value={formData.category_id} onChange={e => setFormData(p => ({ ...p, category_id: e.target.value }))}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', marginBottom: 10 }}>
@@ -246,7 +362,7 @@ export default function ScreenParos() {
                   style={{ width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm, background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`, color: 'white', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 12 }} />
 
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" onClick={() => { setShowForm(false); setFormData({ category_id: '', line_id: '', reason: '' }) }}
+                  <button type="button" onClick={() => { setShowForm(false); setFormData({ ...INITIAL_FORM, responsible: session?.employee_name || session?.name || '' }); setVoiceContext(null); setVoiceNote('') }}
                     style={{ flex: 1, padding: '10px', borderRadius: TOKENS.radius.sm, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600 }}>
                     Cancelar
                   </button>
