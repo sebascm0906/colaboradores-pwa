@@ -54,6 +54,11 @@ export async function createNote({ subject_type, subject_id, subject_name, body,
     subject_id:   Number(subject_id),
     author_id:    author_id || undefined,
   })
+  // Controller devuelve HTTP 200 con {ok:false} cuando falla (p.ej. author no valido).
+  // Sin esta guarda la UI mostraba "Nota agregada" aunque no se persistiera.
+  if (result && typeof result === 'object' && result.ok === false) {
+    throw new Error(result.message || 'No se pudo crear la nota')
+  }
   const data = result?.data ?? result
   return normalizeNote(data)
 }

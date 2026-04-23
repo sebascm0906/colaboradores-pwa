@@ -5341,7 +5341,8 @@ async function directSupervisorVentas(method, path, body) {
   // Passthrough a controllers Odoo. Backend valida permiso is_supervisor_ventas.
 
   if (cleanPath === '/pwa-supv/tasks' && method === 'GET') {
-    return odooJson('/pwa-supv/tasks', {
+    // Controller espera GET (no POST JSON-RPC). Usar odooHttp.
+    return odooHttp('GET', '/pwa-supv/tasks', {
       company_id:  Number(query.get('company_id'))  || companyId || undefined,
       assignee_id: Number(query.get('assignee_id')) || undefined,
       state:       query.get('state')    || undefined,
@@ -5379,7 +5380,8 @@ async function directSupervisorVentas(method, path, body) {
   // ── Sprint 5: Notas de coaching (guía §8d) ────────────────────────────────
 
   if (cleanPath === '/pwa-supv/notes' && method === 'GET') {
-    return odooJson('/pwa-supv/notes', {
+    // Controller espera GET (no POST JSON-RPC). Mismo patron que /pwa-supv/tasks.
+    return odooHttp('GET', '/pwa-supv/notes', {
       subject_type: query.get('subject_type') || undefined,
       subject_id:   Number(query.get('subject_id')) || undefined,
       company_id:   companyId || undefined,

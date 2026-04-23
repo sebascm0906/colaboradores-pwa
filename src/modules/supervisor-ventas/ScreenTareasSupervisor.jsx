@@ -56,14 +56,15 @@ export default function ScreenTareasSupervisor() {
     setLoading(true)
     setError('')
     try {
-      const [tasksData, teamData] = await Promise.all([
-        listTasks(),
-        getTeam().catch(() => []),
-      ])
-      setTasks(tasksData || [])
-      setTeam(Array.isArray(teamData) ? teamData : [])
-    } catch (e) {
-      if (e.message !== 'no_session') setError('Error al cargar tareas')
+      // Cada promesa aislada: si list falla, el form (que depende de team)
+      // sigue utilizable. Antes un solo fallo bloqueaba todo el flujo.
+      const [tasksRes, teamRes] = await Promise.allSettled([listTasks(), getTeam()])
+      if (tasksRes.status === 'fulfilled') {
+        setTasks(tasksRes.value || [])
+      } else if (tasksRes.reason?.message !== 'no_session') {
+        setError('Error al cargar tareas')
+      }
+      setTeam(teamRes.status === 'fulfilled' && Array.isArray(teamRes.value) ? teamRes.value : [])
     } finally {
       setLoading(false)
     }

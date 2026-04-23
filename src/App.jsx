@@ -98,6 +98,7 @@ const ScreenDetalleVendedor    = lazy(() => import('./modules/supervisor-ventas/
 const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSinVisitar'))
 const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
+const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
 // Gerente
 const ScreenGerente          = lazy(() => import('./modules/gerente/ScreenGerente'))
 const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashboardGerente'))
@@ -412,6 +413,7 @@ export default function App() {
             <Route path="/equipo/tareas" element={<PrivateRoute><ScreenTareasSupervisor /></PrivateRoute>} />
             <Route path="/equipo/notas" element={<PrivateRoute><ScreenNotasCliente /></PrivateRoute>} />
             <Route path="/equipo/recuperacion" element={<PrivateRoute><ScreenClientesRecuperacion /></PrivateRoute>} />
+            <Route path="/equipo/nota-rapida" element={<PrivateRoute><ScreenNotaRapida /></PrivateRoute>} />
             {/* V1 legacy routes */}
             <Route path="/equipo/vendedores" element={<Navigate to="/equipo" replace />} />
             <Route path="/equipo/control" element={<Navigate to="/equipo" replace />} />
