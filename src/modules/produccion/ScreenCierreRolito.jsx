@@ -439,6 +439,29 @@ export default function ScreenCierreRolito() {
               </div>
             )}
 
+            {/* ── DECLARACIÓN DE BOLSAS (custodia gerente) ────── */}
+            {!isBarraOperator && (
+              <button
+                onClick={() => navigate('/produccion/declaracion-bolsas')}
+                style={{
+                  width: '100%', padding: '14px 18px', borderRadius: TOKENS.radius.lg,
+                  background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                <div>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Declarar devolución de bolsas</p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '3px 0 0' }}>
+                    Confirma cuántas bolsas devuelves a la gerente
+                  </p>
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
+              </button>
+            )}
+
             {/* ── CHECKLIST ENTREGA ───────────────────────────── */}
             <div style={{
               padding: 16, borderRadius: TOKENS.radius.xl,

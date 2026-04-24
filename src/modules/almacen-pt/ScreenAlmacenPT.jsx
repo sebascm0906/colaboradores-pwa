@@ -142,6 +142,13 @@ export default function ScreenAlmacenPT() {
       color: TOKENS.colors.blue2,
       icon: 'check',
     },
+    {
+      id: 'declaracion-bolsas', label: 'Declarar bolsas',
+      desc: 'Devolver bolsas recibidas de gerente',
+      route: '/almacen-pt/declaracion-bolsas',
+      color: TOKENS.colors.blue3,
+      icon: 'box',
+    },
   ]
 
   return (
