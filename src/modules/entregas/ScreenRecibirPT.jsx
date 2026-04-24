@@ -315,6 +315,7 @@ export default function ScreenRecibirPT() {
       {/* Accept confirm dialog */}
       {dialog?.type === 'accept' && (
         <ConfirmDialog
+          open
           title="Aceptar transferencia"
           message={`Confirmar recepcion de "${dialog.picking.name || `Picking #${dialog.picking.id}`}"? El backend validara el picking y movera el stock.`}
           confirmLabel="Aceptar"
