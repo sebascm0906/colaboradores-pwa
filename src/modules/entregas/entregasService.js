@@ -58,8 +58,24 @@ export async function getDaySummary(warehouseId) {
   // Try dedicated backend endpoint first
   try {
     const result = await api('GET', `/pwa-entregas/day-summary?warehouse_id=${warehouseId}`)
-    if (result && typeof result === 'object' && !result.error) {
-      return result
+    console.info('[ENTREGAS][day-summary] request', { warehouseId })
+    console.info('[ENTREGAS][day-summary] response', result)
+    const payload = result?.data?.summary
+      || result?.summary
+      || result?.data
+      || result
+      || null
+    if (payload && typeof payload === 'object' && !payload.error) {
+      const normalized = {
+        ...payload,
+        pending_pallets: Number(payload.pending_pallets ?? 0) || 0,
+      }
+      console.info('[ENTREGAS][day-summary] normalized', {
+        warehouseId,
+        pending_pallets: normalized.pending_pallets,
+        payload_keys: Object.keys(payload || {}),
+      })
+      return normalized
     }
   } catch {
     // Controller not deployed yet — fall back to composite
@@ -120,6 +136,8 @@ export async function getDaySummary(warehouseId) {
 export async function getPendingTransfers(warehouseId) {
   try {
     const result = await api('GET', `/pwa-pt/pending-transfers?warehouse_id=${warehouseId}`)
+    console.info('[PT PENDING] request', { warehouseId })
+    console.info('[PT PENDING] response', result)
     const items = result?.data?.pickings || result?.pickings || result?.data || result || []
     return Array.isArray(items) ? items : []
   } catch {
@@ -134,6 +152,7 @@ export async function getPendingTransfers(warehouseId) {
  * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
 export async function acceptTransfer(pickingId) {
+  console.info('[PT ACCEPT] service sending', { pickingId })
   return api('POST', '/pwa-pt/accept-transfer', { picking_id: pickingId })
 }
 

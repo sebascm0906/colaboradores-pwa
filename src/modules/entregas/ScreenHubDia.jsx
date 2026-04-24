@@ -96,6 +96,11 @@ export default function ScreenHubDia() {
     setError('')
     try {
       const data = await getDaySummary(warehouseId)
+      console.info('[ENTREGAS][HubDia] summary loaded', {
+        warehouseId,
+        pending_pallets: data?.pending_pallets,
+        summary: data,
+      })
       setSummary(data)
     } catch (e) {
       if (e.message !== 'no_session') setError('Error al cargar resumen del dia')
@@ -117,6 +122,12 @@ export default function ScreenHubDia() {
   }
 
   const statuses = summary ? computeStepStatuses(summary) : {}
+  if (summary) {
+    console.info('[ENTREGAS][HubDia] recibirPT status', {
+      pending_pallets: summary.pending_pallets,
+      recibirPT: statuses.recibirPT,
+    })
+  }
 
   // Find first non-completed step as "suggested next"
   const suggestedStepId = STEPS.find(

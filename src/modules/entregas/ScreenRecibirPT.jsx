@@ -85,6 +85,7 @@ export default function ScreenRecibirPT() {
   }
 
   function openAcceptDialog(picking) {
+    console.log('[PT ACCEPT] click', { pickingId: picking?.id, picking })
     setDialog({ type: 'accept', picking })
   }
 
@@ -101,10 +102,13 @@ export default function ScreenRecibirPT() {
   async function handleAcceptConfirm() {
     if (!dialog || dialog.type !== 'accept') return
     const pickingId = dialog.picking.id
+    console.log('[PT ACCEPT] confirm dialog', { pickingId, picking: dialog.picking })
     closeDialog()
     setActionStates((s) => ({ ...s, [pickingId]: 'accepting' }))
     try {
+      console.log('[PT ACCEPT] sending request', { pickingId })
       const res = await acceptTransfer(pickingId)
+      console.log('[PT ACCEPT] response', res)
       if (res && res.ok === false) {
         showToast(`Error: ${friendlyError(res.error)}`, 'error')
         return
@@ -113,6 +117,11 @@ export default function ScreenRecibirPT() {
       showToast('Transferencia aceptada y picking validado')
       await loadData()
     } catch (e) {
+      console.log('[PT ACCEPT] error', {
+        pickingId,
+        message: e?.message,
+        error: e,
+      })
       if (e.message === 'no_session') return
       showToast(`Error: ${friendlyError(e?.message)}`, 'error')
     } finally {

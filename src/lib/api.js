@@ -4180,16 +4180,23 @@ async function directAlmacenPT(method, path, body) {
     })
   }
   if (cleanPath === '/pwa-pt/accept-transfer' && method === 'POST') {
-    const pickingId = Number(body?.picking_id || 0)
-    if (!pickingId) return { ok: false, error: 'picking_id requerido' }
-    return odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
+    const pickingId = Number(body?.picking_id)
+    console.info('[PT ACCEPT][BFF] incoming request', {
+      raw_picking_id: body?.picking_id,
+      parsed_picking_id: pickingId,
+      is_finite: Number.isFinite(pickingId),
+    })
+    if (!Number.isFinite(pickingId) || pickingId === 0) return { ok: false, error: 'picking_id requerido' }
+    const response = await odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
       picking_id: pickingId,
     })
+    console.info('[PT ACCEPT][BFF] response', response)
+    return response
   }
   if (cleanPath === '/pwa-pt/reject-transfer' && method === 'POST') {
-    const pickingId = Number(body?.picking_id || 0)
+    const pickingId = Number(body?.picking_id)
     const reason = (body?.reason || '').trim()
-    if (!pickingId) return { ok: false, error: 'picking_id requerido' }
+    if (!Number.isFinite(pickingId) || pickingId === 0) return { ok: false, error: 'picking_id requerido' }
     if (!reason) return { ok: false, error: 'reason requerido' }
     return odooJson('/gf/logistics/api/employee/pt_transfer/reject', {
       picking_id: pickingId,
