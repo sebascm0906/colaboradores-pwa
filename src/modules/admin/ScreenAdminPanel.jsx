@@ -78,8 +78,9 @@ function MobileAdminHub() {
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
-    { id: 'salida_rolito',    label: 'Salida a Rolito',    desc: 'Entregar material al turno',  route: '/almacen-pt/materiales/crear', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
+    { id: 'traspaso_mp',      label: 'TRASPASO MATERIA PRIMA', desc: 'Enviar material a rolito o PT', route: '/admin/traspaso-materia-prima', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
     { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
+    { id: 'bolsas_validar',   label: 'Validar bolsas',     desc: 'Conteo final y adeudos',      route: '/admin/bolsas/validar',        color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
   ]
   const visibleActions = ACTIONS.filter((action) => !action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
 

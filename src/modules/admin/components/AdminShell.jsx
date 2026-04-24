@@ -36,10 +36,11 @@ export const NAV_ITEMS = [
   // ── Restringidos a gerente / dirección ──────────────────────────────────
   { id: 'liquidaciones',label: 'Liquidaciones',    route: '/admin/liquidaciones',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'mp',           label: 'Materia prima',    route: '/admin/materia-prima',      roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
-  { id: 'mp-rolito',    label: 'Salida a Rolito',  route: '/almacen-pt/materiales/crear', routeState: { backTo: '/admin' }, roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'traspaso-mp',  label: 'Traspaso MP',      route: '/admin/traspaso-materia-prima', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   // Validar materiales: SOLO gerente/dirección. Segregación de funciones —
   // el auxiliar_admin NO aprueba movimientos de inventario (2026-04-18).
   { id: 'mat-validar',  label: 'Validar materiales', route: '/admin/materiales/validar', roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'bolsas-validar', label: 'Validar bolsas',  route: '/admin/bolsas/validar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
 ]
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */

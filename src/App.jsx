@@ -62,6 +62,10 @@ const ScreenGastosAprobar   = lazy(() => import('./modules/admin/ScreenGastosApr
 const ScreenRequisiciones   = lazy(() => import('./modules/admin/ScreenRequisiciones'))
 const ScreenLiquidaciones   = lazy(() => import('./modules/admin/ScreenLiquidaciones'))
 const ScreenMateriaPrima    = lazy(() => import('./modules/admin/ScreenMateriaPrima'))
+const ScreenTraspasoMateriaPrima = lazy(() => import('./modules/admin/ScreenTraspasoMateriaPrima'))
+const ScreenValidacionBolsas = lazy(() => import('./modules/admin/ScreenValidacionBolsas'))
+const ScreenDeclaracionBolsas = lazy(() => import('./modules/produccion/ScreenDeclaracionBolsas'))
+const ScreenDeclaracionBolsasPT = lazy(() => import('./modules/almacen-pt/ScreenDeclaracionBolsasPT'))
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
 const ScreenMaterialesValidate = lazy(() => import('./modules/admin/ScreenMaterialesValidate'))
 const ScreenMaterialesResolverRejected = lazy(() => import('./modules/admin/ScreenMaterialesResolverRejected'))
@@ -333,6 +337,7 @@ export default function App() {
             <Route path="/produccion/tanque/:machineId" element={<ProductionOperatorRoute><ScreenTanque /></ProductionOperatorRoute>} />
             <Route path="/produccion/incidencia" element={<ProductionOperatorRoute><ScreenIncidenciaRolito /></ProductionOperatorRoute>} />
             <Route path="/produccion/cierre" element={<ProductionOperatorRoute><ScreenCierreRolito /></ProductionOperatorRoute>} />
+            <Route path="/produccion/declaracion-bolsas" element={<ProductionOperatorRoute><ScreenDeclaracionBolsas /></ProductionOperatorRoute>} />
             <Route path="/produccion/handover" element={<ProductionOperatorRoute><ScreenHandoverTurno /></ProductionOperatorRoute>} />
             <Route path="/produccion/turno-entregado" element={<ProductionOperatorRoute allowDelivered><ScreenTurnoEntregado /></ProductionOperatorRoute>} />
             <Route path="/produccion/reconciliacion" element={<ProductionOperatorRoute><ScreenReconciliacionPT /></ProductionOperatorRoute>} />
@@ -347,6 +352,7 @@ export default function App() {
             <Route path="/almacen-pt/merma" element={<PrivateRoute><ScreenMermaPT /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales" element={<PrivateRoute><ScreenMaterialesIssue /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales/crear" element={<PrivateRoute><ScreenMaterialesCrearIssue /></PrivateRoute>} />
+            <Route path="/almacen-pt/declaracion-bolsas" element={<PrivateRoute><ScreenDeclaracionBolsasPT /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales/report/:issueId" element={<PrivateRoute><ScreenMaterialesReport /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales/reconciliar" element={<PrivateRoute><ScreenMaterialesReconcile /></PrivateRoute>} />
 
@@ -368,6 +374,8 @@ export default function App() {
             <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
             <Route path="/admin/liquidaciones" element={<PrivateRoute><ScreenLiquidaciones /></PrivateRoute>} />
             <Route path="/admin/materia-prima" element={<PrivateRoute><ScreenMateriaPrima /></PrivateRoute>} />
+            <Route path="/admin/traspaso-materia-prima" element={<PrivateRoute><ScreenTraspasoMateriaPrima /></PrivateRoute>} />
+            <Route path="/admin/bolsas/validar" element={<PrivateRoute><ScreenValidacionBolsas /></PrivateRoute>} />
             <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
             <Route path="/admin/materiales/validar" element={<PrivateRoute><ScreenMaterialesValidate /></PrivateRoute>} />
             <Route path="/admin/materiales/resolver-rechazo" element={<PrivateRoute><ScreenMaterialesResolverRejected /></PrivateRoute>} />
