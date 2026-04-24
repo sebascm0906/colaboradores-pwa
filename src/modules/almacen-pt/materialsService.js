@@ -20,7 +20,8 @@
 //   { settlement_id }  ó  { shift_id, line_id, material_id }
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
+import { normalizeDispatchConfig } from './materialDispatchConfig.js'
 
 // ── Catálogo de materiales (para selector al crear issue) ─────────────────────
 export async function getMaterialCatalog({ plantId, lineType, activeOnly = true } = {}) {
@@ -190,6 +191,40 @@ export async function getMaterialsReconcile({ shiftId, plantId } = {}) {
     consistent: Boolean(payload.consistent),
     raw: payload,
   }
+}
+
+export async function getDispatchConfig({ warehouseId } = {}) {
+  if (!warehouseId) throw new Error('warehouse_id requerido')
+  const qs = new URLSearchParams({ warehouse_id: String(warehouseId) })
+  const res = await api('GET', `/api/production/materials/dispatch-config?${qs}`)
+  return normalizeDispatchConfig(res?.data ?? res ?? {})
+}
+
+export async function createDispatchTransfer({
+  warehouseId,
+  destinationKey,
+  workerEmployeeId,
+  materialId,
+  qtyIssued,
+  issuedBy,
+  notes,
+} = {}) {
+  if (!warehouseId) throw new Error('warehouse_id requerido')
+  if (!destinationKey) throw new Error('destination_key requerido')
+  if (!materialId) throw new Error('material_id requerido')
+  if (!(Number(qtyIssued) > 0)) throw new Error('qty_issued debe ser mayor a 0')
+
+  const res = await api('POST', '/api/production/materials/dispatch-transfer', {
+    warehouse_id: Number(warehouseId),
+    destination_key: String(destinationKey),
+    worker_employee_id: Number(workerEmployeeId || 0) || undefined,
+    material_id: Number(materialId),
+    qty_issued: Number(qtyIssued),
+    issued_by: Number(issuedBy || 0) || undefined,
+    notes: notes || '',
+  })
+
+  return res?.data ?? res ?? {}
 }
 
 // ── Helpers de presentación (no lógica de negocio) ─────────────────────────────

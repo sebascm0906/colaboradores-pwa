@@ -4,7 +4,7 @@ import {
   minutesFromMachineFreeze,
   withExpectedTimingFields,
   withExpectedFreezeField,
-} from '../modules/produccion/cycleTiming'
+} from '../modules/produccion/cycleTiming.js'
 import {
   buildPtReceptionFromHarvest,
   resolvePackedProductFromHarvest,
@@ -162,6 +162,26 @@ function buildJsonRpcPayload(params) {
     method: 'call',
     params,
     id: Date.now(),
+  }
+}
+
+function extractErrorDetails(payload, status = 0) {
+  const code = String(
+    payload?.error?.data?.code
+      || payload?.error?.code
+      || payload?.code
+      || 'http_error'
+  )
+  const message =
+    payload?.error?.data?.message
+    || payload?.error?.message
+    || payload?.message
+    || payload?.error
+    || `http_${status || 0}`
+
+  return {
+    code,
+    message: String(message),
   }
 }
 
@@ -371,8 +391,8 @@ async function odooJson(path, params = {}) {
   }
 
   if (!res.ok) {
-    const message = json?.error?.message || json?.message || `http_${res.status}`
-    throw new Error(message)
+    const { message, code } = extractErrorDetails(json, res.status)
+    throw new ApiError(message, { status: res.status, code })
   }
 
   return json?.result !== undefined ? json.result : json
@@ -403,8 +423,8 @@ async function odooHttp(method, path, query = {}, body) {
   }
 
   if (!res.ok) {
-    const message = json?.error?.message || json?.message || `http_${res.status}`
-    throw new Error(message)
+    const { message, code } = extractErrorDetails(json, res.status)
+    throw new ApiError(message, { status: res.status, code })
   }
 
   return json
@@ -3157,6 +3177,63 @@ async function directProduction(method, path, body) {
     return envelope?.data ?? envelope
   }
 
+  if (cleanPath === '/api/production/materials/dispatch-config' && method === 'GET') {
+    const warehouseId = Number(query.get('warehouse_id') || 0) || getWarehouseId() || undefined
+    return odooHttp('GET', '/api/production/materials/dispatch-config', warehouseId ? {
+      warehouse_id: warehouseId,
+    } : {})
+  }
+
+  if (cleanPath === '/api/production/materials/dispatch-transfer' && method === 'POST') {
+    return odooHttp('POST', '/api/production/materials/dispatch-transfer', {}, {
+      warehouse_id: Number(body?.warehouse_id || 0) || undefined,
+      destination_key: body?.destination_key || '',
+      worker_employee_id: Number(body?.worker_employee_id || 0) || undefined,
+      material_id: Number(body?.material_id || 0) || undefined,
+      qty_issued: Number(body?.qty_issued || 0),
+      issued_by: Number(body?.issued_by || getEmployeeId() || 0) || undefined,
+      notes: body?.notes ? String(body.notes) : undefined,
+    })
+  }
+
+  if (cleanPath === '/api/production/bags/custody/pending' && method === 'GET') {
+    return odooHttp('GET', '/api/production/bags/custody/pending', {
+      warehouse_id: Number(query.get('warehouse_id') || 0) || getWarehouseId() || undefined,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role: query.get('role') || undefined,
+    })
+  }
+
+  if (cleanPath === '/api/production/bags/custody/issue' && method === 'POST') {
+    return odooHttp('POST', '/api/production/bags/custody/issue', {}, {
+      warehouse_id: Number(body?.warehouse_id || 0) || undefined,
+      destination_key: body?.destination_key || '',
+      worker_employee_id: Number(body?.worker_employee_id || 0) || undefined,
+      bags_issued: Number(body?.bags_issued || 0),
+      bag_unit_cost: Number(body?.bag_unit_cost || 0),
+      issued_by: Number(body?.issued_by || getEmployeeId() || 0) || undefined,
+      notes: body?.notes ? String(body.notes) : undefined,
+    })
+  }
+
+  if (cleanPath === '/api/production/bags/custody/declare' && method === 'POST') {
+    return odooHttp('POST', '/api/production/bags/custody/declare', {}, {
+      custody_id: Number(body?.custody_id || 0) || undefined,
+      bags_declared_by_worker: Number(body?.bags_declared_by_worker || 0),
+      employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
+      notes: body?.notes ? String(body.notes) : undefined,
+    })
+  }
+
+  if (cleanPath === '/api/production/bags/custody/validate' && method === 'POST') {
+    return odooHttp('POST', '/api/production/bags/custody/validate', {}, {
+      custody_id: Number(body?.custody_id || 0) || undefined,
+      bags_validated_by_manager: Number(body?.bags_validated_by_manager || 0),
+      employee_id: Number(body?.employee_id || getEmployeeId() || 0) || undefined,
+      notes: body?.notes ? String(body.notes) : undefined,
+    })
+  }
+
   // ── Machines: catalogo de maquinas de produccion ───────────────────────────
   // CONTRATO CANONICO (Odoo controller real):
   //   GET /api/production/machines?plant_id=N
@@ -5514,7 +5591,8 @@ export async function api(method, path, body) {
       throw new ApiError('no_session', { status: 401, code: 'no_session' })
     }
     const err = await res.json().catch(() => ({}))
-    throw new ApiError(err.message || `http_${res.status}`, { status: res.status, code: 'http_error' })
+    const { message, code } = extractErrorDetails(err, res.status)
+    throw new ApiError(message, { status: res.status, code })
   }
 
   const json = await res.json()
