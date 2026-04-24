@@ -13,6 +13,7 @@ import {
   getPendingPtTransfers,
   createTransfer,
   getPendingTransferReservationMap,
+  getDaySummary,
   logTransferLocal,
   getTodayTransfers,
   fmtNum,
@@ -37,6 +38,7 @@ export default function ScreenTraspasoPT() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [blockedByHandover, setBlockedByHandover] = useState(false)
 
   // Form: lines to transfer
   const [lines, setLines] = useState([])
@@ -52,6 +54,10 @@ export default function ScreenTraspasoPT() {
         getEntregasDestination().catch((e) => { logScreenError('ScreenTraspasoPT', 'getEntregasDestination', e); return null }),
         getTodayTransfers(warehouseId).catch((e) => { logScreenError('ScreenTraspasoPT', 'getTodayTransfers', e); return [] }),
       ])
+      const summary = await getDaySummary(warehouseId).catch((e) => {
+        logScreenError('ScreenTraspasoPT', 'getDaySummary', e)
+        return null
+      })
       // El BFF ya dedup + filtra MP + excluye stock ≤ 0. La pantalla solo
       // consume la lista plana.
       setInventory(Array.isArray(inv) ? inv : [])
@@ -61,6 +67,7 @@ export default function ScreenTraspasoPT() {
         warehouseId,
         destinationWarehouseId: destinationInfo?.id,
       }))
+      setBlockedByHandover(Boolean(summary?.pt_blocked_by_handover))
       if (!inv.length) {
         setError('No hay inventario disponible para traspasar.')
       } else if (!destinationInfo?.id) {
@@ -87,6 +94,10 @@ export default function ScreenTraspasoPT() {
   }
 
   function addLine(item) {
+    if (blockedByHandover) {
+      setError('PT cerrado por relevo pendiente. Acepta el turno para continuar.')
+      return
+    }
     const existing = lines.find(l => l.product_id === (item.product_id || item.id))
     if (existing) return
     const currentReserved = Number(reservationMap[item.product_id || item.id] || 0)
@@ -184,7 +195,7 @@ export default function ScreenTraspasoPT() {
     }
   }
 
-  const canSave = destination?.id && lines.some(l => Number(l.qty) > 0) && !saving
+  const canSave = destination?.id && lines.some(l => Number(l.qty) > 0) && !saving && !blockedByHandover
   const inventoryView = useMemo(() => (
     inventory.map((item) => {
       const productId = item.product_id || item.id
@@ -363,7 +374,7 @@ export default function ScreenTraspasoPT() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>
-                      {lines.filter(l => Number(l.qty) > 0).length} productos -> {selectedCedisObj?.name}
+                      {lines.filter(l => Number(l.qty) > 0).length} productos {'->'} {selectedCedisObj?.name}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -375,6 +386,21 @@ export default function ScreenTraspasoPT() {
             )}
 
             {/* Error / Success */}
+            {blockedByHandover && (
+              <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.30)', color: TOKENS.colors.textSoft }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>PT cerrado por relevo pendiente</p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+                  El traspaso a CEDIS queda bloqueado hasta aceptar el relevo de PT.
+                </p>
+                <button onClick={() => navigate('/almacen-pt/handover')} style={{
+                  marginTop: 10, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
+                  background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.32)',
+                  color: TOKENS.colors.error, fontSize: 13, fontWeight: 700,
+                }}>
+                  Ir a relevo PT
+                </button>
+              </div>
+            )}
             {error && <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: TOKENS.colors.error, fontSize: 13, textAlign: 'center' }}>{error}</div>}
             {success && <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', fontWeight: 600 }}>{success}</div>}
 

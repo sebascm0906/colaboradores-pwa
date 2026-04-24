@@ -22,6 +22,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api } from '../../lib/api'
+import {
+  derivePtBlockState,
+  normalizePendingPtHandover,
+  translatePtBlockedError,
+} from './ptHandoverState'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -34,6 +39,11 @@ export const ENTREGAS_DESTINATION_COMPANY = 'SOLUCIONES EN PRODUCCION GLACIEM'
 
 /** FIFO thresholds (days) */
 export const FIFO_THRESHOLDS = { ok: 3, warn: 7 }
+
+function toReadablePtError(error) {
+  const message = error?.message || String(error || '')
+  return translatePtBlockedError(message)
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Inventory (stock.quant)  — BFF canonical single source of truth
@@ -314,6 +324,16 @@ export async function getDaySummary(warehouseId = DEFAULT_WAREHOUSE_ID) {
   const handoverPending = backendSummary?.shift_handover_pending != null
     ? Boolean(backendSummary.shift_handover_pending)
     : handoverCount > 0
+  const blockState = derivePtBlockState({
+    summary: backendSummary || {},
+    handover: handoverPending ? normalizePendingPtHandover({
+      id: backendSummary?.shift_handover_id || null,
+      warehouse_blocked: backendSummary?.pt_blocked_by_handover,
+      required_after_supervisor_close: backendSummary?.shift_handover_required_after_close,
+      count_submitted: backendSummary?.count_submitted,
+      source_shift_id: backendSummary?.source_shift_id || null,
+    }) : null,
+  })
 
   return {
     date: backendSummary?.date || new Date().toISOString().slice(0, 10),
@@ -335,7 +355,13 @@ export async function getDaySummary(warehouseId = DEFAULT_WAREHOUSE_ID) {
     transformed_kg_total: Number(backendSummary?.transformed_kg_total || 0),
     shift_count: Number(backendSummary?.shift_count || 0),
     shift_handover_pending: handoverPending,
+    shift_handover_required_after_close: Boolean(
+      backendSummary?.shift_handover_required_after_close
+        ?? backendSummary?.required_after_supervisor_close
+    ),
     shift_handover_id: backendSummary?.shift_handover_id || null,
+    pt_blocked_by_handover: blockState.blocked,
+    pt_block_reason: blockState.reason,
     backend_summary: backendSummary || null,
     // Propaga el origen del inventario (live|cache-fresh|cache-stale|error)
     // para que el hub pueda mostrar un badge "datos en cache" si aplica.
@@ -450,15 +476,19 @@ export function getAllReceptionsLocal() {
  * @param {string} [transfer.notes]
  */
 export async function createTransfer(transfer) {
-  const result = await api('POST', '/pwa-pt/transfer-orchestrate', {
-    warehouse_id: transfer.warehouse_id,
-    cedis_id: transfer.cedis_id,
-    destination_warehouse_id: transfer.destination_warehouse_id || transfer.cedis_id,
-    employee_id: transfer.employee_id,
-    lines: transfer.lines || [],
-    notes: transfer.notes || '',
-  })
-  return result?.data || result
+  try {
+    const result = await api('POST', '/pwa-pt/transfer-orchestrate', {
+      warehouse_id: transfer.warehouse_id,
+      cedis_id: transfer.cedis_id,
+      destination_warehouse_id: transfer.destination_warehouse_id || transfer.cedis_id,
+      employee_id: transfer.employee_id,
+      lines: transfer.lines || [],
+      notes: transfer.notes || '',
+    })
+    return result?.data || result
+  } catch (error) {
+    throw new Error(toReadablePtError(error))
+  }
 }
 
 /**
@@ -622,12 +652,14 @@ export async function getDaySales({ warehouseId = DEFAULT_WAREHOUSE_ID, date } =
  * Create shift handover (outgoing almacenista declares inventory).
  * Uses the same shift_handover endpoint as entregas, scoped by warehouse_id.
  */
-export async function createShiftHandover(warehouseId, employeeId, lines, notes) {
+export async function createShiftHandover(warehouseId, employeeId, lines, notes, options = {}) {
   const result = await api('POST', '/pwa-pt/shift-handover-create', {
     warehouse_id: warehouseId,
     employee_id: employeeId,
     lines: lines || [],
     notes: notes || '',
+    handover_id: options?.handover_id || undefined,
+    required_after_supervisor_close: options?.required_after_supervisor_close || undefined,
   })
   return result?.data || result
 }
@@ -640,8 +672,9 @@ export async function getPendingHandover(warehouseId) {
   try {
     const result = await api('GET', `/pwa-pt/shift-handover-pending?warehouse_id=${warehouseId}`)
     const payload = result?.data || result
-    if (!payload || Array.isArray(payload) && payload.length === 0) return null
-    return payload
+    const handover = payload?.handover || payload
+    if (!handover || Array.isArray(handover) && handover.length === 0) return null
+    return normalizePendingPtHandover(handover)
   } catch {
     return null
   }
@@ -714,22 +747,26 @@ export async function getPendingReceptions(warehouseId) {
  *     difference?, difference_pct?, notes?, employee_id?, warehouse_id?, lines? }
  */
 export async function confirmReception(data = {}) {
-  const result = await api('POST', '/pwa-pt/reception-create', {
-    warehouse_id: data.warehouse_id || DEFAULT_WAREHOUSE_ID,
-    employee_id: data.employee_id,
-    shift_id: data.shift_id,
-    packing_entry_id: data.packing_entry_id,
-    packing_entry_ids: Array.isArray(data.packing_entry_ids) ? data.packing_entry_ids : undefined,
-    product_id: data.product_id,
-    qty_reported: data.qty_reported,
-    qty_received: data.qty_received,
-    difference: data.difference,
-    difference_pct: data.difference_pct,
-    notes: data.notes || '',
-    lines: data.lines,
-    received_lines: Array.isArray(data.received_lines) ? data.received_lines : undefined,
-  })
-  return result?.data || result
+  try {
+    const result = await api('POST', '/pwa-pt/reception-create', {
+      warehouse_id: data.warehouse_id || DEFAULT_WAREHOUSE_ID,
+      employee_id: data.employee_id,
+      shift_id: data.shift_id,
+      packing_entry_id: data.packing_entry_id,
+      packing_entry_ids: Array.isArray(data.packing_entry_ids) ? data.packing_entry_ids : undefined,
+      product_id: data.product_id,
+      qty_reported: data.qty_reported,
+      qty_received: data.qty_received,
+      difference: data.difference,
+      difference_pct: data.difference_pct,
+      notes: data.notes || '',
+      lines: data.lines,
+      received_lines: Array.isArray(data.received_lines) ? data.received_lines : undefined,
+    })
+    return result?.data || result
+  } catch (error) {
+    throw new Error(toReadablePtError(error))
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -760,16 +797,20 @@ export async function getPendingTransformations(warehouseId) {
  *   { from_product_id, to_product_id, qty, notes?, employee_id?, warehouse_id?, lines? }
  */
 export async function createTransformation(data = {}) {
-  const result = await api('POST', '/pwa-pt/transformation-create', {
-    warehouse_id: data.warehouse_id || DEFAULT_WAREHOUSE_ID,
-    employee_id: data.employee_id,
-    from_product_id: data.from_product_id,
-    to_product_id: data.to_product_id,
-    qty: data.qty,
-    notes: data.notes || '',
-    lines: data.lines,
-  })
-  return result?.data || result
+  try {
+    const result = await api('POST', '/pwa-pt/transformation-create', {
+      warehouse_id: data.warehouse_id || DEFAULT_WAREHOUSE_ID,
+      employee_id: data.employee_id,
+      from_product_id: data.from_product_id,
+      to_product_id: data.to_product_id,
+      qty: data.qty,
+      notes: data.notes || '',
+      lines: data.lines,
+    })
+    return result?.data || result
+  } catch (error) {
+    throw new Error(toReadablePtError(error))
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -781,15 +822,19 @@ export async function createTransformation(data = {}) {
  * Reuses the entregas warehouse_scrap endpoint (scoped by warehouse_id).
  */
 export async function createScrap(warehouseId, employeeId, productId, qty, reasonTag, notes) {
-  const result = await api('POST', '/pwa-pt/scrap-create', {
-    warehouse_id: warehouseId,
-    employee_id: employeeId,
-    product_id: productId,
-    scrap_qty: qty,
-    reason_tag: reasonTag || '',
-    notes: notes || '',
-  })
-  return result?.data || result
+  try {
+    const result = await api('POST', '/pwa-pt/scrap-create', {
+      warehouse_id: warehouseId,
+      employee_id: employeeId,
+      product_id: productId,
+      scrap_qty: qty,
+      reason_tag: reasonTag || '',
+      notes: notes || '',
+    })
+    return result?.data || result
+  } catch (error) {
+    throw new Error(toReadablePtError(error))
+  }
 }
 
 /**

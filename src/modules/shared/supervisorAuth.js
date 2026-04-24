@@ -47,7 +47,7 @@ export async function validateSupervisorPin(pin, employeeId) {
  * No hay cadena de fallback — si falla, el error se propaga.
  *
  * @param {object} payload — { shift_id }
- * @returns {Promise<{ok: boolean, warnings?: string[], error?: string}>}
+ * @returns {Promise<{ok: boolean, warnings?: string[], pt_handover_created?: boolean, pt_handover_id?: number|null, pt_status?: string|null, pt_blocked?: boolean, data?: object, error?: string}>}
  */
 export async function closeShiftServerSide(payload) {
   if (!payload?.shift_id) {
@@ -57,7 +57,15 @@ export async function closeShiftServerSide(payload) {
   try {
     const result = await api('POST', '/pwa-prod/shift-close', { shift_id: payload.shift_id })
     if (result && !result.error) {
-      return { ok: true, warnings: result.warnings || [] }
+      return {
+        ok: true,
+        warnings: result.warnings || [],
+        pt_handover_created: Boolean(result?.pt_handover_created),
+        pt_handover_id: result?.pt_handover_id || null,
+        pt_status: result?.pt_status || null,
+        pt_blocked: Boolean(result?.pt_blocked),
+        data: result,
+      }
     }
     return { ok: false, error: translateError(result?.error) }
   } catch (e) {

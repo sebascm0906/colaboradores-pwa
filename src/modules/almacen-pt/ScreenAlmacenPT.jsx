@@ -50,7 +50,18 @@ export default function ScreenAlmacenPT() {
 
   const todayReceptions = getTodayReceptionsLocal()
   const todayTransfers = getTodayTransfersLocal()
-  const next = summary ? getNextAction(summary) : null
+  const ptBlockedByHandover = Boolean(summary?.pt_blocked_by_handover)
+  const next = summary
+    ? ptBlockedByHandover
+      ? {
+          action: 'handover',
+          label: 'Resolver relevo de PT',
+          route: '/almacen-pt/handover',
+          color: TOKENS.colors.error,
+          count: summary?.shift_handover_pending ? 1 : 0,
+        }
+      : getNextAction(summary)
+    : null
 
   const ACTIONS = [
     {
@@ -83,9 +94,13 @@ export default function ScreenAlmacenPT() {
     },
     {
       id: 'handover', label: 'Entrega de turno',
-      desc: summary?.shift_handover_pending ? 'Turno pendiente de aceptar' : 'Entregar o aceptar turno',
+      desc: ptBlockedByHandover
+        ? 'PT cerrado por relevo pendiente'
+        : summary?.shift_handover_pending
+          ? 'Turno pendiente de aceptar'
+          : 'Entregar o aceptar turno',
       route: '/almacen-pt/handover',
-      color: summary?.shift_handover_pending ? TOKENS.colors.error : TOKENS.colors.blue3,
+      color: ptBlockedByHandover || summary?.shift_handover_pending ? TOKENS.colors.error : TOKENS.colors.blue3,
       icon: 'clock',
     },
     {
@@ -181,7 +196,7 @@ export default function ScreenAlmacenPT() {
         ) : (
           <>
             {/* Handover pending banner */}
-            {summary?.shift_handover_pending && (
+            {(summary?.shift_handover_pending || ptBlockedByHandover) && (
               <button
                 onClick={() => navigate('/almacen-pt/handover')}
                 style={{
@@ -204,8 +219,14 @@ export default function ScreenAlmacenPT() {
                   </svg>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ ...typo.title, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>Turno pendiente de aceptar</p>
-                  <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, marginTop: 2 }}>Revisa y confirma la entrega del turno anterior</p>
+                  <p style={{ ...typo.title, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+                    {ptBlockedByHandover ? 'PT cerrado por relevo pendiente' : 'Turno pendiente de aceptar'}
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, marginTop: 2 }}>
+                    {ptBlockedByHandover
+                      ? 'Captura o acepta el conteo para reabrir PT'
+                      : 'Revisa y confirma la entrega del turno anterior'}
+                  </p>
                 </div>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.error} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
               </button>
@@ -213,7 +234,7 @@ export default function ScreenAlmacenPT() {
 
             {/* KPI Cards */}
             <div style={{
-              marginTop: summary?.shift_handover_pending ? 12 : 8, padding: 16, borderRadius: TOKENS.radius.xl,
+              marginTop: (summary?.shift_handover_pending || ptBlockedByHandover) ? 12 : 8, padding: 16, borderRadius: TOKENS.radius.xl,
               background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
               boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
               display: 'flex', gap: 8,

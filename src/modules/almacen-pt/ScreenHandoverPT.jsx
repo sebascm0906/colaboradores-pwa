@@ -41,6 +41,10 @@ export default function ScreenHandoverPT() {
   const [entregarLines, setEntregarLines] = useState([])
   const [entregarNotes, setEntregarNotes] = useState('')
 
+  const isRequiredPostClose = Boolean(handover?.required_after_supervisor_close)
+  const countSubmitted = Boolean(handover?.count_submitted)
+  const warehouseBlocked = Boolean(handover?.warehouse_blocked)
+
   const loadData = useCallback(async () => {
     setLoadingInit(true)
     setError('')
@@ -56,7 +60,9 @@ export default function ScreenHandoverPT() {
       setHandover(handoverData)
 
       if (handoverData) {
-        setMode(MODES.ACEPTAR)
+        const requiredPostClose = Boolean(handoverData?.required_after_supervisor_close)
+        const submitted = Boolean(handoverData?.count_submitted)
+        setMode(requiredPostClose && !submitted ? MODES.ENTREGAR : MODES.ACEPTAR)
         setAcceptLines((handoverData.lines || []).map(line => ({
           ...line,
           product: line.product || line.product_id?.[1] || '',
@@ -68,6 +74,7 @@ export default function ScreenHandoverPT() {
         })))
       } else {
         setMode(MODES.ENTREGAR)
+        setAcceptLines([])
       }
 
       // Inventory → entregar lines. El BFF ya dedup por product_id y excluye
@@ -150,9 +157,17 @@ export default function ScreenHandoverPT() {
             qty_declared: l.qty_declared,
             note: l.note || undefined,
           })),
-          entregarNotes.trim() || undefined
+          entregarNotes.trim() || undefined,
+          handover?.id ? {
+            handover_id: handover.id,
+            required_after_supervisor_close: isRequiredPostClose,
+          } : undefined
         )
-        setSuccess('Turno entregado correctamente')
+        setSuccess(
+          isRequiredPostClose
+            ? 'Conteo PT entregado. Queda pendiente la aceptación del siguiente almacenista.'
+            : 'Turno entregado correctamente'
+        )
       } else {
         const actionStr = confirmAction === 'reject' ? 'reject' : 'accept'
         await acceptShiftHandover(
@@ -182,7 +197,10 @@ export default function ScreenHandoverPT() {
 
   function getConfirmMessage() {
     switch (confirmAction) {
-      case 'entregar': return `¿Entregar turno con ${entregarLines.length} productos${entregarDiffCount > 0 ? ` (${entregarDiffCount} con diferencia)` : ''}?`
+      case 'entregar':
+        return isRequiredPostClose
+          ? `¿Confirmar conteo total de PT con ${entregarLines.length} productos${entregarDiffCount > 0 ? ` (${entregarDiffCount} con diferencia)` : ''}?`
+          : `¿Entregar turno con ${entregarLines.length} productos${entregarDiffCount > 0 ? ` (${entregarDiffCount} con diferencia)` : ''}?`
       case 'accept': return '¿Aceptar turno conforme?'
       case 'accept_diff': return `¿Aceptar turno con ${acceptDiffCount} diferencia(s)?`
       case 'reject': return '¿Disputar la entrega de turno?'
@@ -206,17 +224,28 @@ export default function ScreenHandoverPT() {
           { key: MODES.ENTREGAR, label: 'Entregar turno', badge: 0 },
         ].map(tab => {
           const active = mode === tab.key
+          const disabled = isRequiredPostClose
+            ? (!countSubmitted && tab.key === MODES.ACEPTAR) || (countSubmitted && tab.key === MODES.ENTREGAR)
+            : false
           return (
             <button
               key={tab.key}
-              onClick={() => { setMode(tab.key); setHasScrolledBottom(false); setError(''); setSuccess('') }}
+              onClick={() => {
+                if (disabled) return
+                setMode(tab.key)
+                setHasScrolledBottom(false)
+                setError('')
+                setSuccess('')
+              }}
+              disabled={disabled}
               style={{
                 flex: 1, padding: '12px 0', fontSize: 13, fontWeight: 600,
-                color: active ? TOKENS.colors.text : TOKENS.colors.textMuted,
+                color: disabled ? TOKENS.colors.textLow : active ? TOKENS.colors.text : TOKENS.colors.textMuted,
                 background: active ? 'rgba(43,143,224,0.12)' : TOKENS.colors.surfaceSoft,
                 borderBottom: active ? `2px solid ${TOKENS.colors.blue2}` : '2px solid transparent',
                 transition: `all ${TOKENS.motion.fast}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: disabled ? 0.55 : 1,
               }}
             >
               {tab.label}
@@ -243,6 +272,24 @@ export default function ScreenHandoverPT() {
       {success && (
         <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
           {success}
+        </div>
+      )}
+      {isRequiredPostClose && (
+        <div style={{
+          padding: 14,
+          borderRadius: TOKENS.radius.lg,
+          background: warehouseBlocked ? 'rgba(239,68,68,0.10)' : 'rgba(43,143,224,0.10)',
+          border: `1px solid ${warehouseBlocked ? 'rgba(239,68,68,0.35)' : TOKENS.colors.borderBlue}`,
+          marginBottom: 14,
+        }}>
+          <p style={{ ...typo.body, color: warehouseBlocked ? TOKENS.colors.error : TOKENS.colors.blue2, margin: 0, fontWeight: 700 }}>
+            {countSubmitted ? 'PT cerrado por relevo pendiente de aceptación' : 'Conteo total obligatorio de PT'}
+          </p>
+          <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+            {countSubmitted
+              ? 'Otro almacenista PT debe aceptar este relevo para reabrir movimientos.'
+              : 'Este handover fue generado por el cierre del supervisor. Captura el conteo total para dejarlo listo para aceptación.'}
+          </p>
         </div>
       )}
 
@@ -273,6 +320,11 @@ export default function ScreenHandoverPT() {
                     <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
                       {handover.name ? `${handover.name} · ` : ''}{handover.submitted_at || handover.create_date || handover.date || ''}
                     </p>
+                    {handover.source_shift_id && (
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                        Turno supervisor origen: #{handover.source_shift_id}
+                      </p>
+                    )}
                     {handover.notes_out && (
                       <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '6px 0 0', fontStyle: 'italic' }}>
                         "{handover.notes_out}"
@@ -405,10 +457,22 @@ export default function ScreenHandoverPT() {
             <>
               {entregarLines.length === 0 ? (
                 <div style={{ padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center', marginTop: 20 }}>
-                  <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>Sin inventario para entregar</p>
+                  <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>
+                    {isRequiredPostClose ? 'No hay inventario PT disponible para el conteo' : 'Sin inventario para entregar'}
+                  </p>
                 </div>
               ) : (
                 <>
+                  {isRequiredPostClose && (
+                    <div style={{ padding: 14, borderRadius: TOKENS.radius.lg, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.28)', marginBottom: 14 }}>
+                      <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: 0, fontWeight: 700 }}>
+                        Captura obligatoria antes de reabrir PT
+                      </p>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+                        Revisa todas las líneas del inventario. Si hay diferencias mayores al 5%, agrega nota.
+                      </p>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                     {entregarLines.map((line, i) => {
                       const diff = line.qty_declared - line.qty_system
@@ -506,7 +570,7 @@ export default function ScreenHandoverPT() {
                       boxShadow: canSubmitEntregar ? '0 10px 24px rgba(43,143,224,0.25)' : 'none',
                     }}
                   >
-                    {submitting ? 'Procesando...' : 'Entregar Turno'}
+                    {submitting ? 'Procesando...' : isRequiredPostClose ? 'Confirmar Conteo Total' : 'Entregar Turno'}
                   </button>
 
                   {!hasScrolledBottom && entregarLines.length > 3 && (

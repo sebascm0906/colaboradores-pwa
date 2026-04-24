@@ -20,6 +20,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import {
   getPendingReceptions,
   confirmReception,
+  getDaySummary,
   saveReceptionLocal,
   getTodayReceptionsLocal,
   fmtNum,
@@ -205,6 +206,7 @@ export default function ScreenRecepcion() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [blockedByHandover, setBlockedByHandover] = useState(false)
 
   // Selection
   const [selected, setSelected] = useState(null) // normalized pending row
@@ -218,11 +220,15 @@ export default function ScreenRecepcion() {
     setLoading(true)
     setError('')
     try {
-      const result = await getPendingReceptions(warehouseId)
+      const [result, summary] = await Promise.all([
+        getPendingReceptions(warehouseId),
+        getDaySummary(warehouseId).catch(() => null),
+      ])
       setPending({
         pending_posting: Array.isArray(result?.pending_posting) ? result.pending_posting : [],
         pending_receipt: Array.isArray(result?.pending_receipt) ? result.pending_receipt : [],
       })
+      setBlockedByHandover(Boolean(summary?.pt_blocked_by_handover))
     } catch (e) {
       logScreenError('ScreenRecepcion', 'loadData', e)
       setError('No se pudieron cargar los pendientes. Intenta recargar.')
@@ -246,6 +252,10 @@ export default function ScreenRecepcion() {
   const todayReceptions = getTodayReceptionsLocal()
 
   function startCapture(row) {
+    if (blockedByHandover) {
+      setError('PT cerrado por relevo pendiente. Acepta el turno para continuar.')
+      return
+    }
     setSelected(row)
     setQtyReceived(row.qty_pending > 0 ? String(row.qty_pending) : '')
     setNotes('')
@@ -259,7 +269,7 @@ export default function ScreenRecepcion() {
     setNotes('')
   }
 
-  const canSave = selected && num(qtyReceived) > 0 && !saving
+  const canSave = selected && num(qtyReceived) > 0 && !saving && !blockedByHandover
 
   async function handleSave() {
     if (!canSave) return
@@ -349,6 +359,37 @@ export default function ScreenRecepcion() {
         {error && (
           <div style={errorBox}>
             <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
+          </div>
+        )}
+        {blockedByHandover && (
+          <div style={{
+            padding: 12,
+            borderRadius: TOKENS.radius.md,
+            background: 'rgba(239,68,68,0.10)',
+            border: '1px solid rgba(239,68,68,0.30)',
+            marginBottom: 12,
+          }}>
+            <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+              PT cerrado por relevo pendiente
+            </p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+              La recepción queda bloqueada hasta aceptar el turno de PT.
+            </p>
+            <button
+              onClick={() => navigate('/almacen-pt/handover')}
+              style={{
+                marginTop: 10,
+                padding: '10px 12px',
+                borderRadius: TOKENS.radius.sm,
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.32)',
+                color: TOKENS.colors.error,
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              Ir a relevo PT
+            </button>
           </div>
         )}
         {success && (

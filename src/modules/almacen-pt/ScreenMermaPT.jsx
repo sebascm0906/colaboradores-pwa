@@ -3,12 +3,14 @@
 // Endpoint: /gf/logistics/api/employee/warehouse_scrap/create con warehouse_id PT.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import {
   getInventory,
   getScrapHistory,
   createScrap,
+  getDaySummary,
   DEFAULT_WAREHOUSE_ID,
 } from './ptService'
 import { ScreenShell, ConfirmDialog } from '../entregas/components'
@@ -31,6 +33,7 @@ const PT_REASONS = [
 
 export default function ScreenMermaPT() {
   const { session } = useSession()
+  const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
@@ -53,6 +56,7 @@ export default function ScreenMermaPT() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [validationErrors, setValidationErrors] = useState({})
+  const [blockedByHandover, setBlockedByHandover] = useState(false)
 
   // Voice context (PoC Batch B+): ultimo envelope W120 para feedback a W122.
   const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
@@ -67,6 +71,10 @@ export default function ScreenMermaPT() {
         getInventory(warehouseId),
         getScrapHistory(warehouseId),
       ])
+      const summary = await getDaySummary(warehouseId).catch((e) => {
+        logScreenError('ScreenMermaPT', 'getDaySummary', e)
+        return null
+      })
       if (inv.status === 'rejected') logScreenError('ScreenMermaPT', 'getInventory', inv.reason)
       if (hist.status === 'rejected') logScreenError('ScreenMermaPT', 'getScrapHistory', hist.reason)
       // Inventario ya deduplicado + MP filtrado por el BFF canonico.
@@ -79,6 +87,7 @@ export default function ScreenMermaPT() {
         total_kg: Number(item.total_kg) || 0,
       })))
       setHistory(hist.status === 'fulfilled' && Array.isArray(hist.value) ? hist.value : [])
+      setBlockedByHandover(Boolean(summary?.pt_blocked_by_handover))
     } catch (e) { logScreenError('ScreenMermaPT', 'loadData', e) }
     finally { setLoadingInit(false) }
   }
@@ -115,6 +124,10 @@ export default function ScreenMermaPT() {
   }
 
   function handleOpenConfirm() {
+    if (blockedByHandover) {
+      setError('PT cerrado por relevo pendiente. Acepta el turno para continuar.')
+      return
+    }
     if (!validate()) return
     setConfirmOpen(true)
   }
@@ -274,6 +287,21 @@ export default function ScreenMermaPT() {
           {success && (
             <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.successSoft, border: '1px solid rgba(34,197,94,0.25)', color: TOKENS.colors.success, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
               {success}
+            </div>
+          )}
+          {blockedByHandover && (
+            <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.30)', marginBottom: 12 }}>
+              <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>PT cerrado por relevo pendiente</p>
+              <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: '4px 0 0' }}>
+                La merma queda bloqueada hasta aceptar el relevo de PT.
+              </p>
+              <button onClick={() => navigate('/almacen-pt/handover')} style={{
+                marginTop: 10, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
+                background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.32)',
+                color: TOKENS.colors.error, fontSize: 13, fontWeight: 700,
+              }}>
+                Ir a relevo PT
+              </button>
             </div>
           )}
 
@@ -440,12 +468,12 @@ export default function ScreenMermaPT() {
 
             <button
               onClick={handleOpenConfirm}
-              disabled={submitting}
+              disabled={submitting || blockedByHandover}
               style={{
                 width: '100%', padding: 14, borderRadius: TOKENS.radius.lg,
-                background: 'linear-gradient(90deg, #f59e0b, #d97706)', color: 'white',
+                background: blockedByHandover ? TOKENS.colors.surface : 'linear-gradient(90deg, #f59e0b, #d97706)', color: blockedByHandover ? TOKENS.colors.textLow : 'white',
                 fontSize: 15, fontWeight: 600, opacity: submitting ? 0.6 : 1,
-                boxShadow: '0 10px 24px rgba(245,158,11,0.25)',
+                boxShadow: blockedByHandover ? 'none' : '0 10px 24px rgba(245,158,11,0.25)',
               }}
             >
               {submitting ? 'Registrando...' : 'Registrar Merma'}
