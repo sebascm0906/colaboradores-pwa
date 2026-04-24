@@ -83,6 +83,10 @@ export const BACKEND_CAPS = {
   inactiveCustomers: true,
   // Catálogo de incidentes de ruta
   teamIncidents: true,
+  // Flujo de aprobación de requisiciones (approve/reject por monto)
+  requisitionApproval: false,
+  // Monto > threshold requiere aprobación de gerente/director
+  requisitionApprovalThreshold: 5000,
 }
 
 /** Aplica en runtime la respuesta de GET /pwa-admin/capabilities.

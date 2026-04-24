@@ -169,6 +169,16 @@ export function cancelRequisition(id) {
   return api('POST', '/pwa-admin/requisition-cancel', { id })
 }
 
+/** Aprueba una requisición pendiente (requiere rol gerente/director). */
+export function approveRequisition(id) {
+  return api('POST', '/pwa-admin/requisition-approve', { id })
+}
+
+/** Rechaza una requisición pendiente o aprobada con motivo obligatorio. */
+export function rejectRequisition(id, reason) {
+  return api('POST', '/pwa-admin/requisition-reject', { id, reason })
+}
+
 // ── Cierre de Caja ───────────────────────────────────────────────────────────
 
 /** Resumen del día (ventas, gastos, neto) — read-only */

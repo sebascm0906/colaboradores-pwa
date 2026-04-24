@@ -24,7 +24,7 @@ export default function ScreenRequisiciones() {
 
   return (
     <AdminProvider>
-      <AdminShell activeBlock="requisiciones" title="Requisiciones">
+      <AdminShell activeBlock="requisiciones" title="Requisiciones" hideActivityFeed>
         <AdminRequisicionForm />
       </AdminShell>
     </AdminProvider>

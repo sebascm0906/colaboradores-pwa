@@ -58,6 +58,7 @@ export default function AdminShell({
   title = 'Administración de sucursal',
   children,
   onBack,
+  hideActivityFeed = false,
 }) {
   const navigate = useNavigate()
   const { sucursal, employeeName } = useAdmin()
@@ -160,7 +161,7 @@ export default function AdminShell({
       {isDesktop ? (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '220px 1fr 320px',
+          gridTemplateColumns: hideActivityFeed ? '220px 1fr' : '220px 1fr 320px',
           minHeight: 'calc(100dvh - 68px)',
         }}>
           {/* Sidebar izquierda */}
@@ -225,8 +226,8 @@ export default function AdminShell({
             {children}
           </main>
 
-          {/* Feed derecho */}
-          <ActivityFeed />
+          {/* Feed derecho — oculto en vistas que lo desactivan (ej: Requisiciones) */}
+          {!hideActivityFeed && <ActivityFeed />}
         </div>
       ) : (
         // Mobile fallback — columna simple
