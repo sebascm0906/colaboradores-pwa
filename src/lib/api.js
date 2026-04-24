@@ -1160,14 +1160,30 @@ async function directAdmin(method, path, body) {
     if (dateFrom) domain.push(['date_order', '>=', dateFrom])
     if (dateTo) domain.push(['date_order', '<=', `${dateTo} 23:59:59`])
     const offset = Number(query.get('offset') || 0)
-    const result = await readModelSorted('purchase.order', {
-      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at'],
+    // Intentar con campos de aprobación (requieren -u gf_pwa_admin en el servidor).
+    // Si el resultado contiene error de DB (campo no existe), reintentamos sin ellos.
+    const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line']
+    const APPROVAL_FIELDS = ['pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at']
+    let result = await readModelSorted('purchase.order', {
+      fields: [...BASE_FIELDS, ...APPROVAL_FIELDS],
       domain,
       sort_column: 'date_order',
       sort_desc: true,
       limit,
       sudo: 1,
     })
+    // readModelSorted no lanza excepción en errores de app — devuelve { error, case }
+    const hasDbError = result && typeof result === 'object' && result.error
+    if (hasDbError) {
+      result = await readModelSorted('purchase.order', {
+        fields: BASE_FIELDS,
+        domain,
+        sort_column: 'date_order',
+        sort_desc: true,
+        limit,
+        sudo: 1,
+      })
+    }
     const rows = pickListResponse(result).map((row) => ({
       purchase_order_id: row.id,
       id: row.id,
