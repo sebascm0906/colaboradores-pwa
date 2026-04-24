@@ -4,7 +4,7 @@ import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingTransfers, acceptTransfer, rejectTransfer } from './entregasService'
 import { getEntregasDestination, resolveLocalTransferByPicking } from '../almacen-pt/ptService'
-import { ScreenShell, ConfirmDialog, EmptyState } from './components'
+import { ScreenShell, EmptyState } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
 
 /* ============================================================================
@@ -84,26 +84,10 @@ export default function ScreenRecibirPT() {
     return raw || 'Error al procesar transferencia'
   }
 
-  function openAcceptDialog(picking) {
-    console.log('[PT ACCEPT] click', { pickingId: picking?.id, picking })
-    setDialog({ type: 'accept', picking })
-  }
-
-  function openRejectDialog(picking) {
-    setRejectReason('')
-    setDialog({ type: 'reject', picking })
-  }
-
-  function closeDialog() {
-    setDialog(null)
-    setRejectReason('')
-  }
-
-  async function handleAcceptConfirm() {
-    if (!dialog || dialog.type !== 'accept') return
-    const pickingId = dialog.picking.id
-    console.log('[PT ACCEPT] confirm dialog', { pickingId, picking: dialog.picking })
-    closeDialog()
+  async function handleAccept(picking) {
+    const pickingId = picking?.id
+    console.log('[PT ACCEPT] click', { pickingId, picking })
+    if (!pickingId && pickingId !== 0) return
     setActionStates((s) => ({ ...s, [pickingId]: 'accepting' }))
     try {
       console.log('[PT ACCEPT] sending request', { pickingId })
@@ -127,6 +111,16 @@ export default function ScreenRecibirPT() {
     } finally {
       setActionStates((s) => { const n = { ...s }; delete n[pickingId]; return n })
     }
+  }
+
+  function openRejectDialog(picking) {
+    setRejectReason('')
+    setDialog({ type: 'reject', picking })
+  }
+
+  function closeDialog() {
+    setDialog(null)
+    setRejectReason('')
   }
 
   async function handleRejectConfirm() {
@@ -278,7 +272,7 @@ export default function ScreenRecibirPT() {
                 {/* Action buttons */}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    onClick={() => openAcceptDialog(picking)}
+                    onClick={() => handleAccept(picking)}
                     disabled={isBusy}
                     style={{
                       flex: 1, padding: '10px 0', borderRadius: TOKENS.radius.md,
@@ -311,19 +305,6 @@ export default function ScreenRecibirPT() {
       )}
 
       <div style={{ height: 32 }} />
-
-      {/* Accept confirm dialog */}
-      {dialog?.type === 'accept' && (
-        <ConfirmDialog
-          open
-          title="Aceptar transferencia"
-          message={`Confirmar recepcion de "${dialog.picking.name || `Picking #${dialog.picking.id}`}"? El backend validara el picking y movera el stock.`}
-          confirmLabel="Aceptar"
-          confirmColor={TOKENS.colors.success}
-          onConfirm={handleAcceptConfirm}
-          onCancel={closeDialog}
-        />
-      )}
 
       {/* Reject dialog with mandatory reason */}
       {dialog?.type === 'reject' && (
