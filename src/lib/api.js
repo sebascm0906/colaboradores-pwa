@@ -1138,6 +1138,8 @@ async function directAdmin(method, path, body) {
         saleCancel: true,
         liquidacionesHistory: true,
         mpKardex: true,
+        requisitionApproval: true,
+        requisitionApprovalThreshold: 5000,
       },
     }
   }
@@ -1157,26 +1159,34 @@ async function directAdmin(method, path, body) {
     if (state) domain.push(['state', '=', state])
     if (dateFrom) domain.push(['date_order', '>=', dateFrom])
     if (dateTo) domain.push(['date_order', '<=', `${dateTo} 23:59:59`])
+    const offset = Number(query.get('offset') || 0)
     const result = await readModelSorted('purchase.order', {
-      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes'],
+      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at'],
       domain,
       sort_column: 'date_order',
       sort_desc: true,
       limit,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
+    const rows = pickListResponse(result).map((row) => ({
+      purchase_order_id: row.id,
       id: row.id,
       name: row.name || '',
       partner: row.partner_id?.[1] || '',
       state: row.state || 'draft',
-      date: row.date_order || null,
+      date_order: row.date_order || null,
       amount_total: Number(row.amount_total || 0),
       currency: row.currency_id?.[1] || 'MXN',
       company_id: row.company_id?.[0] || 0,
       origin: row.origin || '',
       notes: row.notes || '',
+      line_count: Array.isArray(row.order_line) ? row.order_line.length : 0,
+      approval_state: row.pwa_approval_state || 'none',
+      approval_reason: row.pwa_approval_reason || null,
+      approved_by: row.pwa_approved_by_id?.[1] || null,
+      approved_at: row.pwa_approved_at || null,
     }))
+    return { ok: true, data: { total_count: rows.length, count: rows.length, limit, offset, requisitions: rows } }
   }
 
   // ── Requisition detail (purchase.order + order_line) ────────────────────
@@ -1285,6 +1295,76 @@ async function directAdmin(method, path, body) {
       }
     }
     return { ok: true, data: { id: orderId, state: 'draft' } }
+  }
+
+  // ── Products search (para requisiciones / productPicker) ───────────────
+  // Busca product.product activos por nombre/SKU/barcode.
+  // scope=purchase → solo purchase_ok=True (materia prima comprable)
+  // scope=all      → todos los activos
+  if (cleanPath === '/pwa-admin/products/search' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const q = (query.get('q') || '').trim()
+    const scope = query.get('scope') || 'purchase'
+    const limit = Math.min(Number(query.get('limit') || 50), 200)
+    const domain = [['active', '=', true]]
+    if (scope === 'purchase') {
+      domain.push(['purchase_ok', '=', true])
+    }
+    if (q) {
+      domain.push('|', '|',
+        ['name', 'ilike', q],
+        ['default_code', 'ilike', q],
+        ['barcode', 'ilike', q],
+      )
+    }
+    const result = await readModelSorted('product.product', {
+      fields: ['id', 'display_name', 'default_code', 'barcode', 'categ_id', 'uom_id', 'list_price', 'purchase_ok', 'type'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit,
+      sudo: 1,
+    })
+    const products = pickListResponse(result).map((p) => ({
+      id: p.id,
+      name: p.display_name || '',
+      default_code: p.default_code || null,
+      barcode: p.barcode || null,
+      categ_id: p.categ_id?.[0] || 0,
+      categ_name: p.categ_id?.[1] || '',
+      uom: p.uom_id?.[1] || '',
+      list_price: Number(p.list_price || 0),
+    }))
+    return { ok: true, data: { count: products.length, products } }
+  }
+
+  // ── Requisition approve / reject ────────────────────────────────────────
+  if (cleanPath === '/pwa-admin/requisition-approve' && method === 'POST') {
+    const id = Number(body?.id || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    await createUpdate({
+      model: 'purchase.order',
+      method: 'update',
+      ids: [id],
+      dict: { pwa_approval_state: 'approved' },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, data: { id, approval_state: 'approved' } }
+  }
+
+  if (cleanPath === '/pwa-admin/requisition-reject' && method === 'POST') {
+    const id = Number(body?.id || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    await createUpdate({
+      model: 'purchase.order',
+      method: 'update',
+      ids: [id],
+      dict: { pwa_approval_state: 'rejected', pwa_approval_reason: body?.reason || '' },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, data: { id, approval_state: 'rejected' } }
   }
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
