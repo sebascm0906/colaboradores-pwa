@@ -1316,7 +1316,11 @@ async function directAdmin(method, path, body) {
   // POST /pwa-admin/requisition-receive { id, lines: [{move_id, receive_now_qty}] }
   // Valida cantidades y ejecuta button_validate() parcial sobre el picking.
   if (cleanPath === '/pwa-admin/requisition-receive' && method === 'POST') {
-    return odooJson('/pwa-admin/requisition-receive', body || {})
+    return odooJson('/pwa-admin/requisition-receive', {
+      ...(body || {}),
+      // employee_id requerido — el controller llama _resolve_employee()
+      employee_id: (body || {}).employee_id || getSession().employee_id || undefined,
+    })
   }
 
   // ── Products search (para requisiciones / productPicker) ───────────────
