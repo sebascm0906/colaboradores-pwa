@@ -394,14 +394,19 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
         <RequisitionReceiptModal
           requisitionId={requisitionId}
           onClose={() => setReceiptOpen(false)}
-          onSaved={(id) => {
+          onSaved={(id, receiptData) => {
             setReceiptOpen(false)
-            // Reload detail to reflect updated receipt state
-            setLoading(true)
-            getRequisitionDetail(id).then((res) => {
-              const data = res?.data ?? res
-              setDetail(data || null)
-            }).catch(() => {}).finally(() => setLoading(false))
+            // Fusionar estado de recepción del response inmediatamente —
+            // sin esperar otro round-trip al backend.
+            if (receiptData && typeof receiptData === 'object') {
+              setDetail((prev) => prev ? {
+                ...prev,
+                receipt_state:      receiptData.receipt_state      ?? prev.receipt_state,
+                can_receive:        receiptData.can_receive        ?? prev.can_receive,
+                qty_received_total: receiptData.qty_received_total ?? prev.qty_received_total,
+                qty_pending_total:  receiptData.qty_pending_total  ?? prev.qty_pending_total,
+              } : prev)
+            }
             onReceived && onReceived(id)
           }}
         />

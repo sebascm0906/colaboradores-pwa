@@ -70,9 +70,10 @@ export default function RequisitionReceiptModal({ requisitionId, onClose, onSave
     setSaving(true)
     setError('')
     try {
-      await receiveRequisitionProducts({ id: requisitionId, lines: payload })
+      const res = await receiveRequisitionProducts({ id: requisitionId, lines: payload })
+      const receiptData = res?.data ?? res
       setSuccess('Recepción registrada')
-      onSaved && onSaved(requisitionId)
+      onSaved && onSaved(requisitionId, receiptData)
       setTimeout(() => { onClose && onClose() }, 900)
     } catch (e) {
       setError(e?.message || 'Error al guardar recepción')

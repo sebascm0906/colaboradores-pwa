@@ -1164,8 +1164,9 @@ async function directAdmin(method, path, body) {
     // Si el resultado contiene error de DB (campo no existe), reintentamos sin ellos.
     const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line']
     const APPROVAL_FIELDS = ['pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at']
+    const RECEIPT_FIELDS = ['receipt_state', 'qty_received_total', 'qty_pending_total', 'can_receive', 'incoming_picking_id']
     let result = await readModelSorted('purchase.order', {
-      fields: [...BASE_FIELDS, ...APPROVAL_FIELDS],
+      fields: [...BASE_FIELDS, ...APPROVAL_FIELDS, ...RECEIPT_FIELDS],
       domain,
       sort_column: 'date_order',
       sort_desc: true,
@@ -1219,7 +1220,7 @@ async function directAdmin(method, path, body) {
     const id = Number(query.get('id') || 0)
     if (!id) return { ok: false, error: 'id requerido' }
     const headerResult = await readModel('purchase.order', {
-      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line'],
+      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'receipt_state', 'qty_received_total', 'qty_pending_total', 'can_receive', 'incoming_picking_id'],
       domain: [['id', '=', id]],
       limit: 1,
       sudo: 1,
