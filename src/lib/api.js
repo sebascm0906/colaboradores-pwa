@@ -1201,6 +1201,11 @@ async function directAdmin(method, path, body) {
       approval_reason: row.pwa_approval_reason || null,
       approved_by: row.pwa_approved_by_id?.[1] || null,
       approved_at: row.pwa_approved_at || null,
+      receipt_state: row.receipt_state || (row.state === 'purchase' ? 'confirmed' : ''),
+      qty_received_total: Number(row.qty_received_total || 0),
+      qty_pending_total: Number(row.qty_pending_total || 0),
+      can_receive: Boolean(row.can_receive),
+      incoming_picking_id: Number(row.incoming_picking_id || 0),
     }))
     return { ok: true, data: { total_count: rows.length, count: rows.length, limit, offset, requisitions: rows } }
   }
@@ -1254,9 +1259,25 @@ async function directAdmin(method, path, body) {
         company_id: header.company_id?.[0] || 0,
         origin: header.origin || '',
         notes: header.notes || '',
+        receipt_state: header.receipt_state || (header.state === 'purchase' ? 'confirmed' : ''),
+        qty_received_total: Number(header.qty_received_total || 0),
+        qty_pending_total: Number(header.qty_pending_total || 0),
+        can_receive: Boolean(header.can_receive),
+        incoming_picking_id: Number(header.incoming_picking_id || 0),
         lines,
       },
     }
+  }
+
+  if (cleanPath === '/pwa-admin/requisition-receipt-detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const id = Number(query.get('id') || 0)
+    if (!id) return { ok: false, error: 'id requerido' }
+    return odooHttp('GET', `/pwa-admin/requisition-receipt-detail?id=${id}`, {})
+  }
+
+  if (cleanPath === '/pwa-admin/requisition-receive' && method === 'POST') {
+    return odooJson('/pwa-admin/requisition-receive', body || {})
   }
 
   // ── Requisition cancel ──────────────────────────────────────────────────

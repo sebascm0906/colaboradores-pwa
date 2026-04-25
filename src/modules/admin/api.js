@@ -164,6 +164,16 @@ export function getRequisitionDetail(id) {
   return api('GET', `/pwa-admin/requisition-detail?id=${id}`)
 }
 
+/** Detalle del picking de recepción ligado a una requisición. */
+export function getRequisitionReceiptDetail(id) {
+  return api('GET', `/pwa-admin/requisition-receipt-detail?id=${id}`)
+}
+
+/** Recibe parcial o totalmente los productos de una requisición. */
+export function receiveRequisitionProducts(data) {
+  return api('POST', '/pwa-admin/requisition-receive', data)
+}
+
 /** Cancela una requisición en draft/sent. Rechaza si está confirmada. */
 export function cancelRequisition(id) {
   return api('POST', '/pwa-admin/requisition-cancel', { id })
