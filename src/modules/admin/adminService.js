@@ -295,7 +295,11 @@ export async function createRequisition(payload) {
   delete clean.analytic_account_id
   delete clean.analytic_tag_ids
 
-  return apiCreateRequisition(clean)
+  const result = await apiCreateRequisition(clean)
+  if (result && result.ok === false) {
+    throw new Error(result.message || 'Error al crear requisición')
+  }
+  return result
 }
 
 // ── Cierre del día ──────────────────────────────────────────────────────────
