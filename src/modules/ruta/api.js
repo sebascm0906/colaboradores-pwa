@@ -143,8 +143,17 @@ export function getTeamIncidents({ date, routeIds } = {}) {
 
 // ── Tipos de incidencias (catálogo del backend) ──────────────────────────────
 
-/** Catálogo fijo del backend — 7 tipos según spec A2.
- *  Mantener sincronizado con gf_logistics_ops selection. */
+/**
+ * @deprecated 2026-04-25 — Esta constante NO refleja el enum real del modelo
+ * `gf.route.incident.incident_type`, que solo acepta:
+ *   operation | customer | quality | collection | vehicle
+ *
+ * Los 7 IDs aquí (retraso_ruta, falta_producto, etc.) NO son aceptados por el
+ * controlador y NO están consumidos por ScreenIncidencias (que ya mapea sus
+ * propias 5 categorías ES → 5 valores EN del modelo).
+ *
+ * Conservada solo para evitar romper imports externos durante el rollout.
+ * Eliminar cuando se confirme que ningún consumidor lo referencia. */
 export const INCIDENT_TYPE_CATALOG = [
   { id: 'retraso_ruta',         label: 'Retraso en ruta' },
   { id: 'falta_producto',       label: 'Falta de producto' },

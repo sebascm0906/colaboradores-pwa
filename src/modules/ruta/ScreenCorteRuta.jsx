@@ -60,6 +60,12 @@ export default function ScreenCorteRuta() {
 
   function handleConfirmCorte() {
     if (!plan?.id) return
+    // ATENCIÓN: el corte hoy NO tiene endpoint backend propio. Esta acción
+    // solo marca un flag en localStorage para que el flujo del hub avance al
+    // siguiente paso (Liquidación). La validación real (cuadre = 0) ocurre
+    // server-side al cerrar la ruta vía /pwa-ruta/close-route. Si Sebastián
+    // expone un endpoint de corte_validated, hay que llamarlo aquí y solo
+    // marcar `corteDone:true` si retorna ok:true.
     saveCierreState(plan.id, { corteDone: true, corteAt: new Date().toISOString() })
     setConfirmed(true)
   }
@@ -232,7 +238,10 @@ export default function ScreenCorteRuta() {
                 textAlign: 'center',
               }}>
                 <p style={{ ...typo.body, color: '#22c55e', margin: 0, fontWeight: 700 }}>
-                  Corte confirmado
+                  Validación local OK
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
+                  El cuadre se valida en backend al cerrar la ruta.
                 </p>
               </div>
             ) : (
@@ -247,7 +256,7 @@ export default function ScreenCorteRuta() {
                   opacity: isValid ? 1 : 0.5,
                 }}
               >
-                {isValid ? 'Confirmar Corte' : 'Corte no disponible (revisar diferencias)'}
+                {isValid ? 'Validar corte (local)' : 'Corte no disponible (revisar diferencias)'}
               </button>
             )}
 

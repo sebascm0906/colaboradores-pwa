@@ -5,19 +5,26 @@ import { TOKENS, getTypo } from '../../tokens'
 import { createIncident, getMyIncidents } from './api'
 import { logScreenError } from '../shared/logScreenError'
 
+// Mostramos etiquetas en español al usuario, pero el modelo `gf.route.incident`
+// solo acepta los valores en inglés (selection enum del backend). Mapeamos
+// antes de enviar para evitar el error "Wrong value for selection" que rompe
+// silenciosamente el create.
 const INCIDENT_TYPES = [
-  { key: 'operacion', label: 'Operación' },
-  { key: 'cliente', label: 'Cliente' },
-  { key: 'calidad', label: 'Calidad' },
-  { key: 'cobranza', label: 'Cobranza' },
-  { key: 'vehiculo', label: 'Vehículo' },
+  { key: 'operacion', label: 'Operación', backend: 'operation' },
+  { key: 'cliente',   label: 'Cliente',   backend: 'customer'  },
+  { key: 'calidad',   label: 'Calidad',   backend: 'quality'   },
+  { key: 'cobranza',  label: 'Cobranza',  backend: 'collection'},
+  { key: 'vehiculo',  label: 'Vehículo',  backend: 'vehicle'   },
 ]
 
 const SEVERITIES = [
-  { key: 'baja', label: 'Baja', color: TOKENS.colors.success },
-  { key: 'media', label: 'Media', color: TOKENS.colors.warning },
-  { key: 'alta', label: 'Alta', color: TOKENS.colors.error },
+  { key: 'baja',  label: 'Baja',  color: TOKENS.colors.success, backend: 'low'    },
+  { key: 'media', label: 'Media', color: TOKENS.colors.warning, backend: 'medium' },
+  { key: 'alta',  label: 'Alta',  color: TOKENS.colors.error,   backend: 'high'   },
 ]
+
+const TYPE_TO_BACKEND = Object.fromEntries(INCIDENT_TYPES.map(t => [t.key, t.backend]))
+const SEVERITY_TO_BACKEND = Object.fromEntries(SEVERITIES.map(s => [s.key, s.backend]))
 
 export default function ScreenIncidencias() {
   const { session } = useSession()
@@ -60,14 +67,27 @@ export default function ScreenIncidencias() {
     setSubmitting(true)
     setError('')
     setSuccess('')
+
+    // Mapear etiquetas español → enum inglés del modelo gf.route.incident.
+    // Sin esto, backend responde "Wrong value for selection" y no persiste.
+    const backendType = TYPE_TO_BACKEND[incidentType]
+    const backendSeverity = SEVERITY_TO_BACKEND[severity]
+    if (!backendType || !backendSeverity) {
+      setError('Selección inválida — recarga e intenta de nuevo')
+      setSubmitting(false)
+      return
+    }
+
     try {
       // company_id viene del contexto de sesión; el backend usa el de la empresa
       // del usuario autenticado si no se envía explícito. No hardcodear 34.
       await createIncident({
-        incident_type: incidentType,
-        severity,
+        incident_type: backendType,
+        severity: backendSeverity,
         name: description.trim(),
       })
+      // Solo si no lanzó (createUpdate hace throw on error) limpiamos el form.
+      // Si lanzó, mantenemos los valores escritos para que el usuario reintente.
       setSuccess('Incidencia reportada')
       setIncidentType('')
       setSeverity('')
@@ -75,8 +95,15 @@ export default function ScreenIncidencias() {
       await loadIncidents()
       setTimeout(() => setSuccess(''), 3000)
     } catch (e) {
+      e.context = {
+        employee_id: session?.employee_id,
+        backend_type: backendType,
+        backend_severity: backendSeverity,
+      }
       logScreenError('ScreenIncidencias', 'createIncident', e)
-      setError('No se pudo reportar la incidencia')
+      // Mostrar mensaje real del backend si existe, para que el usuario sepa qué pasó.
+      // No limpiamos el form — el usuario puede reintentar.
+      setError(e?.message || 'No se pudo reportar la incidencia')
     } finally {
       setSubmitting(false)
     }

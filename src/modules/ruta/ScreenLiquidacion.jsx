@@ -104,14 +104,17 @@ export default function ScreenLiquidacion() {
    *   2do intento (tras confirmación explícita): force=true → persiste.
    *
    * Endpoint: POST /gf/logistics/api/employee/liquidacion/confirm
+   *
+   * SEGURIDAD: solo consideramos "éxito" si la respuesta trae explícitamente
+   * `ok === true`. Si endpoint da 404, network error, JSON vacío, body sin
+   * shape esperado → NO persistimos en localStorage, NO marcamos confirmed,
+   * NO mostramos toast de éxito. El backend es la única fuente de verdad.
    */
   async function handleConfirm({ force = false } = {}) {
     if (!plan?.id || submitting) return
     setSubmitting(true)
+    const ENDPOINT = '/gf/logistics/api/employee/liquidacion/confirm'
     try {
-      // Backend SIEMPRE responde HTTP 200. NO usar catch para ok:false.
-      //   Caso diferencia:  { ok:false, code:'difference_warning', data:{total_collected, total_expected, difference} }
-      //   Caso éxito:       { ok:true,  data:{...} }
       const res = await confirmLiquidacion(plan.id, { notes, force })
       const payload = res?.data ?? res ?? {}
 
@@ -126,13 +129,24 @@ export default function ScreenLiquidacion() {
         return
       }
 
-      if (res?.ok === false || res?.error) {
-        const msg = res?.message || res?.error || 'Error al confirmar liquidación'
+      // Éxito SOLO si backend afirma `ok:true` explícito.
+      // Cualquier otra forma (ok:false, ok ausente, error field, body vacío) = fallo.
+      if (res?.ok !== true) {
+        const err = new Error(`Endpoint ${ENDPOINT} no confirmó liquidación`)
+        err.context = {
+          plan_id: plan.id,
+          employee_id: session?.employee_id,
+          status: res?.status ?? res?.case ?? null,
+          body: JSON.stringify(res ?? null).slice(0, 500),
+        }
+        logScreenError('ScreenLiquidacion', 'handleConfirm.invalidResponse', err)
+        const msg = res?.message || res?.error
+          || 'No se pudo confirmar la liquidación. Intenta de nuevo o reporta a soporte.'
         toast.error(msg)
         return
       }
 
-      // Éxito — guardamos localStorage solo como cache para UI
+      // Éxito confirmado por backend — cachéamos en localStorage solo como UI hint
       const snapshot = {
         cashExpected: cashExp, cashCollected: cashCol,
         creditExpected: creditExp, creditCollected: creditCol,
@@ -145,8 +159,14 @@ export default function ScreenLiquidacion() {
       setWarningOpen(null)
       toast.success(payload.message || 'Liquidación confirmada')
     } catch (e) {
-      logScreenError('ScreenLiquidacion', 'handleConfirm', e)
-      toast.error(e?.message || 'No se pudo confirmar la liquidación')
+      // Network error, 404, 5xx, JSON parse error, etc.
+      e.context = {
+        plan_id: plan.id,
+        employee_id: session?.employee_id,
+        endpoint: ENDPOINT,
+      }
+      logScreenError('ScreenLiquidacion', 'handleConfirm.networkError', e)
+      toast.error('No se pudo confirmar la liquidación. Intenta de nuevo o reporta a soporte.')
     } finally {
       setSubmitting(false)
     }

@@ -29,15 +29,29 @@ export default function ScreenAceptarCarga() {
         const p = await getMyRoutePlan(session?.employee_id)
         setPlan(p)
         if (p?.id) {
-          const l = await getMyLoad(p.id).catch(() => null)
+          // Si getMyLoad lanza, NO degradamos a "Sin carga" silenciosa —
+          // mostramos error real. Antes el catch silencioso hacía que un
+          // 404 backend pareciera "no hay carga asignada hoy".
+          let l = null
+          try {
+            l = await getMyLoad(p.id)
+          } catch (e) {
+            logScreenError('ScreenAceptarCarga', 'getMyLoad', e)
+            setError('No se pudo cargar la información de tu carga. Reintenta o reporta a soporte.')
+          }
           setLoad(l)
-          // Si hay picking asignado, cargar líneas con SKU/cantidades
           if (l?.load_picking_id) {
-            const ll = await getLoadLines(l.load_picking_id).catch(() => [])
+            const ll = await getLoadLines(l.load_picking_id).catch((err) => {
+              logScreenError('ScreenAceptarCarga', 'getLoadLines', err)
+              return []
+            })
             setLines(ll || [])
           }
         }
-      } catch (e) { logScreenError('ScreenAceptarCarga', 'fetchData', e) }
+      } catch (e) {
+        logScreenError('ScreenAceptarCarga', 'fetchData', e)
+        setError('No se pudo cargar tu plan de ruta. Reintenta o reporta a soporte.')
+      }
       finally { setLoading(false) }
     }
     fetchData()

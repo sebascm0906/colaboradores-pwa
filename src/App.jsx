@@ -6,7 +6,7 @@ import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
 import { getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
-import { resolveModuleContextRole } from './lib/roleContext'
+import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
 
 // ─── Pantallas base ──────────────────────────────────────────────────────────
 import ScreenLogin   from './screens/ScreenLogin'
@@ -135,6 +135,23 @@ function getStoredSession() {
 function PrivateRoute({ children }) {
   const { session } = useSession()
   if (!session) return <Navigate to="/login" replace />
+  return children
+}
+
+// Role gating estricto para /ruta/* — antes cualquier sesión autenticada
+// podía entrar por URL directa. Solo jefe_ruta y auxiliar_ruta tienen acceso.
+// Si la sesión no incluye ninguno de esos roles (primary o additional),
+// redirige al home. La validación final de tenancy sucede server-side
+// en cada endpoint (ya verificado: /pwa-ruta/liquidation, close-route, etc.
+// devuelven "No tienes acceso a este plan" cuando no sos el dueño).
+const RUTA_ALLOWED_ROLES = ['jefe_ruta', 'auxiliar_ruta']
+
+function RouteRoleRoute({ children }) {
+  const { session } = useSession()
+  if (!session) return <Navigate to="/login" replace />
+  const effective = getEffectiveJobKeys(session)
+  const allowed = effective.some(role => RUTA_ALLOWED_ROLES.includes(role))
+  if (!allowed) return <Navigate to="/" replace />
   return children
 }
 
@@ -399,17 +416,18 @@ export default function App() {
             <Route path="/entregas/inventario" element={<Navigate to="/entregas/operacion" replace />} />
 
             {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
-            <Route path="/ruta" element={<PrivateRoute><ScreenMiRutaV2 /></PrivateRoute>} />
-            <Route path="/ruta/checklist" element={<PrivateRoute><ScreenChecklistUnidad /></PrivateRoute>} />
-            <Route path="/ruta/carga" element={<PrivateRoute><ScreenAceptarCarga /></PrivateRoute>} />
-            <Route path="/ruta/incidencias" element={<PrivateRoute><ScreenIncidencias /></PrivateRoute>} />
-            <Route path="/ruta/kpis" element={<PrivateRoute><ScreenKPIsRuta /></PrivateRoute>} />
-            <Route path="/ruta/conciliacion" element={<PrivateRoute><ScreenConciliacion /></PrivateRoute>} />
-            <Route path="/ruta/control" element={<PrivateRoute><ScreenControlRuta /></PrivateRoute>} />
-            <Route path="/ruta/inventario" element={<PrivateRoute><ScreenInventarioRuta /></PrivateRoute>} />
-            <Route path="/ruta/corte" element={<PrivateRoute><ScreenCorteRuta /></PrivateRoute>} />
-            <Route path="/ruta/liquidacion" element={<PrivateRoute><ScreenLiquidacion /></PrivateRoute>} />
-            <Route path="/ruta/cierre" element={<PrivateRoute><ScreenCierreRuta /></PrivateRoute>} />
+            {/* Role gating: solo jefe_ruta y auxiliar_ruta acceden por URL directa. */}
+            <Route path="/ruta" element={<RouteRoleRoute><ScreenMiRutaV2 /></RouteRoleRoute>} />
+            <Route path="/ruta/checklist" element={<RouteRoleRoute><ScreenChecklistUnidad /></RouteRoleRoute>} />
+            <Route path="/ruta/carga" element={<RouteRoleRoute><ScreenAceptarCarga /></RouteRoleRoute>} />
+            <Route path="/ruta/incidencias" element={<RouteRoleRoute><ScreenIncidencias /></RouteRoleRoute>} />
+            <Route path="/ruta/kpis" element={<RouteRoleRoute><ScreenKPIsRuta /></RouteRoleRoute>} />
+            <Route path="/ruta/conciliacion" element={<RouteRoleRoute><ScreenConciliacion /></RouteRoleRoute>} />
+            <Route path="/ruta/control" element={<RouteRoleRoute><ScreenControlRuta /></RouteRoleRoute>} />
+            <Route path="/ruta/inventario" element={<RouteRoleRoute><ScreenInventarioRuta /></RouteRoleRoute>} />
+            <Route path="/ruta/corte" element={<RouteRoleRoute><ScreenCorteRuta /></RouteRoleRoute>} />
+            <Route path="/ruta/liquidacion" element={<RouteRoleRoute><ScreenLiquidacion /></RouteRoleRoute>} />
+            <Route path="/ruta/cierre" element={<RouteRoleRoute><ScreenCierreRuta /></RouteRoleRoute>} />
 
             {/* ── Supervisor de Ventas ─────────────────────────────────── */}
             {/* Supervisor Ventas V2 — Centro de Control Comercial */}
