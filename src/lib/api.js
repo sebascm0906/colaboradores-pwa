@@ -1201,11 +1201,13 @@ async function directAdmin(method, path, body) {
       approval_reason: row.pwa_approval_reason || null,
       approved_by: row.pwa_approved_by_id?.[1] || null,
       approved_at: row.pwa_approved_at || null,
-      // Receipt fields — defensive fallback when Odoo module not yet deployed
+      // Receipt fields — defensive fallback when Odoo module not yet deployed.
+      // can_receive se deja null cuando Odoo no lo manda para que
+      // normalizeReceiptSummary lo infiera del receipt_state.
       receipt_state: row.receipt_state || (row.state === 'purchase' ? 'confirmed' : ''),
       qty_received_total: Number(row.qty_received_total || 0),
       qty_pending_total: Number(row.qty_pending_total || 0),
-      can_receive: Boolean(row.can_receive),
+      can_receive: row.can_receive != null ? Boolean(row.can_receive) : null,
       incoming_picking_id: Number(row.incoming_picking_id || 0),
     }))
     return { ok: true, data: { total_count: rows.length, count: rows.length, limit, offset, requisitions: rows } }
@@ -1261,11 +1263,13 @@ async function directAdmin(method, path, body) {
         origin: header.origin || '',
         notes: header.notes || '',
         lines,
-        // Receipt fields — defensive fallback when Odoo module not yet deployed
+        // Receipt fields — defensive fallback when Odoo module not yet deployed.
+        // can_receive se deja null cuando Odoo no lo manda para que
+        // normalizeReceiptSummary lo infiera del receipt_state.
         receipt_state: header.receipt_state || (header.state === 'purchase' ? 'confirmed' : ''),
         qty_received_total: Number(header.qty_received_total || 0),
         qty_pending_total: Number(header.qty_pending_total || 0),
-        can_receive: Boolean(header.can_receive),
+        can_receive: header.can_receive != null ? Boolean(header.can_receive) : null,
         incoming_picking_id: Number(header.incoming_picking_id || 0),
       },
     }
