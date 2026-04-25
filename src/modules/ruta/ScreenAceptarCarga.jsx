@@ -16,6 +16,7 @@ export default function ScreenAceptarCarga() {
   const [lines, setLines] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [requiresChecklist, setRequiresChecklist] = useState(false)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -61,11 +62,22 @@ export default function ScreenAceptarCarga() {
     if (!plan?.id || submitting) return
     setSubmitting(true)
     setError('')
+    setRequiresChecklist(false)
     try {
       const res = await acceptLoad(plan.id)
       const ok = res?.ok === true || res?.success === true
 
       if (!ok) {
+        // Caso especial: backend pide completar el checklist de unidad antes
+        // de aceptar carga. Sebastián fix ba9de46 → el code llega en data.code
+        // (también aceptamos res.code como fallback por si el backend evoluciona).
+        const code = res?.data?.code || res?.code || null
+        if (code === 'vehicle_checklist_required') {
+          setRequiresChecklist(true)
+          setError(res?.message || 'Antes de aceptar la carga, debes completar el checklist de unidad.')
+          return
+        }
+
         // Backend respondió HTTP 200 pero con ok:false (acceso, validación,
         // endpoint no deployado que devuelve shape vacío, etc.).
         // NO marcamos load_sealed en falso; mostramos el message del backend
@@ -74,6 +86,7 @@ export default function ScreenAceptarCarga() {
         err.context = {
           plan_id: plan.id,
           employee_id: session?.employee_id,
+          code,
           status: res?.status ?? res?.case ?? null,
           body: JSON.stringify(res ?? null).slice(0, 500),
         }
@@ -133,11 +146,30 @@ export default function ScreenAceptarCarga() {
           <>
             {error && (
               <div style={{
-                marginTop: 10, marginBottom: 16, padding: 16, borderRadius: TOKENS.radius.lg,
-                background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
-                color: TOKENS.colors.error, ...typo.body, textAlign: 'center',
+                marginTop: 10, marginBottom: requiresChecklist ? 8 : 16, padding: 16, borderRadius: TOKENS.radius.lg,
+                background: requiresChecklist ? 'rgba(245,158,11,0.10)' : TOKENS.colors.errorSoft,
+                border: `1px solid ${requiresChecklist ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                color: requiresChecklist ? TOKENS.colors.warning : TOKENS.colors.error,
+                ...typo.body, textAlign: 'center',
               }}>
                 {error}
+              </div>
+            )}
+
+            {requiresChecklist && (
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={() => navigate('/ruta/checklist')}
+                  style={{
+                    width: '100%', padding: '14px',
+                    borderRadius: TOKENS.radius.lg,
+                    background: 'linear-gradient(90deg, #b45309, #f59e0b)',
+                    color: 'white', fontSize: 15, fontWeight: 600,
+                    boxShadow: '0 10px 24px rgba(245,158,11,0.25)',
+                  }}
+                >
+                  Ir a checklist de unidad
+                </button>
               </div>
             )}
 
