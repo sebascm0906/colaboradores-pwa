@@ -1253,13 +1253,33 @@ async function directAdmin(method, path, body) {
     const id = Number(query.get('id') || 0)
     if (!id) return { ok: false, error: 'id requerido' }
     const headerResult = await readModel('purchase.order', {
-      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line'],
+      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'picking_ids'],
       domain: [['id', '=', id]],
       limit: 1,
       sudo: 1,
     })
     const header = pickFirstResponse(headerResult)
     if (!header) return { ok: false, error: 'not_found' }
+    // Derivar receipt_state desde stock.picking — misma lógica que la lista.
+    let derivedReceiptState = ''
+    if (header.state === 'purchase') {
+      const pids = Array.isArray(header.picking_ids) ? header.picking_ids : []
+      let states = []
+      if (pids.length) {
+        const pickRes = await readModelSorted('stock.picking', {
+          fields: ['id', 'state'],
+          domain: [['id', 'in', pids]],
+          sudo: 1,
+          limit: pids.length + 10,
+        }).catch(() => [])
+        states = pickListResponse(pickRes).map((p) => p.state).filter(Boolean)
+      }
+      const hasDone = states.some((s) => s === 'done')
+      const allFinal = states.length > 0 && states.every((s) => s === 'done' || s === 'cancel')
+      if (hasDone && allFinal) derivedReceiptState = 'received'
+      else if (hasDone) derivedReceiptState = 'partially_received'
+      else derivedReceiptState = 'confirmed'
+    }
     const lineIds = Array.isArray(header.order_line) ? header.order_line : []
     let lines = []
     if (lineIds.length) {
@@ -1297,13 +1317,15 @@ async function directAdmin(method, path, body) {
         origin: header.origin || '',
         notes: header.notes || '',
         lines,
-        // Receipt fields — defensive fallback when Odoo module not yet deployed.
-        // can_receive se deja null cuando Odoo no lo manda para que
-        // normalizeReceiptSummary lo infiera del receipt_state.
-        receipt_state: header.receipt_state || (header.state === 'purchase' ? 'confirmed' : ''),
+        // Receipt fields — preferimos lo que mande Odoo; si no, derivamos del picking.
+        receipt_state: header.receipt_state || derivedReceiptState,
         qty_received_total: Number(header.qty_received_total || 0),
         qty_pending_total: Number(header.qty_pending_total || 0),
-        can_receive: header.can_receive != null ? Boolean(header.can_receive) : null,
+        // Cuando ya está recibido, forzamos can_receive=false explícito
+        // para que el modal NO infiera true desde 'confirmed' fallback.
+        can_receive: header.can_receive != null
+          ? Boolean(header.can_receive)
+          : (derivedReceiptState === 'received' ? false : null),
         incoming_picking_id: Number(header.incoming_picking_id || 0),
       },
     }

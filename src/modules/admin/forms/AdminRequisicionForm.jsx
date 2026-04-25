@@ -302,7 +302,9 @@ function HistorialTab({ companyId }) {
             const st = STATUS_MAP[req.state] || STATUS_MAP.draft
             const apv = APPROVAL_MAP[req.approval_state]
             const isPending = req.approval_state === 'pending'
-            const clickable = !isReceived && req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
+            // Recibido SÍ es clickable — abre el detalle en modo solo-lectura
+            // (el modal oculta acciones cuando receipt_state='received').
+            const clickable = req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
             const receiptBadge = resolveReceiptBadge(req)
             const showReceive = BACKEND_CAPS.requisitionReceipt && shouldShowReceiptAction(req) && !isPending
 
