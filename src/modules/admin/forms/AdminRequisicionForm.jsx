@@ -27,6 +27,7 @@ import {
   approveRequisition,
   rejectRequisition,
 } from '../api'
+import { resolveReceiptBadge, shouldShowReceiptAction, resolveReceiptActionLabel } from '../requisitionReceiptState'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 import ProductPicker from '../components/ProductPicker'
 import RequisitionDetailModal from '../components/RequisitionDetailModal'
@@ -301,6 +302,8 @@ function HistorialTab({ companyId }) {
             const apv = APPROVAL_MAP[req.approval_state]
             const isPending = req.approval_state === 'pending'
             const clickable = req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
+            const receiptBadge = resolveReceiptBadge(req)
+            const showReceive = BACKEND_CAPS.requisitionReceipt && shouldShowReceiptAction(req) && !isPending
 
             return (
               <div
@@ -347,7 +350,25 @@ function HistorialTab({ companyId }) {
                   )}
                   <Badge label={st.label} tone={st.tone} />
                   {apv && <Badge label={apv.label} tone={apv.tone} />}
+                  {receiptBadge && <Badge label={receiptBadge.label} tone={receiptBadge.tone} />}
                 </div>
+
+                {/* Acción de recepción — solo cuando hay picking pendiente */}
+                {showReceive && (
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      onClick={() => setDetailId(req.purchase_order_id ?? req.id)}
+                      style={{
+                        width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.md,
+                        background: `linear-gradient(135deg, ${TOKENS.colors.blue3}, #1a70cc)`,
+                        fontSize: 12, fontWeight: 700, color: 'white', border: 'none',
+                        fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+                      }}
+                    >
+                      {resolveReceiptActionLabel(req)}
+                    </button>
+                  </div>
+                )}
 
                 {/* Acciones de aprobación — solo para gerente/director y cuando está pending */}
                 {BACKEND_CAPS.requisitionApproval && canApprove && isPending && (
@@ -430,6 +451,7 @@ function HistorialTab({ companyId }) {
           requisitionId={detailId}
           onClose={() => setDetailId(null)}
           onCancelled={() => load(page)}
+          onReceived={() => load(page)}
         />
       )}
     </div>
