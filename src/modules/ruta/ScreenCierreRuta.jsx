@@ -9,6 +9,9 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getMyTarget, getReconciliation, getLoadLines } from './api'
 import { logScreenError } from '../shared/logScreenError'
+import VoiceInputButton from '../shared/voice/VoiceInputButton'
+import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
+import { parseKmFromVoice } from './voiceKmParser'
 import {
   getKmData,
   saveKmSalida,
@@ -40,6 +43,11 @@ export default function ScreenCierreRuta() {
   const [validation, setValidation] = useState(null)
   const [closing, setClosing] = useState(false)
   const [closed, setClosed] = useState(false)
+  // Piloto voz: feedback efímero al usuario tras dictar.
+  // {kind: 'success'|'partial'|'error', message: string} | null
+  const [voiceNote, setVoiceNote] = useState(null)
+  // trace_id del último envelope, para sendVoiceFeedback al confirmar el cierre.
+  const [voiceTraceId, setVoiceTraceId] = useState(null)
 
   useEffect(() => { loadData() }, [])
 
@@ -112,6 +120,89 @@ export default function ScreenCierreRuta() {
 
   const [closeError, setCloseError] = useState('')
 
+  // ── Voz: parsear envelope/transcript y aplicar km a los inputs ────────────
+  // No persiste localStorage como fuente de verdad: respeta el mismo flujo
+  // que el blur de los inputs (saveKmSalida/saveKmLlegada). NO cierra ruta.
+  function applyVoiceParsed(parsed) {
+    // eslint-disable-next-line no-console
+    console.log('[VOICE_KM] parsed', JSON.stringify({
+      ok: parsed.ok,
+      reason: parsed.reason || null,
+      partial: parsed.partial || false,
+      source: parsed.source || null,
+      departure_km: parsed.departure_km ?? null,
+      arrival_km: parsed.arrival_km ?? null,
+      transcript_length: (parsed.transcript || '').length,
+    }))
+    if (!parsed.ok) {
+      setVoiceNote({ kind: 'error', message: parsed.message })
+      return
+    }
+    // Aplicar campos: solo los que vinieron del parse (parcial respeta lo que
+    // el usuario ya tenía escrito en el otro input).
+    if (parsed.departure_km != null) {
+      setKmSalida(String(parsed.departure_km))
+      if (plan?.id) saveKmSalida(plan.id, parsed.departure_km)
+    }
+    if (parsed.arrival_km != null) {
+      setKmLlegada(String(parsed.arrival_km))
+      if (plan?.id) saveKmLlegada(plan.id, parsed.arrival_km)
+    }
+    // eslint-disable-next-line no-console
+    console.log('[VOICE_KM] applied', JSON.stringify({
+      plan_id: plan?.id || null,
+      employee_id: session?.employee_id || null,
+      departure_km: parsed.departure_km ?? null,
+      arrival_km: parsed.arrival_km ?? null,
+      partial: parsed.partial || false,
+    }))
+    setVoiceNote({ kind: parsed.partial ? 'partial' : 'success', message: parsed.message })
+  }
+
+  function handleVoiceResult(envelope) {
+    // eslint-disable-next-line no-console
+    console.log('[VOICE_KM] transcript', JSON.stringify({
+      trace_id: envelope?.trace_id || null,
+      transcript: envelope?.meta?.transcript || envelope?.data?.transcript || '',
+    }))
+    if (envelope?.trace_id) setVoiceTraceId(envelope.trace_id)
+    const parsed = parseKmFromVoice(envelope)
+    applyVoiceParsed(parsed)
+  }
+
+  function handleVoiceError(code, message, envelope) {
+    // Caso típico: VALIDATION_FAILED del parser estructurado del context_id,
+    // pero el STT sí transcribió. Rescatamos el transcript y parseamos local.
+    const transcript = envelope?.meta?.transcript || envelope?.data?.transcript || ''
+    if (transcript && transcript.trim()) {
+      if (envelope?.trace_id) setVoiceTraceId(envelope.trace_id)
+      // eslint-disable-next-line no-console
+      console.log('[VOICE_KM] transcript (rescued from error)', JSON.stringify({
+        trace_id: envelope?.trace_id || null,
+        transcript,
+        original_error: code,
+      }))
+      const parsed = parseKmFromVoice(transcript)
+      applyVoiceParsed(parsed)
+      return
+    }
+    // eslint-disable-next-line no-console
+    console.log('[VOICE_KM] voice_error', JSON.stringify({ code, message }))
+    setVoiceNote({ kind: 'error', message: message || 'No se pudo procesar el audio.' })
+  }
+
+  // Metadata enviada a W120. context_id `form_brine_reading` (numérico,
+  // mínimo parsing) — mismo patrón que nota rápida del supervisor.
+  // No introducimos context nuevo en n8n para mantener simple.
+  const voiceMetadata = useMemo(() => ({
+    user_id: session?.employee_id || null,
+    plaza_id: session?.plaza_id || null,
+    plan_id: plan?.id || null,
+    canal: 'pwa_colaboradores',
+    use_case: 'route_close_km',
+  }), [session?.employee_id, session?.plaza_id, plan?.id])
+
+
   async function handleCerrarRuta() {
     if (!plan?.id || !validation?.valid) return
     setClosing(true)
@@ -122,6 +213,22 @@ export default function ScreenCierreRuta() {
     const result = await closeRouteWithValidation(plan.id, depKm, arrKm)
 
     if (result.success) {
+      // Voice feedback fire-and-forget: si los km vinieron de un dictado,
+      // mandamos el final_output (los km que el usuario realmente confirmó)
+      // a W122 para que podamos comparar dictado vs valor humano.
+      if (voiceTraceId) {
+        sendVoiceFeedback({
+          trace_id: voiceTraceId,
+          ai_output: {},
+          final_output: { departure_km: depKm, arrival_km: arrKm },
+          metadata: {
+            context_id: 'route_close_km',
+            user_id: session?.employee_id || null,
+            plaza_id: session?.plaza_id || null,
+            plan_id: plan.id,
+          },
+        })
+      }
       setClosed(true)
     } else if (result.source === 'backend') {
       // Server-side business error (JSON-RPC exception from Odoo) — show to user
@@ -223,6 +330,41 @@ export default function ScreenCierreRuta() {
           <>
             {/* KM Section */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>KILOMETRAJE</p>
+
+            {/* Piloto voz: dictar km salida y llegada. La captura manual
+                sigue funcionando siempre (inputs abajo). */}
+            <div style={{ marginBottom: 10 }}>
+              <VoiceInputButton
+                context_id="form_brine_reading"
+                label="Dictar kilómetros (máx ~10 segundos)"
+                metadata={voiceMetadata}
+                disabled={closing}
+                onResult={handleVoiceResult}
+                onError={handleVoiceError}
+              />
+              {voiceNote && (
+                <div style={{
+                  marginTop: 8, padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                  background:
+                    voiceNote.kind === 'success' ? 'rgba(34,197,94,0.10)'
+                    : voiceNote.kind === 'partial' ? TOKENS.colors.warningSoft
+                    : 'rgba(239,68,68,0.08)',
+                  border:
+                    voiceNote.kind === 'success' ? '1px solid rgba(34,197,94,0.30)'
+                    : voiceNote.kind === 'partial' ? '1px solid rgba(245,158,11,0.30)'
+                    : '1px solid rgba(239,68,68,0.30)',
+                }}>
+                  <p style={{
+                    ...typo.caption, margin: 0,
+                    color:
+                      voiceNote.kind === 'success' ? '#22c55e'
+                      : voiceNote.kind === 'partial' ? TOKENS.colors.warning
+                      : '#ef4444',
+                  }}>{voiceNote.message}</p>
+                </div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <div style={{ flex: 1 }}>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>KM Salida</p>
