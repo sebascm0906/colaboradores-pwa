@@ -30,6 +30,12 @@ import {
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 import ProductPicker from '../components/ProductPicker'
 import RequisitionDetailModal from '../components/RequisitionDetailModal'
+import RequisitionReceiptModal from '../components/RequisitionReceiptModal'
+import {
+  resolveReceiptActionLabel,
+  resolveReceiptBadge,
+  shouldShowReceiptAction,
+} from '../requisitionReceiptState'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -98,6 +104,7 @@ function HistorialTab({ companyId }) {
   const [filterTo, setFilterTo]       = useState('')
 
   const [detailId, setDetailId]   = useState(null)
+  const [receiptId, setReceiptId] = useState(null)
   const [rejectId, setRejectId]   = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
@@ -299,8 +306,10 @@ function HistorialTab({ companyId }) {
           {rows.map((req, i) => {
             const st = STATUS_MAP[req.state] || STATUS_MAP.draft
             const apv = APPROVAL_MAP[req.approval_state]
+            const receiptBadge = resolveReceiptBadge(req)
             const isPending = req.approval_state === 'pending'
             const clickable = req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
+            const showReceiveButton = shouldShowReceiptAction(req) && !isPending
 
             return (
               <div
@@ -347,6 +356,7 @@ function HistorialTab({ companyId }) {
                   )}
                   <Badge label={st.label} tone={st.tone} />
                   {apv && <Badge label={apv.label} tone={apv.tone} />}
+                  {receiptBadge && <Badge label={receiptBadge.label} tone={receiptBadge.tone} />}
                 </div>
 
                 {/* Acciones de aprobación — solo para gerente/director y cuando está pending */}
@@ -379,6 +389,27 @@ function HistorialTab({ companyId }) {
                       }}
                     >
                       ✕ Rechazar
+                    </button>
+                  </div>
+                )}
+
+                {showReceiveButton && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setReceiptId(req.purchase_order_id ?? req.id)
+                      }}
+                      style={{
+                        width: '100%', padding: '7px 0', borderRadius: TOKENS.radius.md,
+                        background: `${TOKENS.colors.blue2}18`,
+                        border: `1px solid ${TOKENS.colors.blue2}40`,
+                        color: TOKENS.colors.blue3, fontSize: 12, fontWeight: 700,
+                        cursor: 'pointer',
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      {resolveReceiptActionLabel(req)}
                     </button>
                   </div>
                 )}
@@ -430,6 +461,15 @@ function HistorialTab({ companyId }) {
           requisitionId={detailId}
           onClose={() => setDetailId(null)}
           onCancelled={() => load(page)}
+          onUpdated={() => load(page)}
+        />
+      )}
+
+      {receiptId && (
+        <RequisitionReceiptModal
+          requisitionId={receiptId}
+          onClose={() => setReceiptId(null)}
+          onSaved={() => load(page)}
         />
       )}
     </div>
@@ -755,19 +795,26 @@ function RecentList({ companyId }) {
   const [loading, setLoading] = useState(true)
   const [detailId, setDetailId] = useState(null)
 
-  useEffect(() => {
+  async function loadRecent() {
     if (!companyId) return
     setLoading(true)
-    getRequisitions({ companyId, limit: 10 })
-      .then(res => {
-        const data = res?.data ?? res
-        const rows = Array.isArray(data?.requisitions)
-          ? data.requisitions
-          : Array.isArray(data) ? data : []
-        setList(rows)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    try {
+      const res = await getRequisitions({ companyId, limit: 10 })
+      const data = res?.data ?? res
+      const rows = Array.isArray(data?.requisitions)
+        ? data.requisitions
+        : Array.isArray(data) ? data : []
+      setList(rows)
+    } catch {
+      setList([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!companyId) return
+    loadRecent()
   }, [companyId])
 
   return (
@@ -855,16 +902,8 @@ function RecentList({ companyId }) {
         <RequisitionDetailModal
           requisitionId={detailId}
           onClose={() => setDetailId(null)}
-          onCancelled={() => {
-            setLoading(true)
-            getRequisitions({ companyId: list[0]?.company_id, limit: 10 })
-              .then(res => {
-                const data = res?.data ?? res
-                setList(Array.isArray(data?.requisitions) ? data.requisitions : Array.isArray(data) ? data : [])
-              })
-              .catch(() => {})
-              .finally(() => setLoading(false))
-          }}
+          onCancelled={() => loadRecent()}
+          onUpdated={() => loadRecent()}
         />
       )}
     </div>

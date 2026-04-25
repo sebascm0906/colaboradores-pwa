@@ -9,6 +9,13 @@ import { useEffect, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { getRequisitionDetail, cancelRequisition } from '../api'
 import { BACKEND_CAPS } from '../adminService'
+import RequisitionReceiptModal from './RequisitionReceiptModal'
+import {
+  normalizeReceiptSummary,
+  resolveReceiptActionLabel,
+  resolveReceiptBadge,
+  shouldShowReceiptAction,
+} from '../requisitionReceiptState'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -29,30 +36,36 @@ const STATUS_MAP = {
   cancel:   { label: 'Cancelado',  color: '#e05a5a' },
 }
 
-export default function RequisitionDetailModal({ requisitionId, onClose, onCancelled }) {
+export default function RequisitionDetailModal({ requisitionId, onClose, onCancelled, onUpdated }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [receiptOpen, setReceiptOpen] = useState(false)
+
+  async function load() {
+    if (!requisitionId) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await getRequisitionDetail(requisitionId)
+      const data = res?.data ?? res
+      setDetail(data || null)
+    } catch (e) {
+      setError(e?.message || 'Error al cargar detalle')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
-    async function load() {
-      if (!requisitionId) return
-      setLoading(true)
-      setError('')
-      try {
-        const res = await getRequisitionDetail(requisitionId)
-        const data = res?.data ?? res
-        if (alive) setDetail(data || null)
-      } catch (e) {
-        if (alive) setError(e?.message || 'Error al cargar detalle')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    }
-    load()
+    if (!requisitionId) return undefined
+    ;(async () => {
+      if (!alive) return
+      await load()
+    })()
     return () => { alive = false }
   }, [requisitionId])
 
@@ -63,6 +76,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
       await cancelRequisition(requisitionId)
       setConfirmOpen(false)
       onCancelled && onCancelled(requisitionId)
+      onUpdated && onUpdated(requisitionId)
       onClose && onClose()
     } catch (e) {
       setError(e?.message || 'Error al cancelar requisición')
@@ -76,6 +90,9 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
   const lines = Array.isArray(detail?.lines) ? detail.lines : []
   const total = lines.reduce((s, l) => s + Number(l.price_subtotal ?? l.subtotal ?? ((Number(l.product_qty ?? l.quantity ?? l.qty ?? 0)) * Number(l.price_unit || 0))), 0)
   const canCancel = (state === 'draft' || state === 'sent') && BACKEND_CAPS.requisitionDetail
+  const receiptSummary = normalizeReceiptSummary(detail)
+  const receiptBadge = resolveReceiptBadge(detail)
+  const showReceiptAction = shouldShowReceiptAction(detail)
 
   return (
     <div
@@ -159,7 +176,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
           <>
             {/* Meta */}
             <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10,
+              display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10,
               marginBottom: 16,
             }}>
               <MetaCell label="ESTADO">
@@ -189,7 +206,35 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
                   {detail.partner_name || detail.partner_id?.[1] || '—'}
                 </span>
               </MetaCell>
+              <MetaCell label="RECEPCIÓN">
+                {receiptBadge ? (
+                  <span style={{
+                    padding: '3px 10px', borderRadius: TOKENS.radius.pill,
+                    background: `${receiptBadge.tone === 'success' ? TOKENS.colors.success : receiptBadge.tone === 'warning' ? (TOKENS.colors.warning ?? '#F59E0B') : TOKENS.colors.blue3}15`,
+                    border: `1px solid ${receiptBadge.tone === 'success' ? TOKENS.colors.success : receiptBadge.tone === 'warning' ? (TOKENS.colors.warning ?? '#F59E0B') : TOKENS.colors.blue3}40`,
+                    fontSize: 11, fontWeight: 700,
+                    color: receiptBadge.tone === 'success' ? TOKENS.colors.success : receiptBadge.tone === 'warning' ? (TOKENS.colors.warning ?? '#F59E0B') : TOKENS.colors.blue3,
+                  }}>
+                    {receiptBadge.label}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 13, color: TOKENS.colors.textMuted }}>—</span>
+                )}
+              </MetaCell>
             </div>
+
+            {(receiptSummary.qty_received_total > 0 || receiptSummary.qty_pending_total > 0) && (
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, marginBottom: 16,
+              }}>
+                <MetaCell label="RECIBIDO">
+                  <span style={{ fontSize: 13, color: TOKENS.colors.text }}>{fmt(receiptSummary.qty_received_total)}</span>
+                </MetaCell>
+                <MetaCell label="PENDIENTE">
+                  <span style={{ fontSize: 13, color: TOKENS.colors.text }}>{fmt(receiptSummary.qty_pending_total)}</span>
+                </MetaCell>
+              </div>
+            )}
 
             {/* Líneas */}
             <p style={{
@@ -286,6 +331,22 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
             )}
 
             {/* Acciones */}
+            {showReceiptAction && (
+              <button
+                type="button"
+                onClick={() => setReceiptOpen(true)}
+                style={{
+                  width: '100%', padding: '12px 0', borderRadius: TOKENS.radius.md,
+                  background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
+                  fontSize: 13, fontWeight: 700, color: 'white',
+                  fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+                  border: 'none', marginBottom: canCancel ? 12 : 0,
+                }}
+              >
+                {resolveReceiptActionLabel(detail)}
+              </button>
+            )}
+
             {canCancel && (
               confirmOpen ? (
                 <div style={{
@@ -344,6 +405,16 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
           </>
         )}
       </div>
+      {receiptOpen && (
+        <RequisitionReceiptModal
+          requisitionId={requisitionId}
+          onClose={() => setReceiptOpen(false)}
+          onSaved={async () => {
+            await load()
+            onUpdated && onUpdated(requisitionId)
+          }}
+        />
+      )}
     </div>
   )
 }
