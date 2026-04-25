@@ -32,13 +32,22 @@ export function buildReceivePayloadLines(lines = []) {
 /**
  * Normalizes receipt summary fields from a requisition row (list or detail).
  * Falls back gracefully when the backend has not yet exposed the new fields.
+ *
+ * can_receive fallback: if the backend hasn't returned the field yet we infer
+ * it from receipt_state — confirmed/partially_received → true, received → false.
+ * This ensures the "Recibir producto" button is visible even before the Odoo
+ * module is deployed; the modal will surface any backend error on submit.
  */
 export function normalizeReceiptSummary(row = {}) {
+  const receipt_state = row.receipt_state || (row.state === 'purchase' ? 'confirmed' : '')
+  const can_receive = (row.can_receive !== undefined && row.can_receive !== null)
+    ? Boolean(row.can_receive)
+    : (receipt_state === 'confirmed' || receipt_state === 'partially_received')
   return {
-    receipt_state:       row.receipt_state || (row.state === 'purchase' ? 'confirmed' : ''),
+    receipt_state,
     qty_received_total:  Number(row.qty_received_total  || 0),
     qty_pending_total:   Number(row.qty_pending_total   || 0),
-    can_receive:         Boolean(row.can_receive),
+    can_receive,
     incoming_picking_id: Number(row.incoming_picking_id || 0),
   }
 }

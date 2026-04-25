@@ -79,14 +79,14 @@ test('buildReceivePayloadLines skips zero quantities', () => {
 
 // ── normalizeReceiptSummary ───────────────────────────────────────────────────
 
-test('normalizeReceiptSummary falls back to confirmed with zero totals when backend fields are absent', () => {
+test('normalizeReceiptSummary falls back to confirmed + can_receive=true when backend fields are absent', () => {
   assert.deepEqual(
     normalizeReceiptSummary({ state: 'purchase' }),
     {
       receipt_state: 'confirmed',
       qty_received_total: 0,
       qty_pending_total: 0,
-      can_receive: false,
+      can_receive: true,   // inferred from confirmed state — button must show even without backend field
       incoming_picking_id: 0,
     },
   )
