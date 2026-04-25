@@ -1275,42 +1275,17 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Requisition create (purchase.order draft) ───────────────────────────
-  // Creación mínima: crea el PO draft y sus líneas.
+  // Delegamos al controller de Odoo para que:
+  //   1. Mapee correctamente product_id + product_uom_id
+  //   2. Genere origin = "PWA-Admin: {name}" (requerido por el filtro del Torre)
+  //   3. Cree el registro gf.pwa.requisition con approval_state
+  //   4. Ejecute la lógica de umbral de aprobación
   if (cleanPath === '/pwa-admin/requisition-create' && method === 'POST') {
-    const lines = Array.isArray(body?.lines) ? body.lines : []
-    const created = await createUpdate({
-      model: 'purchase.order',
-      method: 'create',
-      dict: {
-        partner_id: Number(body?.partner_id || 0) || 60889,
-        company_id: Number(body?.company_id || companyId || 0) || undefined,
-        origin: body?.name || body?.title || 'PWA Admin',
-        notes: body?.description || body?.notes || '',
-        state: 'draft',
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    return odooJson('/pwa-admin/requisition-create', {
+      ...(body || {}),
+      // employee_id como fallback — el controller llama _resolve_employee()
+      employee_id: (body || {}).employee_id || getSession().employee_id || undefined,
     })
-    const orderId = Number(pickFirstResponse(created)?.id || created?.id || 0)
-    if (orderId && lines.length) {
-      for (const line of lines) {
-        await createUpdate({
-          model: 'purchase.order.line',
-          method: 'create',
-          dict: {
-            order_id: orderId,
-            name: line.product_name || line.name || 'Item',
-            product_qty: Number(line.quantity || line.qty || line.product_qty || 1),
-            product_id: Number(line.product_id || 0) || undefined,
-            price_unit: Number(line.price_unit || 0),
-            analytic_distribution: line.analytic_distribution || undefined,
-          },
-          sudo: 1,
-          app: 'pwa_colaboradores',
-        })
-      }
-    }
-    return { ok: true, data: { id: orderId, state: 'draft' } }
   }
 
   // ── Products search (para requisiciones / productPicker) ───────────────

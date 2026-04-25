@@ -12,6 +12,15 @@ import { BACKEND_CAPS } from '../adminService'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
+/** Limpia HTML del campo notes (purchase.order.notes es campo Html en Odoo 18) */
+function stripHtml(html) {
+  if (!html || typeof html !== 'string') return ''
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
 const STATUS_MAP = {
   draft:    { label: 'Borrador',   color: '#8b92a1' },
   sent:     { label: 'Enviado',    color: '#4ba3e0' },
@@ -65,7 +74,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
   const state = detail?.state || 'draft'
   const st = STATUS_MAP[state] || STATUS_MAP.draft
   const lines = Array.isArray(detail?.lines) ? detail.lines : []
-  const total = lines.reduce((s, l) => s + Number(l.price_subtotal ?? l.subtotal ?? (Number(l.quantity || 0) * Number(l.price_unit || 0))), 0)
+  const total = lines.reduce((s, l) => s + Number(l.price_subtotal ?? l.subtotal ?? ((Number(l.product_qty ?? l.quantity ?? l.qty ?? 0)) * Number(l.price_unit || 0))), 0)
   const canCancel = (state === 'draft' || state === 'sent') && BACKEND_CAPS.requisitionDetail
 
   return (
@@ -220,7 +229,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
                 </div>
                 <div style={{ maxHeight: 240, overflowY: 'auto' }}>
                   {lines.map((ln, i) => {
-                    const sub = Number(ln.price_subtotal ?? ln.subtotal ?? (Number(ln.quantity || 0) * Number(ln.price_unit || 0)))
+                    const sub = Number(ln.price_subtotal ?? ln.subtotal ?? ((Number(ln.product_qty ?? ln.quantity ?? ln.qty ?? 0)) * Number(ln.price_unit || 0)))
                     return (
                       <div key={ln.id || i} style={{
                         display: 'grid',
@@ -232,7 +241,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {ln.product_name || ln.name || ln.product_id?.[1] || '—'}
                         </span>
-                        <span style={{ textAlign: 'right' }}>{Number(ln.quantity || 0).toFixed(2)}</span>
+                        <span style={{ textAlign: 'right' }}>{Number(ln.product_qty ?? ln.quantity ?? ln.qty ?? 0).toFixed(2)}</span>
                         <span style={{ textAlign: 'right' }}>{fmt(ln.price_unit)}</span>
                         <span style={{ textAlign: 'right', fontWeight: 700, color: TOKENS.colors.text }}>
                           {fmt(sub)}
@@ -271,7 +280,7 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
                   NOTAS
                 </p>
                 <p style={{ fontSize: 12, color: TOKENS.colors.textSoft, margin: 0, whiteSpace: 'pre-wrap' }}>
-                  {detail.notes}
+                  {stripHtml(detail.notes)}
                 </p>
               </div>
             )}
