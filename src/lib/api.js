@@ -1714,54 +1714,11 @@ async function directAdmin(method, path, body) {
   // ── Torre de Control — Requisiciones (Req 1-6 2026-04-24) ─────────────────
   // Operador Torre valida/completa requisiciones draft creadas por el gerente/admin.
 
-  // Lista de requisiciones pendientes de validación (todas las empresas accesibles)
+  // Lista de requisiciones pendientes de validación (TODAS las empresas)
+  // Delegamos al controller Odoo que usa .sudo() sin filtro de compañía,
+  // para que Marisol (CSC GF) vea requisiciones creadas desde fabricación u otras empresas.
   if (cleanPath === '/pwa-admin/torre/requisitions' && method === 'GET') {
-    const tQuery = new URLSearchParams(path.split('?')[1] || '')
-    const tCompanyId = Number(tQuery.get('company_id') || 0)
-    const domain = [
-      ['state', 'in', ['draft', 'sent']],
-      ['origin', 'like', 'PWA-Admin:'],
-    ]
-    if (tCompanyId) domain.push(['company_id', '=', tCompanyId])
-    const result = await readModelSorted('purchase.order', {
-      fields: ['id', 'name', 'origin', 'state', 'amount_total', 'date_order', 'company_id', 'partner_id'],
-      domain,
-      sort_column: 'date_order',
-      sort_desc: true,
-      limit: 100,
-      sudo: 1,
-    })
-    const orders = pickListResponse(result)
-    // Obtener estados de aprobación de la tabla auxiliar
-    const poIds = orders.map((o) => o.id)
-    let approvalMap = {}
-    if (poIds.length) {
-      const approvalResult = await readModelSorted('gf.pwa.requisition', {
-        fields: ['po_id', 'approval_state', 'approval_reason'],
-        domain: [['po_id', 'in', poIds]],
-        sudo: 1,
-        limit: poIds.length + 10,
-      }).catch(() => [])
-      const approvals = pickListResponse(approvalResult)
-      for (const a of approvals) {
-        const pid = Array.isArray(a.po_id) ? a.po_id[0] : a.po_id
-        if (pid) approvalMap[pid] = a.approval_state || 'none'
-      }
-    }
-    const requisitions = orders.map((po) => ({
-      id: po.id,
-      name: po.name || '',
-      origin: po.origin || '',
-      state: po.state || '',
-      amount_total: Number(po.amount_total || 0),
-      date_order: po.date_order || null,
-      company_id: Array.isArray(po.company_id) ? po.company_id[0] : (po.company_id || 0),
-      company_name: Array.isArray(po.company_id) ? po.company_id[1] : '',
-      partner_id: Array.isArray(po.partner_id) ? po.partner_id[0] : (po.partner_id || 0),
-      partner_name: Array.isArray(po.partner_id) ? po.partner_id[1] : '',
-      approval_state: approvalMap[po.id] || 'none',
-    }))
-    return { ok: true, data: { count: requisitions.length, requisitions } }
+    return odooHttp('GET', '/pwa-admin/torre/requisitions', {})
   }
 
   // Detalle de una requisición (con líneas)
