@@ -298,10 +298,11 @@ function HistorialTab({ companyId }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rows.map((req, i) => {
+            const isReceived = req.receipt_state === 'received'
             const st = STATUS_MAP[req.state] || STATUS_MAP.draft
             const apv = APPROVAL_MAP[req.approval_state]
             const isPending = req.approval_state === 'pending'
-            const clickable = req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
+            const clickable = !isReceived && req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
             const receiptBadge = resolveReceiptBadge(req)
             const showReceive = BACKEND_CAPS.requisitionReceipt && shouldShowReceiptAction(req) && !isPending
 
@@ -348,8 +349,8 @@ function HistorialTab({ companyId }) {
                       {fmt(req.amount_total)}
                     </span>
                   )}
-                  <Badge label={st.label} tone={st.tone} />
-                  {apv && <Badge label={apv.label} tone={apv.tone} />}
+                  {!isReceived && <Badge label={st.label} tone={st.tone} />}
+                  {!isReceived && apv && <Badge label={apv.label} tone={apv.tone} />}
                   {receiptBadge && <Badge label={receiptBadge.label} tone={receiptBadge.tone} />}
                 </div>
 

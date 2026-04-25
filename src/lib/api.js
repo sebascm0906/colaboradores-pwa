@@ -1162,10 +1162,10 @@ async function directAdmin(method, path, body) {
     const offset = Number(query.get('offset') || 0)
     // Intentar con campos de aprobación (requieren -u gf_pwa_admin en el servidor).
     // Si el resultado contiene error de DB (campo no existe), reintentamos sin ellos.
-    const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line']
+    // picking_ids: necesario para derivar receipt_state cuando el backend aún no
+    // expone los campos computados del controlador requisition-receipt-detail.
+    const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'picking_ids']
     const APPROVAL_FIELDS = ['pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at']
-    // receipt_state/can_receive NO son campos ORM — los calcula el controlador
-    // leyendo el picking. Se obtienen vía requisition-receipt-detail, no aquí.
     let result = await readModelSorted('purchase.order', {
       fields: [...BASE_FIELDS, ...APPROVAL_FIELDS],
       domain,
@@ -1186,32 +1186,64 @@ async function directAdmin(method, path, body) {
         sudo: 1,
       })
     }
-    const rows = pickListResponse(result).map((row) => ({
-      purchase_order_id: row.id,
-      id: row.id,
-      name: row.name || '',
-      partner: row.partner_id?.[1] || '',
-      state: row.state || 'draft',
-      date_order: row.date_order || null,
-      amount_total: Number(row.amount_total || 0),
-      currency: row.currency_id?.[1] || 'MXN',
-      company_id: row.company_id?.[0] || 0,
-      origin: row.origin || '',
-      notes: row.notes || '',
-      line_count: Array.isArray(row.order_line) ? row.order_line.length : 0,
-      approval_state: row.pwa_approval_state || 'none',
-      approval_reason: row.pwa_approval_reason || null,
-      approved_by: row.pwa_approved_by_id?.[1] || null,
-      approved_at: row.pwa_approved_at || null,
-      // Receipt fields — defensive fallback when Odoo module not yet deployed.
-      // can_receive se deja null cuando Odoo no lo manda para que
-      // normalizeReceiptSummary lo infiera del receipt_state.
-      receipt_state: row.receipt_state || (row.state === 'purchase' ? 'confirmed' : ''),
-      qty_received_total: Number(row.qty_received_total || 0),
-      qty_pending_total: Number(row.qty_pending_total || 0),
-      can_receive: row.can_receive != null ? Boolean(row.can_receive) : null,
-      incoming_picking_id: Number(row.incoming_picking_id || 0),
-    }))
+    const orders = pickListResponse(result)
+    // Bulk fetch de stock.picking states para todas las requisiciones.
+    // received       = >=1 picking en 'done' y todos final ('done'/'cancel')
+    // partially_received = >=1 picking 'done' pero quedan pendientes
+    // confirmed      = state='purchase' sin pickings 'done'
+    const allPickingIds = []
+    for (const row of orders) {
+      const pids = Array.isArray(row.picking_ids) ? row.picking_ids : []
+      for (const pid of pids) allPickingIds.push(pid)
+    }
+    const pickingStateMap = {}
+    if (allPickingIds.length) {
+      const pickRes = await readModelSorted('stock.picking', {
+        fields: ['id', 'state'],
+        domain: [['id', 'in', allPickingIds]],
+        sudo: 1,
+        limit: allPickingIds.length + 10,
+      }).catch(() => [])
+      for (const p of pickListResponse(pickRes)) {
+        pickingStateMap[p.id] = p.state
+      }
+    }
+    const rows = orders.map((row) => {
+      const pids = Array.isArray(row.picking_ids) ? row.picking_ids : []
+      const states = pids.map((pid) => pickingStateMap[pid]).filter(Boolean)
+      const hasDone = states.some((s) => s === 'done')
+      const allFinal = states.length > 0 && states.every((s) => s === 'done' || s === 'cancel')
+      let derivedReceiptState = ''
+      if (row.state === 'purchase') {
+        if (hasDone && allFinal) derivedReceiptState = 'received'
+        else if (hasDone) derivedReceiptState = 'partially_received'
+        else derivedReceiptState = 'confirmed'
+      }
+      return {
+        purchase_order_id: row.id,
+        id: row.id,
+        name: row.name || '',
+        partner: row.partner_id?.[1] || '',
+        state: row.state || 'draft',
+        date_order: row.date_order || null,
+        amount_total: Number(row.amount_total || 0),
+        currency: row.currency_id?.[1] || 'MXN',
+        company_id: row.company_id?.[0] || 0,
+        origin: row.origin || '',
+        notes: row.notes || '',
+        line_count: Array.isArray(row.order_line) ? row.order_line.length : 0,
+        approval_state: row.pwa_approval_state || 'none',
+        approval_reason: row.pwa_approval_reason || null,
+        approved_by: row.pwa_approved_by_id?.[1] || null,
+        approved_at: row.pwa_approved_at || null,
+        // Receipt fields — preferimos lo que mande Odoo; si no, derivamos del picking.
+        receipt_state: row.receipt_state || derivedReceiptState,
+        qty_received_total: Number(row.qty_received_total || 0),
+        qty_pending_total: Number(row.qty_pending_total || 0),
+        can_receive: row.can_receive != null ? Boolean(row.can_receive) : null,
+        incoming_picking_id: Number(row.incoming_picking_id || 0),
+      }
+    })
     return { ok: true, data: { total_count: rows.length, count: rows.length, limit, offset, requisitions: rows } }
   }
 
