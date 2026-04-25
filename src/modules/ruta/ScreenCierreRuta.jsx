@@ -124,7 +124,6 @@ export default function ScreenCierreRuta() {
   // No persiste localStorage como fuente de verdad: respeta el mismo flujo
   // que el blur de los inputs (saveKmSalida/saveKmLlegada). NO cierra ruta.
   function applyVoiceParsed(parsed) {
-    // eslint-disable-next-line no-console
     console.log('[VOICE_KM] parsed', JSON.stringify({
       ok: parsed.ok,
       reason: parsed.reason || null,
@@ -148,7 +147,6 @@ export default function ScreenCierreRuta() {
       setKmLlegada(String(parsed.arrival_km))
       if (plan?.id) saveKmLlegada(plan.id, parsed.arrival_km)
     }
-    // eslint-disable-next-line no-console
     console.log('[VOICE_KM] applied', JSON.stringify({
       plan_id: plan?.id || null,
       employee_id: session?.employee_id || null,
@@ -160,7 +158,6 @@ export default function ScreenCierreRuta() {
   }
 
   function handleVoiceResult(envelope) {
-    // eslint-disable-next-line no-console
     console.log('[VOICE_KM] transcript', JSON.stringify({
       trace_id: envelope?.trace_id || null,
       transcript: envelope?.meta?.transcript || envelope?.data?.transcript || '',
@@ -176,7 +173,6 @@ export default function ScreenCierreRuta() {
     const transcript = envelope?.meta?.transcript || envelope?.data?.transcript || ''
     if (transcript && transcript.trim()) {
       if (envelope?.trace_id) setVoiceTraceId(envelope.trace_id)
-      // eslint-disable-next-line no-console
       console.log('[VOICE_KM] transcript (rescued from error)', JSON.stringify({
         trace_id: envelope?.trace_id || null,
         transcript,
@@ -186,7 +182,6 @@ export default function ScreenCierreRuta() {
       applyVoiceParsed(parsed)
       return
     }
-    // eslint-disable-next-line no-console
     console.log('[VOICE_KM] voice_error', JSON.stringify({ code, message }))
     setVoiceNote({ kind: 'error', message: message || 'No se pudo procesar el audio.' })
   }
