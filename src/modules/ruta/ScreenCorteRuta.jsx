@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan, getReconciliation, getLoadLines } from './api'
+import { getMyRoutePlan, getReconciliation, getLoadLines, validateRouteCorte } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import {
   buildInventoryView,
@@ -26,6 +26,8 @@ export default function ScreenCorteRuta() {
   const [plan, setPlan] = useState(null)
   const [validation, setValidation] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => { loadData() }, [])
 
@@ -58,16 +60,34 @@ export default function ScreenCorteRuta() {
     setLoading(false)
   }
 
-  function handleConfirmCorte() {
-    if (!plan?.id) return
-    // ATENCIÓN: el corte hoy NO tiene endpoint backend propio. Esta acción
-    // solo marca un flag en localStorage para que el flujo del hub avance al
-    // siguiente paso (Liquidación). La validación real (cuadre = 0) ocurre
-    // server-side al cerrar la ruta vía /pwa-ruta/close-route. Si Sebastián
-    // expone un endpoint de corte_validated, hay que llamarlo aquí y solo
-    // marcar `corteDone:true` si retorna ok:true.
-    saveCierreState(plan.id, { corteDone: true, corteAt: new Date().toISOString() })
-    setConfirmed(true)
+  async function handleConfirmCorte() {
+    if (!plan?.id || confirming) return
+    setConfirming(true)
+    setError('')
+    try {
+      const res = await validateRouteCorte(plan.id, validation || {}, '')
+      const payload = res?.data || res?.details || {}
+      if (res?.ok === false || res?.success === false) {
+        const msg = res?.message || payload?.errors?.[0] || 'No se pudo validar el corte'
+        setError(msg)
+        return
+      }
+      saveCierreState(plan.id, {
+        corteDone: true,
+        corteAt: payload.corte_validated_at || new Date().toISOString(),
+      })
+      setConfirmed(true)
+      setPlan(prev => prev ? {
+        ...prev,
+        corte_validated: true,
+        corte_validated_at: payload.corte_validated_at || prev.corte_validated_at,
+      } : prev)
+    } catch (e) {
+      logScreenError('ScreenCorteRuta', 'validateRouteCorte', e)
+      setError(e?.message || 'No se pudo validar el corte')
+    } finally {
+      setConfirming(false)
+    }
   }
 
   const lines = invView?.lines || []
@@ -230,6 +250,15 @@ export default function ScreenCorteRuta() {
               </div>
             )}
 
+            {error && (
+              <div style={{
+                padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 12,
+                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+              }}>
+                <p style={{ ...typo.caption, color: '#ef4444', margin: 0 }}>{error}</p>
+              </div>
+            )}
+
             {/* Confirm button */}
             {confirmed ? (
               <div style={{
@@ -247,16 +276,16 @@ export default function ScreenCorteRuta() {
             ) : (
               <button
                 onClick={handleConfirmCorte}
-                disabled={!isValid}
+                disabled={!isValid || confirming}
                 style={{
                   width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.lg,
                   background: isValid ? 'linear-gradient(135deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
                   color: isValid ? 'white' : TOKENS.colors.textMuted,
                   fontWeight: 700, fontSize: 15,
-                  opacity: isValid ? 1 : 0.5,
+                  opacity: (!isValid || confirming) ? 0.5 : 1,
                 }}
               >
-                {isValid ? 'Validar corte (local)' : 'Corte no disponible (revisar diferencias)'}
+                {!isValid ? 'Corte no disponible (revisar diferencias)' : (confirming ? 'Validando...' : 'Confirmar Corte')}
               </button>
             )}
 

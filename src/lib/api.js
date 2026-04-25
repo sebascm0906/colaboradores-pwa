@@ -3692,6 +3692,20 @@ async function directRuta(method, path, body) {
     return row || null
   }
 
+  if (cleanPath === '/pwa-ruta/accept-load' && method === 'POST') {
+    return odooJson('/pwa-ruta/accept-load', {
+      route_plan_id: Number(body?.route_plan_id || body?.plan_id || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-ruta/validate-corte' && method === 'POST') {
+    return odooJson('/pwa-ruta/validate-corte', {
+      plan_id: Number(body?.plan_id || 0),
+      client_validation: body?.client_validation || {},
+      notes: body?.notes || '',
+    })
+  }
+
   if (cleanPath === '/pwa-ruta/incident-create' && method === 'POST') {
     return createUpdate({
       model: 'gf.route.incident',

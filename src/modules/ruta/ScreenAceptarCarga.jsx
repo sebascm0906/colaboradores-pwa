@@ -61,8 +61,13 @@ export default function ScreenAceptarCarga() {
     if (!plan?.id) return
     setSubmitting(true)
     try {
-      await acceptLoad(plan.id)
-      setLoad(prev => prev ? { ...prev, state: 'accepted' } : prev)
+      const result = await acceptLoad(plan.id)
+      const payload = result?.data || result || {}
+      setLoad(prev => prev ? {
+        ...prev,
+        state: payload.state || 'accepted',
+        load_sealed: payload.load_sealed === true || prev.load_sealed === true,
+      } : prev)
     } catch (e) {
       logScreenError('ScreenAceptarCarga', 'acceptLoad', e)
       setError('No se pudo aceptar la carga')

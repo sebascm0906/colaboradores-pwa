@@ -37,6 +37,15 @@ export function acceptLoad(routePlanId) {
   return api('POST', '/pwa-ruta/accept-load', { route_plan_id: routePlanId })
 }
 
+/** Validar corte real en backend */
+export function validateRouteCorte(planId, clientValidation = {}, notes = '') {
+  return api('POST', '/pwa-ruta/validate-corte', {
+    plan_id: Number(planId),
+    client_validation: clientValidation || {},
+    notes: String(notes || ''),
+  })
+}
+
 // ── Incidencias ──────────────────────────────────────────────────────────────
 
 /** Reportar incidencia */
