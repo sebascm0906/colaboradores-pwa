@@ -32,18 +32,24 @@ export function getMyLoad(routePlanId) {
   return api('GET', `/pwa-ruta/my-load?route_plan_id=${routePlanId}`)
 }
 
-/** Aceptar/confirmar la carga recibida */
+/** Aceptar/confirmar la carga recibida.
+ *
+ *  Endpoint real (Sebastián 2026-04-25): POST /pwa-ruta/accept-load
+ *  Body acepta route_plan_id o plan_id; usamos route_plan_id como canonical.
+ *
+ *  Respuesta éxito:
+ *    { ok:true, success:true, message:'Carga sellada y picking validado',
+ *      data:{ plan_id, state, load_sealed, load_sealed_at, load_sealed_by,
+ *             picking_id, picking_name, picking_state } }
+ *
+ *  Respuesta error funcional (HTTP 200 igual):
+ *    { ok:false, message:'No tienes acceso a este plan.', data:{} }
+ *
+ *  IMPORTANTE: el consumer DEBE validar `res.ok === true || res.success === true`
+ *  antes de marcar éxito. HTTP 200 no es suficiente.
+ */
 export function acceptLoad(routePlanId) {
   return api('POST', '/pwa-ruta/accept-load', { route_plan_id: routePlanId })
-}
-
-/** Validar corte real en backend */
-export function validateRouteCorte(planId, clientValidation = {}, notes = '') {
-  return api('POST', '/pwa-ruta/validate-corte', {
-    plan_id: Number(planId),
-    client_validation: clientValidation || {},
-    notes: String(notes || ''),
-  })
 }
 
 // ── Incidencias ──────────────────────────────────────────────────────────────
@@ -102,6 +108,54 @@ export function getVehicleChecks(checklistId) {
 export function updateKm(planId, type, km) {
   return api('POST', '/pwa-ruta/km-update', { plan_id: planId, type, km })
 }
+
+// ── Validar/confirmar corte (contrato Sebastián 2026-04-25) ─────────────────
+
+/** Pide al backend recalcular y persistir validación de corte.
+ *
+ *  Endpoint real: POST /pwa-ruta/validate-corte
+ *  Alias backend equivalente: POST /pwa-ruta/corte-confirm (mismo handler).
+ *  Decisión: usamos validate-corte como canonical (aliné nombre con el que
+ *  Sebastián documentó como "preferido"). Si en el futuro cambia, el alias
+ *  funciona igual sin tocar este wrapper.
+ *
+ *  El backend recalcula totals con _ensure_reconciliation(recompute=True);
+ *  client_validation se envía como hint informativo pero NO decide.
+ *
+ *  Respuesta éxito:
+ *    { ok:true, success:true, message:'Corte validado',
+ *      data:{ plan_id, corte_validated, corte_validated_at,
+ *             totals:{ loaded, delivered, returned, scrap, difference },
+ *             errors:[], warnings:[] } }
+ *
+ *  Respuesta error funcional (HTTP 200 igual):
+ *    { ok:false, success:false, code:'corte_validation_failed',
+ *      message:'El corte no cuadra a cero',
+ *      details:{ plan_id, totals, errors, warnings } }
+ *  o:
+ *    { ok:false, message:'No se encontró plan para corte.', data:{} }
+ *
+ *  IMPORTANTE: el consumer DEBE validar `res.ok === true && data.corte_validated === true`
+ *  antes de marcar corteDone.
+ *
+ *  @param {number} planId
+ *  @param {{valid:boolean, errors:string[], warnings:string[]}} clientValidation
+ *  @param {string} [notes]
+ */
+export function validateCorte(planId, clientValidation, notes = '') {
+  return api('POST', '/pwa-ruta/validate-corte', {
+    plan_id: Number(planId),
+    client_validation: clientValidation || { valid: false, errors: [], warnings: [] },
+    notes: String(notes || '').trim(),
+  })
+}
+
+/** Alias compatible: durante el rebase de PR #19 se identificó un commit
+ *  paralelo de Sebastián (a925647) que exportó la misma función con el
+ *  nombre `validateRouteCorte`. Conservamos el alias para no romper
+ *  consumidores externos que ya hayan importado ese símbolo. La canonical
+ *  sigue siendo `validateCorte`. */
+export const validateRouteCorte = validateCorte
 
 // ── Liquidación real (gf_logistics_ops) ─────────────────────────────────────
 

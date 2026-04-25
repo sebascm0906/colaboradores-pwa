@@ -6,11 +6,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan, getReconciliation, getLoadLines, validateRouteCorte } from './api'
+import { getMyRoutePlan, getReconciliation, getLoadLines, validateCorte } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import {
   buildInventoryView,
-  validateCorte,
+  validateCorte as validateCorteLocal,
   saveCierreState,
   getCierreState,
   fmtNum,
@@ -26,8 +26,13 @@ export default function ScreenCorteRuta() {
   const [plan, setPlan] = useState(null)
   const [validation, setValidation] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState('')
+  // Estado del submit al backend de validate-corte
+  const [submitting, setSubmitting] = useState(false)
+  // Banner de feedback tras el call al backend
+  // {kind:'success'|'mismatch'|'error', message:string, details?:object} | null
+  const [backendNote, setBackendNote] = useState(null)
+  // Marca server-side: solo true cuando backend devolvió data.corte_validated
+  const [serverConfirmed, setServerConfirmed] = useState(false)
 
   useEffect(() => { loadData() }, [])
 
@@ -38,9 +43,19 @@ export default function ScreenCorteRuta() {
       setPlan(p)
       if (!p) { setInvView(null); setLoading(false); return }
 
-      // Check if already confirmed — backend field or local cache
+      // Check if already confirmed — preferimos campo backend (corte_validated)
+      // sobre el cache de localStorage. Si el plan ya viene con
+      // corte_validated:true desde Odoo, marcamos como confirmed server-side.
       const cierreState = getCierreState(p.id, p)
-      if (cierreState.corteDone) setConfirmed(true)
+      if (p.corte_validated === true) {
+        setConfirmed(true)
+        setServerConfirmed(true)
+      } else if (cierreState.corteDone) {
+        // Cache local heredado de versiones previas; lo mostramos como
+        // confirmado para no perder progreso UX, pero NO marcamos
+        // serverConfirmed (el cierre final de ruta validará server-side).
+        setConfirmed(true)
+      }
 
       let reconciliation = null
       if (p.reconciliation_id) {
@@ -55,38 +70,105 @@ export default function ScreenCorteRuta() {
 
       const iv = buildInventoryView(reconciliation, loadLinesData)
       setInvView(iv)
-      setValidation(validateCorte(iv))
+      setValidation(validateCorteLocal(iv))
     } catch (e) { logScreenError('ScreenCorteRuta', 'loadData', e); setInvView(null) }
     setLoading(false)
   }
 
+  /**
+   * Llama POST /pwa-ruta/validate-corte. Backend recalcula la conciliación
+   * con _ensure_reconciliation(recompute=True) y decide si el cuadre = 0.
+   * client_validation se envía como hint de telemetría (no decide).
+   *
+   * Casos manejados:
+   *   res.ok === true  + data.corte_validated === true → marca server-confirmed
+   *   res.ok === false + code === 'corte_validation_failed' → muestra detalles
+   *   res.ok === false (sin code) → ownership/acceso, mensaje del backend
+   *   network error / 404 / 5xx → error genérico, NO marca corteDone
+   *
+   * En NINGÚN caso usamos localStorage como fuente de verdad para "validó
+   * server-side". Solo usamos saveCierreState como cache UX cuando el
+   * backend confirmó explícitamente — y serverConfirmed=true es la marca
+   * que dice "esto vino del backend".
+   */
   async function handleConfirmCorte() {
-    if (!plan?.id || confirming) return
-    setConfirming(true)
-    setError('')
+    if (!plan?.id || submitting) return
+    setSubmitting(true)
+    setBackendNote(null)
+    const ENDPOINT = '/pwa-ruta/validate-corte'
+
+    // client_validation es informativo: ayuda al backend a comparar con su
+    // propio recálculo. No decide el resultado.
+    const clientValidation = validation
+      ? { valid: !!validation.valid, errors: validation.errors || [], warnings: validation.warnings || [] }
+      : { valid: false, errors: [], warnings: [] }
+
     try {
-      const res = await validateRouteCorte(plan.id, validation || {}, '')
-      const payload = res?.data || res?.details || {}
-      if (res?.ok === false || res?.success === false) {
-        const msg = res?.message || payload?.errors?.[0] || 'No se pudo validar el corte'
-        setError(msg)
+      const res = await validateCorte(plan.id, clientValidation, '')
+      const data = res?.data ?? {}
+
+      // Caso 1: backend confirmó cuadre OK
+      if (res?.ok === true && data?.corte_validated === true) {
+        // Cache UI para que el hub muestre el step como done sin esperar refetch.
+        // El campo `serverConfirmed` es el flag honesto: solo true cuando backend
+        // confirmó explícitamente.
+        saveCierreState(plan.id, {
+          corteDone: true,
+          corteAt: data?.corte_validated_at || new Date().toISOString(),
+        })
+        setConfirmed(true)
+        setServerConfirmed(true)
+        setBackendNote({
+          kind: 'success',
+          message: res?.message || 'Corte validado por backend',
+          details: data?.totals || null,
+        })
         return
       }
-      saveCierreState(plan.id, {
-        corteDone: true,
-        corteAt: payload.corte_validated_at || new Date().toISOString(),
+
+      // Caso 2: error funcional con detalles (no cuadra)
+      if (res?.ok === false && res?.code === 'corte_validation_failed') {
+        const det = res?.details || {}
+        setBackendNote({
+          kind: 'mismatch',
+          message: res?.message || 'El corte no cuadra a cero',
+          details: {
+            totals: det.totals || null,
+            errors: Array.isArray(det.errors) ? det.errors : [],
+            warnings: Array.isArray(det.warnings) ? det.warnings : [],
+          },
+        })
+        return
+      }
+
+      // Caso 3: cualquier otra forma de ok:false (acceso, plan no encontrado)
+      // o respuesta sin shape esperado (404 con HTML, body vacío).
+      const err = new Error(`Endpoint ${ENDPOINT} no validó el corte`)
+      err.context = {
+        plan_id: plan.id,
+        employee_id: session?.employee_id,
+        status: res?.status ?? res?.case ?? null,
+        body: JSON.stringify(res ?? null).slice(0, 500),
+      }
+      logScreenError('ScreenCorteRuta', 'handleConfirmCorte.invalidResponse', err)
+      setBackendNote({
+        kind: 'error',
+        message: res?.message || 'No se pudo validar el corte. Intenta de nuevo o reporta a soporte.',
       })
-      setConfirmed(true)
-      setPlan(prev => prev ? {
-        ...prev,
-        corte_validated: true,
-        corte_validated_at: payload.corte_validated_at || prev.corte_validated_at,
-      } : prev)
     } catch (e) {
-      logScreenError('ScreenCorteRuta', 'validateRouteCorte', e)
-      setError(e?.message || 'No se pudo validar el corte')
+      // Network error, 404 con HTML, 5xx, JSON parse error.
+      e.context = {
+        plan_id: plan.id,
+        employee_id: session?.employee_id,
+        endpoint: ENDPOINT,
+      }
+      logScreenError('ScreenCorteRuta', 'handleConfirmCorte.networkError', e)
+      setBackendNote({
+        kind: 'error',
+        message: 'No se pudo validar el corte. Intenta de nuevo o reporta a soporte.',
+      })
     } finally {
-      setConfirming(false)
+      setSubmitting(false)
     }
   }
 
@@ -250,12 +332,42 @@ export default function ScreenCorteRuta() {
               </div>
             )}
 
-            {error && (
+            {/* Banner de respuesta backend (success / mismatch / error) */}
+            {backendNote && (
               <div style={{
                 padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 12,
-                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                background:
+                  backendNote.kind === 'success' ? 'rgba(34,197,94,0.10)'
+                  : backendNote.kind === 'mismatch' ? 'rgba(245,158,11,0.10)'
+                  : 'rgba(239,68,68,0.10)',
+                border: `1px solid ${
+                  backendNote.kind === 'success' ? 'rgba(34,197,94,0.30)'
+                  : backendNote.kind === 'mismatch' ? 'rgba(245,158,11,0.30)'
+                  : 'rgba(239,68,68,0.30)'}`,
               }}>
-                <p style={{ ...typo.caption, color: '#ef4444', margin: 0 }}>{error}</p>
+                <p style={{
+                  ...typo.caption, margin: 0, fontWeight: 700,
+                  color:
+                    backendNote.kind === 'success' ? '#22c55e'
+                    : backendNote.kind === 'mismatch' ? '#f59e0b'
+                    : '#ef4444',
+                }}>{backendNote.message}</p>
+                {/* Detalles del mismatch — diferencia + errors/warnings */}
+                {backendNote.kind === 'mismatch' && backendNote.details && (
+                  <>
+                    {backendNote.details.totals && (
+                      <p style={{ ...typo.caption, color: '#f59e0b', margin: '6px 0 0' }}>
+                        Diferencia: {fmtNum(backendNote.details.totals.difference || 0)} unidades
+                      </p>
+                    )}
+                    {(backendNote.details.errors || []).map((e, i) => (
+                      <p key={i} style={{ ...typo.caption, color: '#f59e0b', margin: '2px 0 0' }}>- {e}</p>
+                    ))}
+                    {(backendNote.details.warnings || []).map((w, i) => (
+                      <p key={i} style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>- {w}</p>
+                    ))}
+                  </>
+                )}
               </div>
             )}
 
@@ -267,25 +379,31 @@ export default function ScreenCorteRuta() {
                 textAlign: 'center',
               }}>
                 <p style={{ ...typo.body, color: '#22c55e', margin: 0, fontWeight: 700 }}>
-                  Validación local OK
+                  {serverConfirmed ? 'Corte validado por backend' : 'Validación local OK'}
                 </p>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
-                  El cuadre se valida en backend al cerrar la ruta.
+                  {serverConfirmed
+                    ? 'corte_validated registrado en Odoo.'
+                    : 'Validación local solamente. El backend re-valida al cerrar la ruta.'}
                 </p>
               </div>
             ) : (
               <button
                 onClick={handleConfirmCorte}
-                disabled={!isValid || confirming}
+                disabled={!isValid || submitting}
                 style={{
                   width: '100%', padding: '14px 0', borderRadius: TOKENS.radius.lg,
                   background: isValid ? 'linear-gradient(135deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
                   color: isValid ? 'white' : TOKENS.colors.textMuted,
                   fontWeight: 700, fontSize: 15,
-                  opacity: (!isValid || confirming) ? 0.5 : 1,
+                  opacity: (isValid && !submitting) ? 1 : 0.5,
                 }}
               >
-                {!isValid ? 'Corte no disponible (revisar diferencias)' : (confirming ? 'Validando...' : 'Confirmar Corte')}
+                {submitting
+                  ? 'Validando con backend…'
+                  : isValid
+                    ? 'Validar corte'
+                    : 'Corte no disponible (revisar diferencias)'}
               </button>
             )}
 

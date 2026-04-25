@@ -58,24 +58,57 @@ export default function ScreenAceptarCarga() {
   }, [])
 
   async function handleAccept() {
-    if (!plan?.id) return
+    if (!plan?.id || submitting) return
     setSubmitting(true)
+    setError('')
     try {
-      const result = await acceptLoad(plan.id)
-      const payload = result?.data || result || {}
-      setLoad(prev => prev ? {
-        ...prev,
-        state: payload.state || 'accepted',
-        load_sealed: payload.load_sealed === true || prev.load_sealed === true,
-      } : prev)
+      const res = await acceptLoad(plan.id)
+      const ok = res?.ok === true || res?.success === true
+
+      if (!ok) {
+        // Backend respondió HTTP 200 pero con ok:false (acceso, validación,
+        // endpoint no deployado que devuelve shape vacío, etc.).
+        // NO marcamos load_sealed en falso; mostramos el message del backend
+        // si vino, sino mensaje genérico.
+        const err = new Error(`accept-load no confirmó la aceptación`)
+        err.context = {
+          plan_id: plan.id,
+          employee_id: session?.employee_id,
+          status: res?.status ?? res?.case ?? null,
+          body: JSON.stringify(res ?? null).slice(0, 500),
+        }
+        logScreenError('ScreenAceptarCarga', 'acceptLoad.invalidResponse', err)
+        setError(res?.message || 'No se pudo aceptar la carga. Intenta de nuevo o reporta a soporte.')
+        return
+      }
+
+      // Éxito confirmado: reflejamos load_sealed real desde el backend.
+      const data = res?.data || {}
+      setLoad(prev => prev
+        ? {
+            ...prev,
+            state: data.state || prev.state,
+            load_sealed: data.load_sealed === true ? true : prev.load_sealed,
+            load_sealed_at: data.load_sealed_at || prev.load_sealed_at,
+            load_sealed_by: data.load_sealed_by || prev.load_sealed_by,
+          }
+        : prev)
     } catch (e) {
-      logScreenError('ScreenAceptarCarga', 'acceptLoad', e)
-      setError('No se pudo aceptar la carga')
+      // Network error, 404, 5xx, JSON parse error.
+      e.context = {
+        plan_id: plan.id,
+        employee_id: session?.employee_id,
+        endpoint: '/pwa-ruta/accept-load',
+      }
+      logScreenError('ScreenAceptarCarga', 'acceptLoad.networkError', e)
+      setError('No se pudo aceptar la carga. Intenta de nuevo o reporta a soporte.')
     } finally {
       setSubmitting(false)
     }
   }
 
+  // load_sealed es la fuente de verdad — viene del backend en getMyLoad y se
+  // actualiza solo cuando handleAccept confirma con res.ok === true.
   const isAccepted = load?.load_sealed === true
   const products = lines.length > 0 ? lines : (load?.products || load?.lines || [])
 
