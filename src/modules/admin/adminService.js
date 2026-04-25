@@ -45,6 +45,8 @@ export const BACKEND_CAPS = {
   productSearch: true,
   // GET /pwa-admin/requisition-detail + POST /requisition-cancel
   requisitionDetail: true,
+  // GET /pwa-admin/requisition-receipt-detail + POST /requisition-receive
+  requisitionReceipt: true,
   // GET /pwa-admin/cash-closing/history + /detail
   cashClosingHistory: true,
   // POST /pwa-admin/expense-attach + GET /expense-attachments

@@ -1201,6 +1201,12 @@ async function directAdmin(method, path, body) {
       approval_reason: row.pwa_approval_reason || null,
       approved_by: row.pwa_approved_by_id?.[1] || null,
       approved_at: row.pwa_approved_at || null,
+      // Receipt fields — defensive fallback when Odoo module not yet deployed
+      receipt_state: row.receipt_state || (row.state === 'purchase' ? 'confirmed' : ''),
+      qty_received_total: Number(row.qty_received_total || 0),
+      qty_pending_total: Number(row.qty_pending_total || 0),
+      can_receive: Boolean(row.can_receive),
+      incoming_picking_id: Number(row.incoming_picking_id || 0),
     }))
     return { ok: true, data: { total_count: rows.length, count: rows.length, limit, offset, requisitions: rows } }
   }
@@ -1255,6 +1261,12 @@ async function directAdmin(method, path, body) {
         origin: header.origin || '',
         notes: header.notes || '',
         lines,
+        // Receipt fields — defensive fallback when Odoo module not yet deployed
+        receipt_state: header.receipt_state || (header.state === 'purchase' ? 'confirmed' : ''),
+        qty_received_total: Number(header.qty_received_total || 0),
+        qty_pending_total: Number(header.qty_pending_total || 0),
+        can_receive: Boolean(header.can_receive),
+        incoming_picking_id: Number(header.incoming_picking_id || 0),
       },
     }
   }
@@ -1286,6 +1298,21 @@ async function directAdmin(method, path, body) {
       // employee_id como fallback — el controller llama _resolve_employee()
       employee_id: (body || {}).employee_id || getSession().employee_id || undefined,
     })
+  }
+
+  // ── Requisition receipt detail (passthrough al controller de Odoo) ──────
+  // GET /pwa-admin/requisition-receipt-detail?id=PO_ID
+  // Devuelve picking de recepción con líneas editables.
+  if (cleanPath === '/pwa-admin/requisition-receipt-detail' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooHttp('GET', `/pwa-admin/requisition-receipt-detail?${query.toString()}`, {})
+  }
+
+  // ── Requisition receive (passthrough al controller de Odoo) ────────────
+  // POST /pwa-admin/requisition-receive { id, lines: [{move_id, receive_now_qty}] }
+  // Valida cantidades y ejecuta button_validate() parcial sobre el picking.
+  if (cleanPath === '/pwa-admin/requisition-receive' && method === 'POST') {
+    return odooJson('/pwa-admin/requisition-receive', body || {})
   }
 
   // ── Products search (para requisiciones / productPicker) ───────────────

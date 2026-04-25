@@ -375,3 +375,18 @@ export function getRecoveryCustomers(filters = {}) {
   }
   return api('GET', `/pwa-supv/customers/recovery${toQuery(mapped)}`)
 }
+
+// ── Requisition receipt ───────────────────────────────────────────────────────
+
+/** Detalle del picking de recepción asociado a una requisición confirmada.
+ *  Devuelve: { picking_id, state, lines: [{ move_id, product_name, qty_ordered,
+ *    qty_received, qty_pending }] } */
+export function getRequisitionReceiptDetail(id) {
+  return api('GET', `/pwa-admin/requisition-receipt-detail?id=${id}`)
+}
+
+/** Registra recepción parcial o total sobre el picking de Odoo.
+ *  Payload: { id: purchase_order_id, lines: [{ move_id, receive_now_qty }] } */
+export function receiveRequisitionProducts(data) {
+  return api('POST', '/pwa-admin/requisition-receive', data)
+}
