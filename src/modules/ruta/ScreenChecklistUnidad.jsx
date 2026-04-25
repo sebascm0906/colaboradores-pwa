@@ -76,9 +76,13 @@ export default function ScreenChecklistUnidad() {
     try {
       await submitVehicleCheck(c.id, data)
       setChecks(prev => prev.map((ch, i) => i === idx ? { ...ch, saved: true } : ch))
+      setError('')
     } catch (e) {
       logScreenError('ScreenChecklistUnidad', 'submitVehicleCheck', e)
-      // user can retry
+      // Antes el error era silencioso — el usuario veía el item sin marcar
+      // pero pensaba que la app aún cargaba. Ahora mostramos error explícito
+      // para que sepa que el backend rechazó y debe reintentar.
+      setError('No se pudo guardar el ítem. Reintenta o reporta a soporte.')
     }
   }
 
