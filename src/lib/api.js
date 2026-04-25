@@ -1282,7 +1282,7 @@ async function directAdmin(method, path, body) {
       model: 'purchase.order',
       method: 'create',
       dict: {
-        partner_id: Number(body?.partner_id || 0) || 1,
+        partner_id: Number(body?.partner_id || 0) || 60889,
         company_id: Number(body?.company_id || companyId || 0) || undefined,
         origin: body?.name || body?.title || 'PWA Admin',
         notes: body?.description || body?.notes || '',
@@ -1300,7 +1300,7 @@ async function directAdmin(method, path, body) {
           dict: {
             order_id: orderId,
             name: line.product_name || line.name || 'Item',
-            product_qty: Number(line.qty || line.product_qty || 1),
+            product_qty: Number(line.quantity || line.qty || line.product_qty || 1),
             product_id: Number(line.product_id || 0) || undefined,
             price_unit: Number(line.price_unit || 0),
             analytic_distribution: line.analytic_distribution || undefined,
@@ -1355,32 +1355,18 @@ async function directAdmin(method, path, body) {
   }
 
   // ── Requisition approve / reject ────────────────────────────────────────
+  // Delegamos al controller de Odoo que opera sobre gf.pwa.requisition
+  // (no sobre purchase.order directamente — pwa_approval_state ya no existe ahí).
   if (cleanPath === '/pwa-admin/requisition-approve' && method === 'POST') {
     const id = Number(body?.id || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    await createUpdate({
-      model: 'purchase.order',
-      method: 'update',
-      ids: [id],
-      dict: { pwa_approval_state: 'approved' },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { ok: true, data: { id, approval_state: 'approved' } }
+    return odooJson('/pwa-admin/requisition-approve', { id })
   }
 
   if (cleanPath === '/pwa-admin/requisition-reject' && method === 'POST') {
     const id = Number(body?.id || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    await createUpdate({
-      model: 'purchase.order',
-      method: 'update',
-      ids: [id],
-      dict: { pwa_approval_state: 'rejected', pwa_approval_reason: body?.reason || '' },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { ok: true, data: { id, approval_state: 'rejected' } }
+    return odooJson('/pwa-admin/requisition-reject', { id, reason: body?.reason || '' })
   }
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
@@ -1748,6 +1734,175 @@ async function directAdmin(method, path, body) {
       expense_id: Number(body?.expense_id || 0),
       reason:     String(body?.reason || '').trim(),
     })
+  }
+
+  // ── Torre de Control — Requisiciones (Req 1-6 2026-04-24) ─────────────────
+  // Operador Torre valida/completa requisiciones draft creadas por el gerente/admin.
+
+  // Lista de requisiciones pendientes de validación (todas las empresas accesibles)
+  if (cleanPath === '/pwa-admin/torre/requisitions' && method === 'GET') {
+    const tQuery = new URLSearchParams(path.split('?')[1] || '')
+    const tCompanyId = Number(tQuery.get('company_id') || 0)
+    const domain = [
+      ['state', 'in', ['draft', 'sent']],
+      ['origin', 'like', 'PWA-Admin:'],
+    ]
+    if (tCompanyId) domain.push(['company_id', '=', tCompanyId])
+    const result = await readModelSorted('purchase.order', {
+      fields: ['id', 'name', 'origin', 'state', 'amount_total', 'date_order', 'company_id', 'partner_id'],
+      domain,
+      sort_column: 'date_order',
+      sort_desc: true,
+      limit: 100,
+      sudo: 1,
+    })
+    const orders = pickListResponse(result)
+    // Obtener estados de aprobación de la tabla auxiliar
+    const poIds = orders.map((o) => o.id)
+    let approvalMap = {}
+    if (poIds.length) {
+      const approvalResult = await readModelSorted('gf.pwa.requisition', {
+        fields: ['po_id', 'approval_state', 'approval_reason'],
+        domain: [['po_id', 'in', poIds]],
+        sudo: 1,
+        limit: poIds.length + 10,
+      }).catch(() => [])
+      const approvals = pickListResponse(approvalResult)
+      for (const a of approvals) {
+        const pid = Array.isArray(a.po_id) ? a.po_id[0] : a.po_id
+        if (pid) approvalMap[pid] = a.approval_state || 'none'
+      }
+    }
+    const requisitions = orders.map((po) => ({
+      id: po.id,
+      name: po.name || '',
+      origin: po.origin || '',
+      state: po.state || '',
+      amount_total: Number(po.amount_total || 0),
+      date_order: po.date_order || null,
+      company_id: Array.isArray(po.company_id) ? po.company_id[0] : (po.company_id || 0),
+      company_name: Array.isArray(po.company_id) ? po.company_id[1] : '',
+      partner_id: Array.isArray(po.partner_id) ? po.partner_id[0] : (po.partner_id || 0),
+      partner_name: Array.isArray(po.partner_id) ? po.partner_id[1] : '',
+      approval_state: approvalMap[po.id] || 'none',
+    }))
+    return { ok: true, data: { count: requisitions.length, requisitions } }
+  }
+
+  // Detalle de una requisición (con líneas)
+  if (cleanPath === '/pwa-admin/torre/requisition-detail' && method === 'GET') {
+    const tQuery = new URLSearchParams(path.split('?')[1] || '')
+    const tId = Number(tQuery.get('id') || 0)
+    if (!tId) return { ok: false, error: 'id requerido' }
+    const poRes = await readModelSorted('purchase.order', {
+      fields: ['id', 'name', 'origin', 'state', 'amount_total', 'date_order', 'company_id', 'partner_id', 'notes'],
+      domain: [['id', '=', tId]],
+      sudo: 1,
+      limit: 1,
+    })
+    const po = pickListResponse(poRes)[0]
+    if (!po) return { ok: false, error: 'Requisición no encontrada' }
+    const linesRes = await readModelSorted('purchase.order.line', {
+      fields: ['id', 'product_id', 'name', 'product_qty', 'product_uom_id', 'price_unit', 'price_subtotal', 'analytic_distribution'],
+      domain: [['order_id', '=', tId]],
+      sudo: 1,
+      limit: 200,
+    })
+    const lines = pickListResponse(linesRes)
+    const approvalRes = await readModelSorted('gf.pwa.requisition', {
+      fields: ['approval_state', 'approval_reason', 'approved_by_id', 'approved_at'],
+      domain: [['po_id', '=', tId]],
+      sudo: 1,
+      limit: 1,
+    }).catch(() => [])
+    const approval = pickListResponse(approvalRes)[0] || {}
+    return {
+      ok: true,
+      data: {
+        id: po.id,
+        name: po.name || '',
+        origin: po.origin || '',
+        state: po.state || '',
+        amount_total: Number(po.amount_total || 0),
+        date_order: po.date_order || null,
+        company_id: Array.isArray(po.company_id) ? po.company_id[0] : (po.company_id || 0),
+        company_name: Array.isArray(po.company_id) ? po.company_id[1] : '',
+        partner_id: Array.isArray(po.partner_id) ? po.partner_id[0] : (po.partner_id || 0),
+        partner_name: Array.isArray(po.partner_id) ? po.partner_id[1] : '',
+        notes: po.notes || '',
+        approval_state: approval.approval_state || 'none',
+        approval_reason: approval.approval_reason || '',
+        lines: lines.map((l) => ({
+          id: l.id,
+          product_id: Array.isArray(l.product_id) ? l.product_id[0] : (l.product_id || 0),
+          product_name: Array.isArray(l.product_id) ? l.product_id[1] : (l.name || ''),
+          qty: Number(l.product_qty || 0),
+          uom: Array.isArray(l.product_uom_id) ? l.product_uom_id[1] : '',
+          price_unit: Number(l.price_unit || 0),
+          subtotal: Number(l.price_subtotal || 0),
+          analytic_distribution: l.analytic_distribution || null,
+        })),
+      },
+    }
+  }
+
+  // Actualizar líneas de una requisición (price_unit + analytic_distribution)
+  if (cleanPath === '/pwa-admin/torre/requisition-update' && method === 'POST') {
+    const lines = Array.isArray(body?.lines) ? body.lines : []
+    for (const line of lines) {
+      if (!line.id) continue
+      const dict = {}
+      if (line.price_unit !== undefined && line.price_unit !== null) dict.price_unit = Number(line.price_unit)
+      if (line.analytic_distribution !== undefined) dict.analytic_distribution = line.analytic_distribution || false
+      if (Object.keys(dict).length) {
+        await createUpdate({
+          model: 'purchase.order.line',
+          method: 'update',
+          ids: [Number(line.id)],
+          dict,
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        })
+      }
+    }
+    return { ok: true, data: { updated: lines.length } }
+  }
+
+  // Confirmar requisición → convierte a purchase.order confirmado
+  if (cleanPath === '/pwa-admin/torre/requisition-confirm' && method === 'POST') {
+    return odooJson('/pwa-admin/torre/requisition-confirm', { id: Number(body?.id || 0) })
+  }
+
+  // Cuentas analíticas filtradas por plan "PL" (plazas) — para el Torre detail
+  if (cleanPath === '/pwa-admin/torre/plazas' && method === 'GET') {
+    const tQuery = new URLSearchParams(path.split('?')[1] || '')
+    const tCompanyId = Number(tQuery.get('company_id') || 0)
+    const planRes = await readModelSorted('account.analytic.plan', {
+      fields: ['id', 'name', 'code'],
+      domain: [['code', '=', 'PL']],
+      sudo: 1,
+      limit: 1,
+    }).catch(() => [])
+    const plan = pickListResponse(planRes)[0]
+    if (!plan) return { ok: true, data: { count: 0, plazas: [] } }
+    const accountDomain = [['plan_id', '=', plan.id]]
+    if (tCompanyId) accountDomain.push('|', ['company_id', '=', tCompanyId], ['company_id', '=', false])
+    const accountsRes = await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code', 'company_id'],
+      domain: accountDomain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 100,
+      sudo: 1,
+    })
+    const plazas = pickListResponse(accountsRes).map((a) => ({
+      id: a.id,
+      name: a.name || '',
+      code: a.code || '',
+      company_id: Array.isArray(a.company_id) ? a.company_id[0] : (a.company_id || 0),
+      company_name: Array.isArray(a.company_id) ? a.company_id[1] : '',
+    }))
+    return { ok: true, data: { plan_id: plan.id, plan_name: plan.name, count: plazas.length, plazas } }
   }
 
   // ── Evidencia fotográfica centralizada (guía §7) ───────────────────────────

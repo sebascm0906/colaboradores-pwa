@@ -103,6 +103,9 @@ const ScreenClientesSinVisitar = lazy(() => import('./modules/supervisor-ventas/
 const ScreenScoreSemanal       = lazy(() => import('./modules/supervisor-ventas/ScreenScoreSemanal'))
 const ScreenCierreOperativo    = lazy(() => import('./modules/supervisor-ventas/ScreenCierreOperativo'))
 const ScreenNotaRapida         = lazy(() => import('./modules/supervisor-ventas/ScreenNotaRapida'))
+// Torres de Control — Validación de Requisiciones
+const ScreenTorreRequisiciones = lazy(() => import('./modules/torre/ScreenTorreRequisiciones'))
+const ScreenTorreDetail        = lazy(() => import('./modules/torre/ScreenTorreDetail'))
 // Gerente
 const ScreenGerente          = lazy(() => import('./modules/gerente/ScreenGerente'))
 const ScreenDashboardGerente = lazy(() => import('./modules/gerente/ScreenDashboardGerente'))
@@ -433,14 +436,9 @@ export default function App() {
             <Route path="/gerente/gastos" element={<PrivateRoute><ScreenGastosGerente /></PrivateRoute>} />
             <Route path="/gerente/forecast" element={<PrivateRoute><ScreenForecastUnlock /></PrivateRoute>} />
 
-            {/* ── Módulos pendientes (placeholder genérico) ───────────────── */}
-            {[
-              '/torres',
-            ].map(path => (
-              <Route key={path} path={path} element={
-                <PrivateRoute><ScreenModuloPendiente /></PrivateRoute>
-              } />
-            ))}
+            {/* ── Torres de Control — Validación de Requisiciones ────────── */}
+            <Route path="/torres" element={<PrivateRoute><ScreenTorreRequisiciones /></PrivateRoute>} />
+            <Route path="/torres/requisicion/:poId" element={<PrivateRoute><ScreenTorreDetail /></PrivateRoute>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

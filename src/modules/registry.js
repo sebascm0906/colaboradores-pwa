@@ -112,14 +112,12 @@ export const MODULES = [
   // ── Torres de Control — CSC GF ───────────────────────────────────────────
   {
     id:     'torre_control',
-    label:  'Torres',
+    label:  'Validar',
     route:  '/torres',
     tone:   'steel',
     roles:  ['operador_torres'],
-    status: 'pending',
+    status: 'live',
     icon:   'torres',
-    pendingLabel: 'Torres de Control',
-    pendingDesc:  'Monitoreo de operaciones en tiempo real. Disponible pronto.',
   },
 
   // ── Gerente de Sucursal ────────────────────────────────────────────────

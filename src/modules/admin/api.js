@@ -323,6 +323,37 @@ export function rejectExpense(expenseId, reason) {
   })
 }
 
+// ── Torres de Control — Validación de Requisiciones (2026-04-24) ────────────
+
+/** Lista de requisiciones draft/sent disponibles para el Operador Torre. */
+export function getTorreRequisitions(filters = {}) {
+  const mapped = {
+    company_id: filters.companyId ?? filters.company_id,
+  }
+  return api('GET', `/pwa-admin/torre/requisitions${toQuery(mapped)}`)
+}
+
+/** Detalle de una requisición con sus líneas (para el formulario de validación). */
+export function getTorreRequisitionDetail(id) {
+  return api('GET', `/pwa-admin/torre/requisition-detail?id=${id}`)
+}
+
+/** Actualiza líneas: price_unit y/o analytic_distribution. */
+export function updateTorreRequisitionLines(poId, lines) {
+  return api('POST', '/pwa-admin/torre/requisition-update', { id: poId, lines })
+}
+
+/** Confirma la requisición → purchase.order confirmado + approval_state='approved'. */
+export function confirmTorreRequisition(id) {
+  return api('POST', '/pwa-admin/torre/requisition-confirm', { id })
+}
+
+/** Cuentas analíticas del plan "PL" (Plazas) para distribuir por línea. */
+export function getTorrePlazas(companyId) {
+  const qs = companyId ? `?company_id=${companyId}` : ''
+  return api('GET', `/pwa-admin/torre/plazas${qs}`)
+}
+
 // ── Clientes (supv) — Inactivos y Recuperación (A3) ─────────────────────────
 
 /** Clientes sin orden en los últimos N días (backend: 60 por default). */
