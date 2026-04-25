@@ -3765,11 +3765,56 @@ async function directRuta(method, path, body) {
 
   // ── Sprint 5: Liquidación confirm con force (guía §4) ─────────────────────
   // Endpoint real del backend: /gf/logistics/api/employee/liquidacion/confirm
+  // Alias backend: /pwa-ruta/liquidacion-confirm (mismo handler, igual contrato).
+  // Backend puede responder HTTP 200 con result.ok === false + code:
+  //   'difference_warning' (force=false y hay diferencia)
+  //   'write_failed'       (error al persistir)
+  // o sin code con message "No se encontró plan para liquidación." (acceso).
+  // El consumer (ScreenLiquidacion) debe validar res.ok === true para éxito.
   if (cleanPath === '/gf/logistics/api/employee/liquidacion/confirm' && method === 'POST') {
     return odooJson('/gf/logistics/api/employee/liquidacion/confirm', {
       plan_id: Number(body?.plan_id || 0),
       notes:   String(body?.notes || '').trim(),
       force:   Boolean(body?.force),
+    })
+  }
+
+  // ── Aceptar carga (contrato Sebastián 2026-04-25) ─────────────────────────
+  // Endpoint real: POST /pwa-ruta/accept-load
+  // Backend acepta route_plan_id o plan_id; preferimos route_plan_id como
+  // contrato canonical. Backend responde HTTP 200 incluso en error funcional
+  // con result.ok === false (p.ej. "No tienes acceso a este plan.").
+  // El consumer (ScreenAceptarCarga) debe validar res.ok === true ||
+  // res.success === true; cualquier otra forma es fallo y NO marca aceptado.
+  if (cleanPath === '/pwa-ruta/accept-load' && method === 'POST') {
+    return odooJson('/pwa-ruta/accept-load', {
+      route_plan_id: Number(body?.route_plan_id || body?.plan_id || 0),
+    })
+  }
+
+  // ── Validar corte (contrato Sebastián 2026-04-25) ─────────────────────────
+  // Endpoint real: POST /pwa-ruta/validate-corte
+  // Alias backend: POST /pwa-ruta/corte-confirm (mismo handler).
+  // Backend recalcula con _ensure_reconciliation(recompute=True);
+  // client_validation se envía como hint de telemetría pero no decide.
+  // Respuestas:
+  //   ok:true  + data.corte_validated:true                    → cuadre OK
+  //   ok:false + code:'corte_validation_failed' + details     → no cuadra
+  //   ok:false (sin code)  → ownership / acceso al plan
+  // El consumer (ScreenCorteRuta) NO debe marcar corteDone si ok !== true.
+  if (cleanPath === '/pwa-ruta/validate-corte' && method === 'POST') {
+    return odooJson('/pwa-ruta/validate-corte', {
+      plan_id:           Number(body?.plan_id || 0),
+      client_validation: body?.client_validation || { valid: false, errors: [], warnings: [] },
+      notes:             String(body?.notes || '').trim(),
+    })
+  }
+  if (cleanPath === '/pwa-ruta/corte-confirm' && method === 'POST') {
+    // Alias del handler de validate-corte; el backend lo trata igual.
+    return odooJson('/pwa-ruta/corte-confirm', {
+      plan_id:           Number(body?.plan_id || 0),
+      client_validation: body?.client_validation || { valid: false, errors: [], warnings: [] },
+      notes:             String(body?.notes || '').trim(),
     })
   }
 
