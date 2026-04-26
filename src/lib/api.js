@@ -3335,6 +3335,22 @@ async function directProduction(method, path, body) {
     return envelope?.data ?? envelope
   }
 
+  // ── Materials: validar recepcion (operador confirma qty recibida) ─────────
+  //   POST /api/production/materials/issue/validate-receipt
+  //   Request:  { issue_id, qty_received, employee_id }
+  if (cleanPath === '/api/production/materials/issue/validate-receipt' && method === 'POST') {
+    const issueId = Number(body?.issue_id || 0)
+    if (!issueId) return { error: 'issue_id requerido' }
+    const raw = await odooHttp('POST', '/api/production/materials/issue/validate-receipt', {}, {
+      issue_id: issueId,
+      qty_received: Number(body?.qty_received || 0),
+      employee_id: body?.employee_id || getEmployeeId() || undefined,
+    })
+    const envelope = raw?.result ?? raw
+    if (envelope?.ok === false) return { error: envelope?.message || 'Error validando recepcion' }
+    return envelope?.data ?? envelope
+  }
+
   // ── Materials: report del operador (gf.production.material.settlement) ────
   //   POST /api/production/materials/settlement/report
   //   Request: { settlement_id }  ó  { shift_id, line_id, material_id }
