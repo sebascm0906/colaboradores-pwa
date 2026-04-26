@@ -10,6 +10,7 @@ import {
   getPendingHandover,
   createShiftHandover,
   acceptShiftHandover,
+  getEligibleReceivers,
   DEFAULT_WAREHOUSE_ID,
 } from './ptService'
 import { ScreenShell, ConfirmDialog } from '../entregas/components'
@@ -40,6 +41,11 @@ export default function ScreenHandoverPT() {
 
   const [entregarLines, setEntregarLines] = useState([])
   const [entregarNotes, setEntregarNotes] = useState('')
+  // Backend exige shift_in_employee_id (a quien le entrego). Sin esto el
+  // POST /shift_handover/create responde "shift_in_employee_id es obligatorio."
+  const [shiftInEmployeeId, setShiftInEmployeeId] = useState(0)
+  const [eligibleReceivers, setEligibleReceivers] = useState([])
+  const [loadingReceivers, setLoadingReceivers] = useState(false)
 
   const isRequiredPostClose = Boolean(handover?.required_after_supervisor_close)
   const countSubmitted = Boolean(handover?.count_submitted)
@@ -94,6 +100,21 @@ export default function ScreenHandoverPT() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Cargar empleados elegibles para recibir (mismo warehouse, otros almacenistas PT).
+  useEffect(() => {
+    if (!warehouseId || !employeeId) return
+    let cancelled = false
+    setLoadingReceivers(true)
+    getEligibleReceivers(warehouseId, employeeId)
+      .then((list) => {
+        if (cancelled) return
+        setEligibleReceivers(list)
+        if (list.length === 1) setShiftInEmployeeId(list[0].id)
+      })
+      .finally(() => { if (!cancelled) setLoadingReceivers(false) })
+    return () => { cancelled = true }
+  }, [warehouseId, employeeId])
+
   useEffect(() => {
     function checkScroll() {
       const el = scrollRef.current
@@ -125,6 +146,14 @@ export default function ScreenHandoverPT() {
   }
 
   function validateEntregar() {
+    if (!shiftInEmployeeId) {
+      setError('Selecciona al almacenista entrante a quien entregas el turno.')
+      return false
+    }
+    if (shiftInEmployeeId === employeeId) {
+      setError('No puedes entregar el turno a ti mismo.')
+      return false
+    }
     for (const line of entregarLines) {
       const diff = line.qty_declared - line.qty_system
       const pct = line.qty_system > 0 ? Math.abs(diff) / line.qty_system : (diff !== 0 ? 1 : 0)
@@ -158,10 +187,13 @@ export default function ScreenHandoverPT() {
             note: l.note || undefined,
           })),
           entregarNotes.trim() || undefined,
-          handover?.id ? {
-            handover_id: handover.id,
-            required_after_supervisor_close: isRequiredPostClose,
-          } : undefined
+          {
+            ...(handover?.id ? {
+              handover_id: handover.id,
+              required_after_supervisor_close: isRequiredPostClose,
+            } : {}),
+            shift_in_employee_id: shiftInEmployeeId,
+          }
         )
         setSuccess(
           isRequiredPostClose
@@ -455,6 +487,41 @@ export default function ScreenHandoverPT() {
 
           {mode === MODES.ENTREGAR && (
             <>
+              {/* Selector empleado entrante: backend exige shift_in_employee_id */}
+              <div style={{ marginBottom: 14, marginTop: 4 }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 6px', fontWeight: 600 }}>
+                  Entregar turno a
+                </p>
+                {loadingReceivers ? (
+                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13 }}>
+                    Cargando almacenistas disponibles…
+                  </div>
+                ) : eligibleReceivers.length === 0 ? (
+                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.28)', color: TOKENS.colors.warning, fontSize: 13 }}>
+                    No hay otros almacenistas PT en este almacén para recibir el turno.
+                    Contacta a tu supervisor.
+                  </div>
+                ) : (
+                  <select
+                    value={shiftInEmployeeId || ''}
+                    onChange={(e) => setShiftInEmployeeId(Number(e.target.value) || 0)}
+                    style={{
+                      width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                      color: 'white', fontSize: 14, outline: 'none',
+                      fontFamily: 'DM Sans, sans-serif',
+                    }}
+                  >
+                    <option value="">— Selecciona compañero —</option>
+                    {eligibleReceivers.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}{r.barcode ? ` (${r.barcode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               {entregarLines.length === 0 ? (
                 <div style={{ padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center', marginTop: 20 }}>
                   <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>

@@ -722,6 +722,23 @@ export async function acceptShiftHandover(handoverId, employeeId, lines, notes, 
 }
 
 /**
+ * Empleados elegibles para recibir el turno PT (mismo warehouse, job
+ * Almacenista PT, excluyendo al saliente). Backend exige shift_in_employee_id
+ * en handover/create — el saliente debe seleccionar al receptor.
+ */
+export async function getEligibleReceivers(warehouseId, excludeEmployeeId) {
+  if (!warehouseId) return []
+  const params = new URLSearchParams({ warehouse_id: String(warehouseId) })
+  if (excludeEmployeeId) params.set('exclude_employee_id', String(excludeEmployeeId))
+  try {
+    const result = await api('GET', `/pwa-pt/eligible-receivers?${params.toString()}`)
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * PT shift status — fuente de verdad sobre ownership/blocked/pending.
  * Backend devuelve view: 'dashboard' | 'blocked' | 'receive_turn'.
  * La PWA NO debe decidir ownership por su cuenta.

@@ -5121,6 +5121,37 @@ async function directAlmacenPT(method, path, body) {
     })
   }
 
+  // Empleados elegibles para recibir el turno PT en este warehouse.
+  // Filtra por job 'Almacenista de Producto Terminado' (puede haber variantes;
+  // usamos ilike para tolerancia). Excluye al saliente.
+  if (cleanPath === '/pwa-pt/eligible-receivers' && method === 'GET') {
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const excludeId = Number(query.get('exclude_employee_id') || 0)
+    if (!reqWarehouseId) return []
+    const domain = [
+      ['active', '=', true],
+      ['warehouse_id', '=', reqWarehouseId],
+      '|',
+      ['job_id.name', 'ilike', 'Almacenista de Producto Terminado'],
+      ['job_id.name', 'ilike', 'Almacenista PT'],
+    ]
+    if (excludeId > 0) domain.push(['id', '!=', excludeId])
+    const result = await readModelSorted('hr.employee', {
+      fields: ['id', 'name', 'barcode', 'job_id', 'warehouse_id'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      barcode: row.barcode || '',
+      job: row.job_id?.[1] || '',
+    }))
+  }
+
   // ── Scrap for PT (reuses entregas warehouse_scrap endpoint) ──────────────
   if (cleanPath === '/pwa-pt/scrap-create' && method === 'POST') {
     return odooJson('/gf/logistics/api/employee/warehouse_scrap/create', {
