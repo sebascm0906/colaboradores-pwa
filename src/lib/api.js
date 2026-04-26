@@ -1597,6 +1597,12 @@ async function directAdmin(method, path, body) {
     })
   }
 
+  // ── Traspaso MP gerente — stock filtrado a 3 Laurita en PIGU/MP-IGUALA ──
+  // Delega al controller Odoo (hardcoded para Fabricacion-Iguala).
+  if (cleanPath === '/pwa-admin/traspaso-mp/iguala-stock' && method === 'GET') {
+    return odooHttp('GET', '/pwa-admin/traspaso-mp/iguala-stock', {})
+  }
+
   // ── Materia Prima — stock.quant filtrado por locaciones MP ──────────────
   if (cleanPath === '/pwa-admin/materia-prima/stock' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
