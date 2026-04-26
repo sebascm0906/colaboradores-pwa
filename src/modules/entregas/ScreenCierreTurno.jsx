@@ -5,6 +5,7 @@ import { safeNumber } from '../../lib/safeNumber'
 import {
   getCedisInventory, getPendingHandover,
   createShiftHandover, acceptShiftHandover,
+  getEligibleReceivers,
 } from './entregasService'
 import { ScreenShell, ConfirmDialog } from './components'
 
@@ -43,6 +44,14 @@ export default function ScreenCierreTurno() {
   const [inventory, setInventory] = useState([])
   const [entregarLines, setEntregarLines] = useState([])
   const [entregarNotes, setEntregarNotes] = useState('')
+
+  // BLD-20260426-P0-1: empleado entrante (a quien le entrego el turno).
+  // Backend exige `shift_in_employee_id`; sin él /shift_handover/create
+  // responde {ok:false}. Cargamos elegibles (mismo warehouse + puesto
+  // almacenista_entregas, excluyendo al saliente).
+  const [eligibleReceivers, setEligibleReceivers] = useState([])
+  const [shiftInEmployeeId, setShiftInEmployeeId] = useState(0)
+  const [loadingReceivers, setLoadingReceivers] = useState(false)
 
   // ── Load data ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -93,6 +102,25 @@ export default function ScreenCierreTurno() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // BLD-20260426-P0-1: cargar empleados elegibles para recibir el turno
+  // (mismo warehouse + puesto almacenista_entregas, excluyendo al saliente).
+  // Se carga apenas tengamos warehouseId + employeeId, sin esperar al modo:
+  // así el selector ya está listo en cuanto el usuario abre tab "Entregar".
+  useEffect(() => {
+    if (!warehouseId || !employeeId) return
+    let cancelled = false
+    setLoadingReceivers(true)
+    getEligibleReceivers(warehouseId, employeeId)
+      .then((list) => {
+        if (cancelled) return
+        setEligibleReceivers(list)
+        // Si solo hay un candidato, lo preseleccionamos por conveniencia.
+        if (list.length === 1) setShiftInEmployeeId(list[0].id)
+      })
+      .finally(() => { if (!cancelled) setLoadingReceivers(false) })
+    return () => { cancelled = true }
+  }, [warehouseId, employeeId])
+
   // ── Scroll tracking for anti-skip ─────────────────────────────────────────
   useEffect(() => {
     function checkScroll() {
@@ -130,6 +158,16 @@ export default function ScreenCierreTurno() {
 
   // ── Validation ────────────────────────────────────────────────────────────
   function validateEntregar() {
+    // BLD-20260426-P0-1: shift_in_employee_id es obligatorio (backend lo
+    // exige). Validamos en cliente para mensaje claro antes del POST.
+    if (!shiftInEmployeeId) {
+      setError('Selecciona al empleado entrante a quien entregas el turno.')
+      return false
+    }
+    if (shiftInEmployeeId === employeeId) {
+      setError('No puedes entregar el turno a ti mismo.')
+      return false
+    }
     // Lines with >5% difference need notes
     for (const line of entregarLines) {
       const diff = line.qty_declared - line.qty_system
@@ -158,9 +196,12 @@ export default function ScreenCierreTurno() {
     setError('')
     try {
       if (confirmAction === 'entregar') {
-        await createShiftHandover(
+        // BLD-20260426-P0-1: pasamos shift_in_employee_id explícito.
+        // Backend lo requiere; antes el call respondía {ok:false}.
+        const result = await createShiftHandover(
           warehouseId,
           employeeId,
+          shiftInEmployeeId,
           entregarLines.map(l => ({
             product_id: l.product_id,
             qty_system: l.qty_system,
@@ -169,6 +210,12 @@ export default function ScreenCierreTurno() {
           })),
           entregarNotes.trim() || undefined
         )
+        // Defensa runtime: aunque createShiftHandover no tira en HTTP 200,
+        // el backend puede devolver {ok:false, message} con error de
+        // negocio. NO mostramos éxito si ok===false explícito.
+        if (result && result.ok === false) {
+          throw new Error(result.message || 'Backend rechazó la entrega de turno')
+        }
         setSuccess('Turno entregado correctamente')
         setConfirmOpen(false)
         setTimeout(() => setSuccess(''), 4000)
@@ -211,7 +258,11 @@ export default function ScreenCierreTurno() {
     }
   }
 
-  const canSubmitEntregar = entregarLines.length === 0 || hasScrolledBottom
+  // BLD-20260426-P0-1: además del scroll-to-bottom, exigimos que se
+  // haya elegido al empleado entrante. Sin él el backend rechaza.
+  const canSubmitEntregar = (entregarLines.length === 0 || hasScrolledBottom)
+    && !!shiftInEmployeeId
+    && shiftInEmployeeId !== employeeId
   const canSubmitAcceptar = hasScrolledBottom && acceptLines.length > 0
 
   return (
@@ -441,6 +492,44 @@ export default function ScreenCierreTurno() {
           ════════════════════════════════════════════════════════════════ */}
           {mode === MODES.ENTREGAR && (
             <>
+              {/* BLD-20260426-P0-1: selector de empleado entrante.
+                  Backend exige shift_in_employee_id; sin él /shift_handover/create
+                  responde ok:false. Bloqueamos el botón de entrega hasta que
+                  el saliente seleccione a un compañero. */}
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 6px', fontWeight: 600 }}>
+                  Entregar turno a
+                </p>
+                {loadingReceivers ? (
+                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, color: TOKENS.colors.textMuted, fontSize: 13 }}>
+                    Cargando compañeros disponibles...
+                  </div>
+                ) : eligibleReceivers.length === 0 ? (
+                  <div style={{ padding: 12, borderRadius: TOKENS.radius.md, background: TOKENS.colors.warningSoft, border: '1px solid rgba(245,158,11,0.25)', color: TOKENS.colors.warning, fontSize: 13 }}>
+                    No hay otros almacenistas de entregas en este CEDIS para
+                    recibir el turno. Contacta a tu supervisor.
+                  </div>
+                ) : (
+                  <select
+                    value={shiftInEmployeeId || ''}
+                    onChange={(e) => setShiftInEmployeeId(Number(e.target.value) || 0)}
+                    style={{
+                      width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                      background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                      color: 'white', fontSize: 14, outline: 'none',
+                      fontFamily: 'DM Sans, sans-serif',
+                    }}
+                  >
+                    <option value="">— Selecciona compañero —</option>
+                    {eligibleReceivers.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}{r.barcode ? ` (${r.barcode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               {entregarLines.length === 0 && (
                 <div style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center', marginBottom: 12 }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0 }}>Sin inventario en sistema. Puedes entregar un turno vacio para inicializar el ciclo.</p>

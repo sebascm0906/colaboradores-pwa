@@ -5363,6 +5363,47 @@ async function directEntregas(method, path, body) {
 
   if (!cleanPath.startsWith('/pwa-entregas/')) return NO_DIRECT
 
+  // BLD-20260426-P0-1: lista de empleados elegibles para recibir un
+  // handover de turno. Filtra por warehouse del saliente y por el
+  // mismo puesto (almacenista_entregas), excluyendo al saliente mismo.
+  // Necesario porque el backend (commit reciente de Sebastián) ahora
+  // exige `shift_in_employee_id` al crear handover y la PWA no tenía
+  // de dónde tomarlo. Sin este picker, "Entregar Turno" estaba roto.
+  //
+  // BLD-20260426-P0-1-FIX: el filtro original usaba `pwa_job_key` pero
+  // ese campo NO existe en hr.employee (es derivado server-side por el
+  // controller /api/employee-sign-in). search_read con ese campo
+  // respondía {error:"Invalid field 'pwa_job_key'"} y la lista
+  // siempre venía vacía → la pantalla mostraba "no hay candidatos"
+  // hasta para sucursales con varios almacenistas. Ahora filtramos
+  // por nombre del job (`job_id.name ilike 'Almacenista de entregas'`)
+  // que SÍ es queryable por el ORM.
+  if (cleanPath === '/pwa-entregas/eligible-receivers' && method === 'GET') {
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const excludeId = Number(query.get('exclude_employee_id') || 0)
+    if (!reqWarehouseId) return []
+    const domain = [
+      ['active', '=', true],
+      ['warehouse_id', '=', reqWarehouseId],
+      ['job_id.name', 'ilike', 'Almacenista de entregas'],
+    ]
+    if (excludeId > 0) domain.push(['id', '!=', excludeId])
+    const result = await readModelSorted('hr.employee', {
+      fields: ['id', 'name', 'barcode', 'job_id', 'warehouse_id'],
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || '',
+      barcode: row.barcode || '',
+      job: row.job_id?.[1] || '',
+    }))
+  }
+
   if (cleanPath === '/pwa-entregas/today-routes' && method === 'GET') {
     const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
@@ -5491,9 +5532,13 @@ async function directEntregas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-entregas/shift-handover-create' && method === 'POST') {
+    // BLD-20260426-P0-1: propagar `shift_in_employee_id` (empleado entrante).
+    // Backend lo exige; sin él respondía {ok:false, "shift_in_employee_id
+    // es obligatorio."}. Ver entregasService.createShiftHandover.
     return odooJson('/gf/logistics/api/employee/shift_handover/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
       employee_id: body?.employee_id || getEmployeeId() || 0,
+      shift_in_employee_id: body?.shift_in_employee_id || 0,
       lines: body?.lines || [],
       notes: body?.notes || '',
     })
