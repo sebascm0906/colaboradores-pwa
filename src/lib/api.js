@@ -5532,6 +5532,10 @@ async function directEntregas(method, path, body) {
   //   Backend mueve stock CEDIS → unidad. NO sella el plan; load_sealed queda
   //   para /pwa-ruta/accept-load (vendedor).
   //
+  // Meta (Sebas 2026-04-26): el guard gf_saleops resuelve analytic_account_id
+  // desde warehouse_id, así que el BFF sólo necesita enviar:
+  //   { employee_id, employee_ref, warehouse_id, request_id, idempotency_key }
+  //
   // Envelope gf_saleops:
   //   éxito  → { status:"ok",    code:"OK",     user_message, data:{count, rows[{picking_id, state, already_done}]}, meta:{request_id} }
   //   error  → { status:"error", code:"VALIDATION_ERROR|NOT_FOUND|FORBIDDEN|SERVER_MISCONFIG|SERVER_ERROR", user_message, data, meta }
@@ -5567,23 +5571,25 @@ async function directEntregas(method, path, body) {
       pickingIds = [loadPickingId]
     }
 
-    // Construir meta desde sesión. Si analytic_account_id no está en la sesión
-    // del rol almacenista_entregas, lo omitimos (Sebas: no inventar valores).
+    // Construir meta desde sesión. Sebas (2026-04-26) confirmó que el guard
+    // gf_saleops resuelve analytic_account_id a partir de warehouse_id, así
+    // que el BFF NO necesita mandar analytic_account_id explícito.
+    // Meta mínima recomendada por Sebas:
+    //   { employee_id, employee_ref, warehouse_id, request_id, idempotency_key }
     const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
-    const sessionAnalyticId = Number(session.analytic_account_id || session.sucursal_id || session.sucursal || 0) || 0
-    const sessionCompanyId = Number(session.company_id || companyId || 0) || 0
+    const sessionWarehouseId = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+    const employeeRef = String(session.employee_ref || session.barcode || employeeId || '')
     const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? `pwa-load-${crypto.randomUUID()}`
       : `pwa-load-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
     const meta = {
       employee_id: employeeId || undefined,
-      employee_ref: employeeId ? String(employeeId) : undefined,
-      company_id: sessionCompanyId || undefined,
+      employee_ref: employeeRef || undefined,
+      warehouse_id: sessionWarehouseId || undefined,
       request_id: requestId,
       idempotency_key: requestId,
     }
-    if (sessionAnalyticId) meta.analytic_account_id = sessionAnalyticId
 
     const envelope = await odooJson('/gf/salesops/warehouse/load/execute', {
       meta,
