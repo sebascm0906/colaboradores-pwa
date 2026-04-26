@@ -5121,20 +5121,28 @@ async function directAlmacenPT(method, path, body) {
     })
   }
 
-  // Empleados elegibles para recibir el turno PT en este warehouse.
-  // Filtra por job 'Almacenista de Producto Terminado' (puede haber variantes;
-  // usamos ilike para tolerancia). Excluye al saliente.
+  // Empleados elegibles para recibir el turno PT.
+  // Filtra por job 'Almacenista de Producto Terminado' (variantes via ilike).
+  // Para PT, los hr.employee a menudo NO tienen warehouse_id seteado, asi
+  // que el filtro principal es company_id; si warehouse_id esta seteado en
+  // el empleado, debe coincidir, pero si no lo esta lo aceptamos (mismo
+  // plant/company es suficiente). Excluye al saliente.
   if (cleanPath === '/pwa-pt/eligible-receivers' && method === 'GET') {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const excludeId = Number(query.get('exclude_employee_id') || 0)
-    if (!reqWarehouseId) return []
+    if (!reqWarehouseId && !companyId) return []
     const domain = [
       ['active', '=', true],
-      ['warehouse_id', '=', reqWarehouseId],
       '|',
       ['job_id.name', 'ilike', 'Almacenista de Producto Terminado'],
       ['job_id.name', 'ilike', 'Almacenista PT'],
     ]
+    // company_id es nuestra red de seguridad cuando warehouse_id esta vacio.
+    if (companyId) domain.push(['company_id', '=', companyId])
+    // warehouse_id tolerante: '=' reqWarehouseId  OR  warehouse_id IS NULL.
+    if (reqWarehouseId) {
+      domain.push('|', ['warehouse_id', '=', reqWarehouseId], ['warehouse_id', '=', false])
+    }
     if (excludeId > 0) domain.push(['id', '!=', excludeId])
     const result = await readModelSorted('hr.employee', {
       fields: ['id', 'name', 'barcode', 'job_id', 'warehouse_id'],
@@ -5149,6 +5157,7 @@ async function directAlmacenPT(method, path, body) {
       name: row.name || '',
       barcode: row.barcode || '',
       job: row.job_id?.[1] || '',
+      warehouse_id: row.warehouse_id?.[0] || null,
     }))
   }
 
