@@ -5522,16 +5522,108 @@ async function directEntregas(method, path, body) {
     }))
   }
 
-  if (cleanPath === '/pwa-entregas/confirm-load' && method === 'POST') {
-    // Sebastian rollout 2026-04-19: motor transaccional. El controller
-    // route_plan/seal_load valida el load_picking_id (button_validate),
-    // marca load_sealed/load_sealed_at/load_sealed_by_id y propaga el state.
-    // Precondiciones: stock reservado (assigned), plan en estado 'published'.
+  // ─── Carga por forecast (BLD-20260426-P0-LOAD-EXECUTE) ─────────────────────
+  // Contrato oficial confirmado por Sebastián (2026-04-26):
+  //   PWA → /pwa-entregas/load-execute (preferido) o /pwa-entregas/confirm-load
+  //         (legacy, mantenido para no tocar UI hoy)
+  //     ↓ BFF resuelve plan_id → load_picking_id (1 read sobre gf.route.plan)
+  //   BFF → POST /gf/salesops/warehouse/load/execute
+  //         envelope gf_saleops { meta:{...}, data:{ picking_ids:[...] } }
+  //   Backend mueve stock CEDIS → unidad. NO sella el plan; load_sealed queda
+  //   para /pwa-ruta/accept-load (vendedor).
+  //
+  // Envelope gf_saleops:
+  //   éxito  → { status:"ok",    code:"OK",     user_message, data:{count, rows[{picking_id, state, already_done}]}, meta:{request_id} }
+  //   error  → { status:"error", code:"VALIDATION_ERROR|NOT_FOUND|FORBIDDEN|SERVER_MISCONFIG|SERVER_ERROR", user_message, data, meta }
+  //   busy   → { status:"busy",  code:"LOCKED", user_message, data, meta }
+  //
+  // Traducción a contrato UI ({ ok, message, error?, code, data }):
+  //   - status:"ok"    → { ok:true,  message:user_message, data:{...rows..., already_done: bool} }
+  //   - status:"error" → { ok:false, error:user_message, message:user_message, code, data }
+  //   - status:"busy"  → { ok:false, error:user_message, message:user_message, code:"LOCKED", data }
+  //
+  // already_done en rows[]: éxito idempotente (no fallo). El mensaje refleja
+  // que la carga ya estaba ejecutada.
+  if ((cleanPath === '/pwa-entregas/load-execute' || cleanPath === '/pwa-entregas/confirm-load')
+      && method === 'POST') {
+    const session = getSession()
     const planId = Number(body?.plan_id || body?.route_plan_id || 0)
-    if (!planId) return { ok: false, error: 'plan_id requerido' }
-    return odooJson('/gf/logistics/api/employee/route_plan/seal_load', {
-      plan_id: planId,
+    let pickingIds = Array.isArray(body?.picking_ids)
+      ? body.picking_ids.map((n) => Number(n)).filter((n) => n > 0)
+      : []
+
+    // Resolver picking_ids desde plan_id (camino preferido para mantener contrato UI actual)
+    if (!pickingIds.length) {
+      if (!planId) return { ok: false, error: 'plan_id o picking_ids requeridos', message: 'plan_id o picking_ids requeridos' }
+      const planRows = pickListResponse(await readModelSorted('gf.route.plan', {
+        fields: ['id', 'load_picking_id'],
+        domain: [['id', '=', planId]],
+        sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+      }))
+      const loadPickingId = Number(planRows[0]?.load_picking_id?.[0] || planRows[0]?.load_picking_id || 0)
+      if (!loadPickingId) {
+        return { ok: false, error: 'El plan no tiene load_picking_id asignado.', message: 'El plan no tiene load_picking_id asignado.' }
+      }
+      pickingIds = [loadPickingId]
+    }
+
+    // Construir meta desde sesión. Si analytic_account_id no está en la sesión
+    // del rol almacenista_entregas, lo omitimos (Sebas: no inventar valores).
+    const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
+    const sessionAnalyticId = Number(session.analytic_account_id || session.sucursal_id || session.sucursal || 0) || 0
+    const sessionCompanyId = Number(session.company_id || companyId || 0) || 0
+    const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? `pwa-load-${crypto.randomUUID()}`
+      : `pwa-load-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+    const meta = {
+      employee_id: employeeId || undefined,
+      employee_ref: employeeId ? String(employeeId) : undefined,
+      company_id: sessionCompanyId || undefined,
+      request_id: requestId,
+      idempotency_key: requestId,
+    }
+    if (sessionAnalyticId) meta.analytic_account_id = sessionAnalyticId
+
+    const envelope = await odooJson('/gf/salesops/warehouse/load/execute', {
+      meta,
+      data: { picking_ids: pickingIds },
     })
+
+    // Traducción envelope gf_saleops → contrato UI {ok, message, error?, code, data}
+    const status = String(envelope?.status || '').toLowerCase()
+    const code = envelope?.code || (status === 'busy' ? 'LOCKED' : (status === 'ok' ? 'OK' : 'UNKNOWN'))
+    const userMessage = envelope?.user_message || envelope?.message || ''
+    const envData = envelope?.data || {}
+
+    if (status === 'ok') {
+      const rows = Array.isArray(envData?.rows) ? envData.rows : []
+      const allAlreadyDone = rows.length > 0 && rows.every((r) => r?.already_done === true)
+      const message = allAlreadyDone
+        ? (userMessage || 'La carga ya estaba ejecutada.')
+        : (userMessage || 'Carga ejecutada')
+      return {
+        ok: true,
+        message,
+        code,
+        data: {
+          ...envData,
+          already_done: allAlreadyDone,
+          picking_ids: pickingIds,
+        },
+        meta: envelope?.meta || {},
+      }
+    }
+
+    // status === 'error' o 'busy' (o cualquier otro) → ok:false
+    return {
+      ok: false,
+      error: userMessage || (status === 'busy' ? 'Operación temporalmente bloqueada.' : 'Error al ejecutar carga.'),
+      message: userMessage || (status === 'busy' ? 'Operación temporalmente bloqueada.' : 'Error al ejecutar carga.'),
+      code,
+      data: envData,
+      meta: envelope?.meta || {},
+    }
   }
 
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
