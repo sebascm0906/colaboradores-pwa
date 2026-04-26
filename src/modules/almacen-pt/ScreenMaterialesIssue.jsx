@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
-import { getMaterialIssues, stateLabel, lineOf, validateMaterialIssueReceipt } from './materialsService'
+import { getMaterialIssues, stateLabel, lineOf, validateMaterialIssueReceipt, cancelMaterialIssue } from './materialsService'
 import { buildMaterialesNavState, resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
@@ -48,6 +48,27 @@ export default function ScreenMaterialesIssue() {
   const [validateError, setValidateError] = useState('')
 
   useEffect(() => { loadData() }, [])
+
+  async function handleRejectIssue(issueId) {
+    if (!window.confirm('¿Rechazar esta entrega? El gerente deberá enviarla de nuevo.')) return
+    setValidatingSubmit(true)
+    setValidateError('')
+    try {
+      await cancelMaterialIssue({
+        issueId,
+        employeeId: session?.employee_id,
+        notes: 'Rechazada por operador en validación de recepción',
+      })
+      setValidatingId(null)
+      setQtyReceived('')
+      await loadData()
+    } catch (e) {
+      logScreenError('ScreenMaterialesIssue', 'rejectIssue', e)
+      setValidateError(e?.message || 'Error al rechazar entrega')
+    } finally {
+      setValidatingSubmit(false)
+    }
+  }
 
   async function handleValidateReceipt(issueId) {
     if (!(Number(qtyReceived) > 0)) return
@@ -186,20 +207,33 @@ export default function ScreenMaterialesIssue() {
                           </span>
                         </div>
                         {!isValidating ? (
-                          <button
-                            onClick={() => {
-                              setValidatingId(issueId)
-                              setQtyReceived(String(it.qty_issued || ''))
-                              setValidateError('')
-                            }}
-                            style={{
-                              padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                              background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
-                              color: 'white', fontSize: 13, fontWeight: 700,
-                            }}
-                          >
-                            Validar recepción
-                          </button>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              onClick={() => handleRejectIssue(issueId)}
+                              disabled={validatingSubmit}
+                              style={{
+                                padding: '10px 12px', borderRadius: TOKENS.radius.md,
+                                background: 'transparent', border: `1px solid ${TOKENS.colors.error}60`,
+                                color: TOKENS.colors.error, fontSize: 13, fontWeight: 700,
+                              }}
+                            >
+                              Rechazar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setValidatingId(issueId)
+                                setQtyReceived(String(it.qty_issued || ''))
+                                setValidateError('')
+                              }}
+                              style={{
+                                flex: 1, padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                                background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                                color: 'white', fontSize: 13, fontWeight: 700,
+                              }}
+                            >
+                              Validar recepción
+                            </button>
+                          </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <label style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>
