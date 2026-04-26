@@ -441,7 +441,14 @@ export async function getEligibleReceivers(warehouseId, excludeEmployeeId) {
 export async function getPendingHandover(warehouseId) {
   try {
     const result = await api('GET', `/pwa-entregas/shift-handover-pending?warehouse_id=${warehouseId}`)
-    // Backend returns { handover: {...} } or { handover: null }
+    // BLD-20260426-P0-1-FIX2: Backend (gf_logistics_ops) responde con
+    //   { ok, message, data: { found, handover? } }
+    // El parser anterior solo buscaba result.handover y result.id, así que
+    // siempre devolvía null y la pantalla nunca mostraba el handover
+    // pendiente para aceptar (validado runtime con Hector). Aceptamos las
+    // 3 shapes (data wrap, legacy raw object, direct handover) para no
+    // romper si el backend cambia.
+    if (result?.data?.handover) return result.data.handover
     if (result?.handover) return result.handover
     if (result && result.id) return result // direct handover object
     return null
