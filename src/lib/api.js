@@ -5455,13 +5455,24 @@ async function directEntregas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
+    // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
+    // por introspección live (2026-04-26):
+    //   - NO existen: route_plan_id, warehouse_id, qty, notes, plan_id
+    //   - SÍ existen: stop_id, product_id, quantity, line_type, reason,
+    //     reception_state, received_qty, received_by_id, received_at,
+    //     reception_notes, create_date, company_id
+    // El warehouse del CEDIS se resuelve por la cadena:
+    //   stop_id → gf.route.stop.route_plan_id → gf.route.plan.route_id →
+    //   gf.route.warehouse_dispatch_id (= warehouse del CEDIS, ej. 89 = CEDIS Iguala)
+    // Sin esto la consulta fallaba con "Invalid field ..." y pickListResponse
+    // devolvía [] silenciosamente, ocultando devoluciones reales.
     const routePlanId = Number(query.get('route_plan_id') || 0)
     const domain = [['line_type', 'in', ['return', 'scrap']]]
-    if (routePlanId) domain.push(['route_plan_id', '=', routePlanId])
+    if (routePlanId) domain.push(['stop_id.route_plan_id', '=', routePlanId])
     if (companyId) domain.push(['company_id', '=', companyId])
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+    if (warehouseId) domain.push(['stop_id.route_plan_id.route_id.warehouse_dispatch_id', '=', warehouseId])
     const result = await readModelSorted('gf.route.stop.line', {
-      fields: ['id', 'route_plan_id', 'stop_id', 'product_id', 'qty', 'line_type', 'reason', 'notes', 'create_date',
+      fields: ['id', 'stop_id', 'product_id', 'quantity', 'line_type', 'reason', 'create_date',
         'received_by_id', 'received_at', 'received_qty', 'reception_state', 'reception_notes'],
       domain,
       sort_column: 'create_date',
@@ -5469,27 +5480,49 @@ async function directEntregas(method, path, body) {
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      route_plan_id: row.route_plan_id?.[0] || row.route_plan_id || null,
-      route: row.route_plan_id?.[1] || '',
-      stop_id: row.stop_id?.[0] || row.stop_id || null,
-      product_id: row.product_id?.[0] || row.product_id || null,
-      product: row.product_id?.[1] || '',
-      quantity: Number(row.qty || 0),
-      line_type: row.line_type || null,
-      reason: row.reason || '',
-      notes: row.notes || '',
-      create_date: row.create_date || '',
-      // Reception fields (from Sebastián's gf_logistics_ops extension)
-      received_by_id: row.received_by_id?.[0] || null,
-      received_by: row.received_by_id?.[1] || '',
-      received_at: row.received_at || null,
-      received_qty: row.received_qty != null ? Number(row.received_qty) : null,
-      reception_state: row.reception_state || 'pending',
-      reception_notes: row.reception_notes || '',
-      state: row.reception_state === 'received' || row.reception_state === 'received_with_diff' ? 'done' : 'pending',
-    }))
+    const rows = pickListResponse(result)
+    // Enriquecimiento: la UI agrupa por route_plan_id y muestra el nombre de la
+    // ruta (ScreenDevolucionesV2 L67/L70). Como el campo no vive en la línea,
+    // resolvemos stop_id → route_plan_id en una segunda consulta sobre los
+    // stops únicos.
+    const stopIds = [...new Set(rows.map((r) => r.stop_id?.[0] || r.stop_id).filter(Boolean))]
+    const planByStop = new Map()
+    if (stopIds.length) {
+      const stops = pickListResponse(await readModelSorted('gf.route.stop', {
+        fields: ['id', 'route_plan_id'],
+        domain: [['id', 'in', stopIds]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: stopIds.length,
+        sudo: 1,
+      }))
+      for (const s of stops) planByStop.set(s.id, s.route_plan_id || null)
+    }
+    return rows.map((row) => {
+      const stopId = row.stop_id?.[0] || row.stop_id || null
+      const planRef = stopId ? planByStop.get(stopId) : null
+      return {
+        id: row.id,
+        route_plan_id: planRef?.[0] || planRef || null,
+        route: planRef?.[1] || '',
+        stop_id: stopId,
+        product_id: row.product_id?.[0] || row.product_id || null,
+        product: row.product_id?.[1] || '',
+        quantity: Number(row.quantity || 0),
+        line_type: row.line_type || null,
+        reason: row.reason || '',
+        notes: '', // campo no existe en gf.route.stop.line; reception_notes es para post-recepción
+        create_date: row.create_date || '',
+        // Reception fields (from Sebastián's gf_logistics_ops extension)
+        received_by_id: row.received_by_id?.[0] || null,
+        received_by: row.received_by_id?.[1] || '',
+        received_at: row.received_at || null,
+        received_qty: row.received_qty != null ? Number(row.received_qty) : null,
+        reception_state: row.reception_state || 'pending',
+        reception_notes: row.reception_notes || '',
+        state: row.reception_state === 'received' || row.reception_state === 'received_with_diff' ? 'done' : 'pending',
+      }
+    })
   }
 
   // ── Sebastián's gf_logistics_ops endpoints ────────────────────────────────
