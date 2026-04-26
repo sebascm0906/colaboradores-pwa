@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
-import { getDaySummary, computeStepStatuses, STEP_STATUS } from './entregasService'
+import { getDaySummary, getEntregasShiftStatus, computeStepStatuses, STEP_STATUS } from './entregasService'
 import { getEntregasDestination } from '../almacen-pt/ptService'
 import { ScreenShell, StepTimeline } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
@@ -68,6 +68,7 @@ export default function ScreenHubDia() {
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [summary, setSummary] = useState(null)
+  const [shiftStatus, setShiftStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [fixedDestination, setFixedDestination] = useState(null)
@@ -95,21 +96,36 @@ export default function ScreenHubDia() {
     setLoading(true)
     setError('')
     try {
-      const data = await getDaySummary(warehouseId)
-      console.info('[ENTREGAS][HubDia] summary loaded', {
+      const status = await getEntregasShiftStatus({
         warehouseId,
-        pending_pallets: data?.pending_pallets,
-        summary: data,
+        employeeId: Number(session?.employee_id || 0) || 0,
       })
-      setSummary(data)
+      setShiftStatus(status)
+      if (status.view === 'dashboard') {
+        const data = await getDaySummary(warehouseId)
+        console.info('[ENTREGAS][HubDia] summary loaded', {
+          warehouseId,
+          pending_pallets: data?.pending_pallets,
+          summary: data,
+        })
+        setSummary(data)
+      } else {
+        setSummary(null)
+      }
     } catch (e) {
       if (e.message !== 'no_session') setError('Error al cargar resumen del dia')
     } finally {
       setLoading(false)
     }
-  }, [warehouseId])
+  }, [warehouseId, session?.employee_id])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    if (shiftStatus?.view === 'receive_turn') {
+      navigate('/entregas/cierre-turno', { replace: true })
+    }
+  }, [shiftStatus?.view, navigate])
 
   // Guard: si no hay warehouse, mostrar pantalla de error claro.
   if (!warehouseId) {
@@ -224,6 +240,16 @@ export default function ScreenHubDia() {
             animation: 'spin 0.8s linear infinite',
           }} />
         </div>
+      ) : shiftStatus?.view === 'blocked' ? (
+        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} />
+      ) : shiftStatus?.view === 'receive_turn' ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+          <div style={{
+            width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)',
+            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+        </div>
       ) : summary ? (
         <>
           {/* Step Timeline label */}
@@ -315,5 +341,53 @@ export default function ScreenHubDia() {
         </>
       ) : null}
     </ScreenShell>
+  )
+}
+
+function EntregasBlockedView({ shiftStatus, typo, onReload }) {
+  const ownerName = shiftStatus?.owner_employee_name || 'otro almacenista'
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{
+        padding: 24, borderRadius: TOKENS.radius.xl,
+        background: 'linear-gradient(160deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))',
+        border: `1px solid ${TOKENS.colors.error}50`,
+        boxShadow: '0 12px 28px rgba(239,68,68,0.20)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: `${TOKENS.colors.error}24`, border: `1px solid ${TOKENS.colors.error}60`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px', color: TOKENS.colors.error,
+        }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p style={{ ...typo.title, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+          Entregas en uso por otro almacenista
+        </p>
+        <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: '8px 0 0' }}>
+          <strong>{ownerName}</strong> tiene el turno activo. No puedes operar Entregas
+          hasta que entregue el turno.
+        </p>
+        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '12px 0 0' }}>
+          Cuando te asignen el relevo, esta pantalla cambiará a “Recibir turno”.
+        </p>
+        <button
+          onClick={onReload}
+          style={{
+            marginTop: 18, padding: '10px 18px', borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 700,
+            fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+          }}
+        >
+          Refrescar estado
+        </button>
+      </div>
+    </div>
   )
 }

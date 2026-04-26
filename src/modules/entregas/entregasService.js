@@ -431,6 +431,42 @@ export async function getEligibleReceivers(warehouseId, excludeEmployeeId) {
 }
 
 /**
+ * Estado de turno de Entregas — fuente de verdad backend sobre ownership,
+ * bloqueo y handover pendiente para el empleado actual.
+ *
+ * @param {Object} params
+ * @param {number} params.warehouseId
+ * @param {number} params.employeeId
+ * @returns {Promise<{
+ *   view:'dashboard'|'blocked'|'receive_turn',
+ *   blocked:boolean,
+ *   pending_for_me:boolean,
+ *   owner_employee_id:number|null,
+ *   owner_employee_name:string,
+ *   handover_id:number|null,
+ *   handover:Object|null,
+ *   raw:Object
+ * }>}
+ */
+export async function getEntregasShiftStatus({ warehouseId, employeeId } = {}) {
+  const result = await api('POST', '/pwa-entregas/shift-status', {
+    warehouse_id: warehouseId,
+    employee_id: employeeId,
+  })
+  const payload = result?.data || result || {}
+  return {
+    view: payload.view || 'dashboard',
+    blocked: Boolean(payload.blocked),
+    pending_for_me: Boolean(payload.pending_for_me),
+    owner_employee_id: Number(payload.owner_employee_id || 0) || null,
+    owner_employee_name: payload.owner_employee_name || '',
+    handover_id: Number(payload.handover_id || 0) || null,
+    handover: payload.handover || null,
+    raw: payload,
+  }
+}
+
+/**
  * Consultar si hay un handover pendiente de aceptar para este CEDIS.
  * Backend (gf_logistics_ops): searches gf.shift.handover with
  * state=submitted for today + warehouse.

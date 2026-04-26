@@ -5,7 +5,7 @@ import { safeNumber } from '../../lib/safeNumber'
 import {
   getCedisInventory, getPendingHandover,
   createShiftHandover, acceptShiftHandover,
-  getEligibleReceivers,
+  getEligibleReceivers, getEntregasShiftStatus,
 } from './entregasService'
 import { ScreenShell, ConfirmDialog } from './components'
 
@@ -34,6 +34,7 @@ export default function ScreenCierreTurno() {
   const [submitting, setSubmitting] = useState(false)
   const [hasScrolledBottom, setHasScrolledBottom] = useState(false)
   const scrollRef = useRef(null)
+  const [shiftStatus, setShiftStatus] = useState(null)
 
   // ── Handover data (aceptar mode) ──────────────────────────────────────────
   const [handover, setHandover] = useState(null)
@@ -58,22 +59,37 @@ export default function ScreenCierreTurno() {
     setLoadingInit(true)
     setError('')
     try {
+      const status = await getEntregasShiftStatus({
+        warehouseId,
+        employeeId,
+      })
+      setShiftStatus(status)
+
+      if (status.view === 'blocked') {
+        setHandover(null)
+        setInventory([])
+        setAcceptLines([])
+        setEntregarLines([])
+        setMode(MODES.ENTREGAR)
+        return
+      }
+
       const [ho, inv] = await Promise.allSettled([
         getPendingHandover(warehouseId),
         getCedisInventory(warehouseId),
       ])
 
-      const handoverData = ho.status === 'fulfilled' ? ho.value : null
+      const handoverData = (ho.status === 'fulfilled' ? ho.value : null) || status.handover || null
       const invData = inv.status === 'fulfilled' && Array.isArray(inv.value) ? inv.value : []
 
       setHandover(handoverData)
       setInventory(invData)
 
       // Auto-detect mode
-      if (handoverData) {
+      if (status.view === 'receive_turn' || handoverData) {
         setMode(MODES.ACEPTAR)
         // Initialize accept lines from handover (backend returns qty_system + qty_declared)
-        setAcceptLines((handoverData.lines || []).map(line => ({
+        setAcceptLines(((handoverData?.lines) || []).map(line => ({
           ...line,
           product: line.product || line.product_id?.[1] || '',
           product_id: line.product_id?.[0] || line.product_id || 0,
@@ -98,7 +114,7 @@ export default function ScreenCierreTurno() {
     } catch (e) {
       if (e.message !== 'no_session') setError('Error al cargar datos')
     } finally { setLoadingInit(false) }
-  }, [warehouseId])
+  }, [warehouseId, employeeId])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -264,6 +280,14 @@ export default function ScreenCierreTurno() {
     && !!shiftInEmployeeId
     && shiftInEmployeeId !== employeeId
   const canSubmitAcceptar = hasScrolledBottom && acceptLines.length > 0
+
+  if (!loadingInit && shiftStatus?.view === 'blocked') {
+    return (
+      <ScreenShell title="Turno" backTo="/entregas">
+        <EntregasBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} />
+      </ScreenShell>
+    )
+  }
 
   return (
     <ScreenShell title="Turno" backTo="/entregas">
@@ -665,5 +689,53 @@ export default function ScreenCierreTurno() {
         loading={submitting}
       />
     </ScreenShell>
+  )
+}
+
+function EntregasBlockedView({ shiftStatus, typo, onReload }) {
+  const ownerName = shiftStatus?.owner_employee_name || 'otro almacenista'
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{
+        padding: 24, borderRadius: TOKENS.radius.xl,
+        background: 'linear-gradient(160deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))',
+        border: `1px solid ${TOKENS.colors.error}50`,
+        boxShadow: '0 12px 28px rgba(239,68,68,0.20)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: `${TOKENS.colors.error}24`, border: `1px solid ${TOKENS.colors.error}60`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px', color: TOKENS.colors.error,
+        }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p style={{ ...typo.title, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+          Entregas en uso por otro almacenista
+        </p>
+        <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: '8px 0 0' }}>
+          <strong>{ownerName}</strong> tiene el turno activo. No puedes entregar ni aceptar
+          operaciones hasta que te asigne el relevo.
+        </p>
+        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '12px 0 0' }}>
+          Cuando haya un handover pendiente para ti, esta pantalla cambiará a “Aceptar turno”.
+        </p>
+        <button
+          onClick={onReload}
+          style={{
+            marginTop: 18, padding: '10px 18px', borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 700,
+            fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+          }}
+        >
+          Refrescar estado
+        </button>
+      </div>
+    </div>
   )
 }

@@ -5443,12 +5443,29 @@ async function directEntregas(method, path, body) {
   if (cleanPath === '/pwa-entregas/eligible-receivers' && method === 'GET') {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const excludeId = Number(query.get('exclude_employee_id') || 0)
-    if (!reqWarehouseId) return []
+    if (!reqWarehouseId && !companyId) return []
+    // Lógica de scoping:
+    //   warehouse_id = X  OR  (warehouse_id IS NULL AND company_id = Y)
+    // Asi cubrimos:
+    //   - Caso CEDIS Iguala: Hector (company 35) y TURNO2 EN (company 34)
+    //     comparten warehouse 89 -> match por warehouse, ignora company.
+    //   - Empleados sin warehouse seteado -> caen al fallback de company.
     const domain = [
       ['active', '=', true],
-      ['warehouse_id', '=', reqWarehouseId],
-      ['job_id.name', 'ilike', 'Almacenista de entregas'],
+      ['job_id.name', 'ilike', 'Almacenista'],
+      ['job_id.name', 'ilike', 'entregas'],
     ]
+    if (reqWarehouseId && companyId) {
+      domain.push(
+        '|',
+        ['warehouse_id', '=', reqWarehouseId],
+        '&', ['warehouse_id', '=', false], ['company_id', '=', companyId],
+      )
+    } else if (reqWarehouseId) {
+      domain.push(['warehouse_id', '=', reqWarehouseId])
+    } else if (companyId) {
+      domain.push(['company_id', '=', companyId])
+    }
     if (excludeId > 0) domain.push(['id', '!=', excludeId])
     const result = await readModelSorted('hr.employee', {
       fields: ['id', 'name', 'barcode', 'job_id', 'warehouse_id'],
@@ -5463,6 +5480,7 @@ async function directEntregas(method, path, body) {
       name: row.name || '',
       barcode: row.barcode || '',
       job: row.job_id?.[1] || '',
+      warehouse_id: row.warehouse_id?.[0] || null,
     }))
   }
 
@@ -5698,6 +5716,15 @@ async function directEntregas(method, path, body) {
       lines: body?.lines || [],
       notes: body?.notes || '',
       action: body?.action || 'accept',
+    })
+  }
+
+  // Shift status Entregas — fuente de verdad sobre ownership/blocked/pending.
+  // Mismo contrato que pt/shift_status pero scope no-PT (entregas).
+  if (cleanPath === '/pwa-entregas/shift-status' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/entregas/shift_status', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
     })
   }
 
