@@ -193,6 +193,19 @@ export async function getMaterialsReconcile({ shiftId, plantId } = {}) {
   }
 }
 
+/** Stock disponible filtrado para la vista Traspaso MP del gerente
+ *  (3 MP Laurita en location PIGU/MP-IGUALA — fijo para Fabricación-Iguala). */
+export async function getTraspasoMpIgualaStock() {
+  const res = await api('GET', '/pwa-admin/traspaso-mp/iguala-stock')
+  if (res?.error) throw new Error(res.error)
+  const payload = res?.data ?? res ?? {}
+  return {
+    locationId: payload.location_id,
+    locationName: payload.location_name || '',
+    products: Array.isArray(payload.products) ? payload.products : [],
+  }
+}
+
 export async function getDispatchConfig({ warehouseId } = {}) {
   if (!warehouseId) throw new Error('warehouse_id requerido')
   const qs = new URLSearchParams({ warehouse_id: String(warehouseId) })

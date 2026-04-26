@@ -79,8 +79,8 @@ function MobileAdminHub() {
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
     { id: 'traspaso_mp',      label: 'TRASPASO MATERIA PRIMA', desc: 'Enviar material a rolito o PT', route: '/admin/traspaso-materia-prima', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
-    { id: 'materiales_validar', label: 'Validar materiales', desc: 'Settlements por validar',   route: '/admin/materiales/validar', color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
-    { id: 'bolsas_validar',   label: 'Validar bolsas',     desc: 'Conteo final y adeudos',      route: '/admin/bolsas/validar',        color: TOKENS.colors.warning, roles: ['gerente_sucursal', 'direccion_general'] },
+    // Validar materiales / Validar bolsas eliminados (2026-04-25) —
+    // el traspaso ahora mueve stock real, no requiere segunda validación.
   ]
   const visibleActions = ACTIONS.filter((action) => !action.roles || action.roles.some((role) => effectiveRoles.includes(role)))
 
