@@ -3693,6 +3693,24 @@ async function directProduction(method, path, body) {
     return { success: true, data: result }
   }
 
+  // Cualquier otro /api/production/* va DIRECTO a Odoo (no n8n).
+  // Si no hay handler especifico, delegamos generico via odooHttp.
+  // Asume que el path en Odoo es identico al path PWA — si la ruta Odoo
+  // difiere (ej: /issues -> /issue/list), hay que poner handler explicito
+  // ANTES de este catch-all.
+  if (cleanPath.startsWith('/api/production/')) {
+    const queryStr = path.includes('?') ? path.split('?')[1] : ''
+    const queryObj = {}
+    if (queryStr) {
+      for (const [k, v] of new URLSearchParams(queryStr)) queryObj[k] = v
+    }
+    if (method === 'GET') {
+      return odooHttp('GET', cleanPath, queryObj)
+    }
+    // POST/PUT/etc — type=json en Odoo: usa odooJson (envelope JSON-RPC)
+    return odooJson(cleanPath, body || {})
+  }
+
   return NO_DIRECT
 }
 
