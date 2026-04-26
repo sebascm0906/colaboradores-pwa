@@ -206,15 +206,17 @@ export async function getTraspasoMpIgualaStock() {
   }
 }
 
-/** Traspaso directo PIGU/MP-IGUALA → PROCESO-ROLITO (single-step stock.move).
- *  Sin material.issue ni dispatch_config — solo mueve stock al confirmar. */
-export async function traspasoMpIgualaTransfer({ productId, qty, notes } = {}) {
+/** Traspaso PIGU/MP-IGUALA → PROCESO-ROLITO en Iguala.
+ *  Crea material.issue (visible para operador rolito en "Materiales del turno")
+ *  + stock.move real al confirmar. Sin dispatch_config. */
+export async function traspasoMpIgualaTransfer({ productId, qty, notes, issuedBy } = {}) {
   if (!productId) throw new Error('product_id requerido')
   if (!(Number(qty) > 0)) throw new Error('qty debe ser mayor a 0')
   const res = await api('POST', '/pwa-admin/traspaso-mp/iguala-transfer', {
     product_id: Number(productId),
     qty: Number(qty),
     notes: notes || '',
+    issued_by: Number(issuedBy || 0) || undefined,
   })
   if (res && res.ok === false) {
     throw new Error(res.message || 'Error al crear el traspaso')

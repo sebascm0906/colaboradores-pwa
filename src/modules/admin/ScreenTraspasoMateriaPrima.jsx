@@ -127,6 +127,7 @@ function TraspasoMPForm() {
         productId: Number(selectedProduct.product_id),
         qty: Number(qty),
         notes,
+        issuedBy: session?.employee_id,
       })
       setSuccess(true)
     } catch (e) {
