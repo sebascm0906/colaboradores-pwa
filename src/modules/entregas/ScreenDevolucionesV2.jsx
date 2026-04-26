@@ -102,7 +102,15 @@ export default function ScreenDevolucionesV2() {
     setError('')
     setSuccess('')
     try {
-      await acceptReturn(
+      // BLD-20260426-P0-DEVOL: defensa contra falso éxito.
+      // Backend (gf_logistics_ops) responde con HTTP 200 + {ok:false, message}
+      // ante errores de negocio (plan inexistente, línea ya recibida, etc.).
+      // Antes el code solo manejaba try/catch, así que un response ok:false
+      // pasaba como éxito y se mostraba "Devolucion confirmada" en verde
+      // sin que la devolución quedara registrada en Odoo. Mismo bug que ya
+      // arreglamos en mostrador (PR #21). Aquí lo replicamos con el mismo
+      // patrón mínimo.
+      const result = await acceptReturn(
         [ret.id],
         [{
           stop_line_id: ret.id,
@@ -112,6 +120,10 @@ export default function ScreenDevolucionesV2() {
         employeeId,
         warehouseId
       )
+      if (result && result.ok === false) {
+        setError(result.message || 'Backend rechazó la devolución')
+        return // NO success, NO reload — el operador debe corregir y reintentar
+      }
       setSuccess('Devolucion confirmada')
       setTimeout(() => setSuccess(''), 3000)
       // Reload
