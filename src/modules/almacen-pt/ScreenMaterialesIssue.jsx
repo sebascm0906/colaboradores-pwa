@@ -152,9 +152,12 @@ export default function ScreenMaterialesIssue() {
                 {g.items.map(it => {
                   const issueState = it.state || 'draft'
                   const settlementState = it.settlement_state
-                  // Issue 'draft' = entrega pendiente de que el operador valide recepcion.
-                  const isPendingReceipt = issueState === 'draft' && !settlementState
-                  const displayState = settlementState || issueState
+                  // Issue 'draft' = entrega pendiente de validar recepcion.
+                  // El backend a veces "joina" con un settlement viejo de la misma
+                  // combinacion shift/line/material, asi que NO miramos settlement_state
+                  // para detectar pendiente — solo el issue.state.
+                  const isPendingReceipt = issueState === 'draft'
+                  const displayState = isPendingReceipt ? 'draft' : (settlementState || issueState)
                   const canReport = !isPendingReceipt && (displayState === 'draft' || displayState === 'issued')
                   const issueId = it.id || it.issue_id
                   const isValidating = validatingId === issueId
