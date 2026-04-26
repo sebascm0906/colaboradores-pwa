@@ -323,8 +323,56 @@ export default function App() {
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
 
-  function login(sessionData) { setSession(normalizeSessionRoleContext(sessionData)) }
-  function logout()           { setSession(null) }
+  // Multi-tab safety: detect when another tab cambia la sesion (logout o
+  // login distinto). Cuando el employee_id en localStorage difiere del que
+  // tenemos en memoria, hard-reload para descartar cualquier estado en RAM
+  // del usuario anterior y arrancar limpio con la nueva sesion.
+  useEffect(() => {
+    function checkSessionDrift() {
+      const stored = getStoredSession()
+      const memEmpId = session?.employee_id || null
+      const storedEmpId = stored?.employee_id || null
+      if (memEmpId !== storedEmpId) {
+        // Drift detectado: hard reload a "/" para que el routing recompute
+        // landing y se descarte la pila de history del usuario anterior.
+        window.location.replace('/')
+      }
+    }
+    function onStorage(e) {
+      if (e.key === 'gf_session') checkSessionDrift()
+    }
+    function onFocus() { checkSessionDrift() }
+    function onVisibility() { if (document.visibilityState === 'visible') checkSessionDrift() }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [session?.employee_id])
+
+  function login(sessionData) {
+    const next = normalizeSessionRoleContext(sessionData)
+    const nextEmpId = next?.employee_id || null
+    const prevEmpId = session?.employee_id || null
+    setSession(next)
+    // Si entra otro empleado distinto al que estaba (raro, pero pasa cuando
+    // el mismo navegador cambia de usuario), forzamos reload despues de
+    // persistir la sesion para limpiar history y estado de modulos viejos.
+    if (prevEmpId && nextEmpId && prevEmpId !== nextEmpId) {
+      // Persistir primero para que el reload ya lea la nueva sesion.
+      try { localStorage.setItem('gf_session', JSON.stringify(next)) } catch {}
+      window.location.replace('/')
+    }
+  }
+  function logout() {
+    setSession(null)
+    // Reload para descartar cualquier dato en RAM del usuario que sale.
+    try { localStorage.removeItem('gf_session') } catch {}
+    window.location.replace('/login')
+  }
   function updateSession(patch) {
     setSession(prev => (prev ? normalizeSessionRoleContext({ ...prev, ...patch }) : prev))
   }
