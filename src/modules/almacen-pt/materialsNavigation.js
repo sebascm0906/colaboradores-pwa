@@ -13,9 +13,10 @@ export function defaultMaterialesBackToForRole(role, fallback = '/almacen-pt') {
   if (normalized === 'almacenista_pt') {
     return '/almacen-pt'
   }
-  if (normalized === 'gerente_sucursal') {
-    return '/admin'
-  }
+  // gerente_sucursal NO se mapea a /admin: las pantallas de materiales ya
+  // no son del gerente (Validar materiales/bolsas se eliminaron 2026-04-25).
+  // Si un operador tiene tambien rol gerente, el back NO debe mandarlo al
+  // panel admin — fallback al hub general '/' cae en home con sus modulos.
   return fallback
 }
 

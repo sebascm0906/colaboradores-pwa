@@ -33,8 +33,10 @@ export default function ScreenMaterialesIssue() {
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const plantId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
-  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt', session?.role)
   const activeRole = normalizeOperatorCloseRole(location.state?.selected_role || session?.role)
+  // Importante: pasar el rol contextual (no session?.role) para que un
+  // operador con rol secundario gerente no sea redirigido a /admin.
+  const backTo = resolveMaterialesBackTo(location.state, '/almacen-pt', activeRole || session?.role)
   const canCreateIssue = activeRole !== 'operador_rolito'
 
   const [shift, setShift] = useState(null)
