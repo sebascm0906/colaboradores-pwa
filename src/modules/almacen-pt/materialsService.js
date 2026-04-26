@@ -206,6 +206,22 @@ export async function getTraspasoMpIgualaStock() {
   }
 }
 
+/** Traspaso directo PIGU/MP-IGUALA → PROCESO-ROLITO (single-step stock.move).
+ *  Sin material.issue ni dispatch_config — solo mueve stock al confirmar. */
+export async function traspasoMpIgualaTransfer({ productId, qty, notes } = {}) {
+  if (!productId) throw new Error('product_id requerido')
+  if (!(Number(qty) > 0)) throw new Error('qty debe ser mayor a 0')
+  const res = await api('POST', '/pwa-admin/traspaso-mp/iguala-transfer', {
+    product_id: Number(productId),
+    qty: Number(qty),
+    notes: notes || '',
+  })
+  if (res && res.ok === false) {
+    throw new Error(res.message || 'Error al crear el traspaso')
+  }
+  return res?.data ?? res ?? {}
+}
+
 export async function getDispatchConfig({ warehouseId } = {}) {
   if (!warehouseId) throw new Error('warehouse_id requerido')
   const qs = new URLSearchParams({ warehouse_id: String(warehouseId) })

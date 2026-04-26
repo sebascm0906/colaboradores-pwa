@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
-import { getTraspasoMpIgualaStock, createDispatchTransfer } from '../almacen-pt/materialsService'
+import { getTraspasoMpIgualaStock, traspasoMpIgualaTransfer } from '../almacen-pt/materialsService'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 
@@ -115,7 +115,7 @@ function TraspasoMPForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!selectedProduct?.material_id || !(Number(qty) > 0)) return
+    if (!selectedProduct?.product_id || !(Number(qty) > 0)) return
     if (Number(qty) > Number(selectedProduct.qty_available)) {
       setSubmitError(`Solo hay ${selectedProduct.qty_available} disponibles en PIGU/MP-IGUALA`)
       return
@@ -123,17 +123,14 @@ function TraspasoMPForm() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      await createDispatchTransfer({
-        warehouseId,
-        destinationKey: 'rolito',
-        materialId: Number(selectedProduct.material_id),
-        qtyIssued: Number(qty),
-        issuedBy: session?.employee_id,
+      await traspasoMpIgualaTransfer({
+        productId: Number(selectedProduct.product_id),
+        qty: Number(qty),
         notes,
       })
       setSuccess(true)
     } catch (e) {
-      logScreenError('ScreenTraspasoMateriaPrima', 'createDispatchTransfer', e)
+      logScreenError('ScreenTraspasoMateriaPrima', 'traspasoMpIgualaTransfer', e)
       setSubmitError(e?.message || 'Error al crear el traspaso')
     } finally {
       setSubmitting(false)
