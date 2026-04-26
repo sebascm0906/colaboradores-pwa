@@ -5073,11 +5073,19 @@ async function directAlmacenPT(method, path, body) {
     return envelope?.data ?? envelope
   }
 
-  // ── Shift handover for PT (Sebastián commit a3f58c0) ─────────────────────
+  // ── Shift handover for PT (Sebastián commit a3f58c0 + PT unified 2026-04-26) ─
+  // PT consolida dos almacenes logicos (rolito + barra). Si el caller envia
+  // warehouse_ids, los reenviamos junto con handover_scope='pt' para que el
+  // backend consolide stock de ambos en un solo handover.
   if (cleanPath === '/pwa-pt/shift-handover-create' && method === 'POST') {
     return odooJson('/gf/logistics/api/employee/shift_handover/create', {
       warehouse_id: body?.warehouse_id || warehouseId,
+      warehouse_ids: Array.isArray(body?.warehouse_ids) && body.warehouse_ids.length
+        ? body.warehouse_ids
+        : undefined,
+      handover_scope: 'pt',
       employee_id: body?.employee_id || getEmployeeId() || 0,
+      shift_in_employee_id: body?.shift_in_employee_id || undefined,
       lines: body?.lines || [],
       notes: body?.notes || '',
     })
@@ -5086,6 +5094,7 @@ async function directAlmacenPT(method, path, body) {
   if (cleanPath === '/pwa-pt/shift-handover-pending' && method === 'GET') {
     return odooJson('/gf/logistics/api/employee/shift_handover/pending', {
       warehouse_id: warehouseId,
+      handover_scope: 'pt',
     })
   }
 
@@ -5096,6 +5105,19 @@ async function directAlmacenPT(method, path, body) {
       lines: body?.lines || [],
       notes: body?.notes || '',
       action: body?.action || 'accept',
+    })
+  }
+
+  // Shift status PT — fuente de verdad sobre ownership/blocked/pending.
+  // Devuelve: { view: 'dashboard'|'blocked'|'receive_turn', blocked,
+  // pending_for_me, owner_employee_id, owner_employee_name, handover_id, handover }
+  if (cleanPath === '/pwa-pt/shift-status' && method === 'POST') {
+    return odooJson('/gf/logistics/api/employee/pt/shift_status', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      warehouse_ids: Array.isArray(body?.warehouse_ids) && body.warehouse_ids.length
+        ? body.warehouse_ids
+        : undefined,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
     })
   }
 

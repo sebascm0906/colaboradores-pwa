@@ -649,13 +649,35 @@ export async function getDaySales({ warehouseId = DEFAULT_WAREHOUSE_ID, date } =
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Create shift handover (outgoing almacenista declares inventory).
- * Uses the same shift_handover endpoint as entregas, scoped by warehouse_id.
+ * Resuelve los warehouse_ids del handover PT (rolito + barra cuando existan).
+ * Para Iguala hoy es solo [warehouseId] — backend consolida sub-locations.
+ * Si la sesion expone session.pt_warehouse_ids, se usan esos.
+ */
+function resolvePtWarehouseIds(warehouseId, extra) {
+  const ids = []
+  if (Array.isArray(extra)) {
+    for (const v of extra) {
+      const n = Number(v)
+      if (n && !ids.includes(n)) ids.push(n)
+    }
+  }
+  const primary = Number(warehouseId)
+  if (primary && !ids.includes(primary)) ids.unshift(primary)
+  return ids
+}
+
+/**
+ * Create shift handover PT (outgoing almacenista declares inventory).
+ * Mismo endpoint que entregas, pero PWA agrega handover_scope='pt' y
+ * warehouse_ids para que backend consolide rolito+barra.
  */
 export async function createShiftHandover(warehouseId, employeeId, lines, notes, options = {}) {
   const result = await api('POST', '/pwa-pt/shift-handover-create', {
     warehouse_id: warehouseId,
+    warehouse_ids: resolvePtWarehouseIds(warehouseId, options?.warehouse_ids),
+    handover_scope: 'pt',
     employee_id: employeeId,
+    shift_in_employee_id: options?.shift_in_employee_id || undefined,
     lines: lines || [],
     notes: notes || '',
     handover_id: options?.handover_id || undefined,
@@ -665,12 +687,16 @@ export async function createShiftHandover(warehouseId, employeeId, lines, notes,
 }
 
 /**
- * Get pending handover for this warehouse.
- * Returns null when there is no pending handover.
+ * Get pending handover PT for this warehouse (consolidado rolito+barra).
+ * Returns null cuando no hay pendiente.
  */
-export async function getPendingHandover(warehouseId) {
+export async function getPendingHandover(warehouseId, options = {}) {
   try {
-    const result = await api('GET', `/pwa-pt/shift-handover-pending?warehouse_id=${warehouseId}`)
+    const qs = new URLSearchParams({ warehouse_id: String(warehouseId) })
+    qs.set('handover_scope', 'pt')
+    const ids = resolvePtWarehouseIds(warehouseId, options?.warehouse_ids)
+    if (ids.length > 1) qs.set('warehouse_ids', ids.join(','))
+    const result = await api('GET', `/pwa-pt/shift-handover-pending?${qs.toString()}`)
     const payload = result?.data || result
     const handover = payload?.handover || payload
     if (!handover || Array.isArray(handover) && handover.length === 0) return null
@@ -681,7 +707,7 @@ export async function getPendingHandover(warehouseId) {
 }
 
 /**
- * Accept shift handover (incoming almacenista validates).
+ * Accept shift handover PT (incoming almacenista validates).
  * action: 'accept' | 'reject'
  */
 export async function acceptShiftHandover(handoverId, employeeId, lines, notes, action = 'accept') {
@@ -693,6 +719,30 @@ export async function acceptShiftHandover(handoverId, employeeId, lines, notes, 
     action,
   })
   return result?.data || result
+}
+
+/**
+ * PT shift status — fuente de verdad sobre ownership/blocked/pending.
+ * Backend devuelve view: 'dashboard' | 'blocked' | 'receive_turn'.
+ * La PWA NO debe decidir ownership por su cuenta.
+ */
+export async function getPtShiftStatus({ warehouseId, employeeId, warehouseIds } = {}) {
+  const result = await api('POST', '/pwa-pt/shift-status', {
+    warehouse_id: warehouseId,
+    warehouse_ids: resolvePtWarehouseIds(warehouseId, warehouseIds),
+    employee_id: employeeId,
+  })
+  const payload = result?.data || result || {}
+  return {
+    view: payload.view || 'dashboard',
+    blocked: Boolean(payload.blocked),
+    pending_for_me: Boolean(payload.pending_for_me),
+    owner_employee_id: Number(payload.owner_employee_id || 0) || null,
+    owner_employee_name: payload.owner_employee_name || '',
+    handover_id: Number(payload.handover_id || 0) || null,
+    handover: payload.handover || null,
+    raw: payload,
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

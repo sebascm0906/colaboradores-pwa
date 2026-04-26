@@ -11,6 +11,7 @@ import {
   getNextAction,
   getTodayReceptionsLocal,
   getTodayTransfersLocal,
+  getPtShiftStatus,
   fmtNum,
   fmtKg,
   DEFAULT_WAREHOUSE_ID,
@@ -22,6 +23,7 @@ export default function ScreenAlmacenPT() {
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
   const [summary, setSummary] = useState(null)
+  const [shiftStatus, setShiftStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -32,15 +34,31 @@ export default function ScreenAlmacenPT() {
   }, [])
 
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
+  const employeeId = session?.employee_id || 0
 
   useEffect(() => { loadData() }, [])
+
+  // Si el backend dice receive_turn, redirigimos al handover automaticamente.
+  useEffect(() => {
+    if (shiftStatus?.view === 'receive_turn') {
+      navigate('/almacen-pt/handover', { replace: true })
+    }
+  }, [shiftStatus?.view, navigate])
 
   async function loadData() {
     setLoading(true)
     setError('')
     try {
-      const s = await getDaySummary(warehouseId)
-      setSummary(s)
+      // 1) Fuente de verdad backend: ownership + view a renderizar.
+      const status = await getPtShiftStatus({ warehouseId, employeeId })
+      setShiftStatus(status)
+      // 2) Solo cargamos summary cuando el dashboard es visible.
+      if (status.view === 'dashboard') {
+        const s = await getDaySummary(warehouseId)
+        setSummary(s)
+      } else {
+        setSummary(null)
+      }
     } catch (e) {
       setError(e.message || 'Error cargando datos')
     } finally {
@@ -200,6 +218,13 @@ export default function ScreenAlmacenPT() {
             <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0 }}>{error}</p>
             <button onClick={loadData} style={{ ...typo.caption, color: TOKENS.colors.blue2, fontWeight: 600, marginTop: 8 }}>Reintentar</button>
           </div>
+        ) : shiftStatus?.view === 'blocked' ? (
+          <PtBlockedView shiftStatus={shiftStatus} typo={typo} onReload={loadData} />
+        ) : shiftStatus?.view === 'receive_turn' ? (
+          // Caso transitorio: el effect ya redirige a /almacen-pt/handover.
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
         ) : (
           <>
             {/* Handover pending banner */}
@@ -328,6 +353,55 @@ export default function ScreenAlmacenPT() {
             <div style={{ height: 32 }} />
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── PT bloqueado: otro almacenista tiene el turno; sin handover para mi ─────
+function PtBlockedView({ shiftStatus, typo, onReload }) {
+  const ownerName = shiftStatus?.owner_employee_name || 'otro almacenista'
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{
+        padding: 24, borderRadius: TOKENS.radius.xl,
+        background: 'linear-gradient(160deg, rgba(239,68,68,0.18), rgba(239,68,68,0.06))',
+        border: `1px solid ${TOKENS.colors.error}50`,
+        boxShadow: '0 12px 28px rgba(239,68,68,0.20)',
+        textAlign: 'center',
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: '50%',
+          background: `${TOKENS.colors.error}24`, border: `1px solid ${TOKENS.colors.error}60`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px', color: TOKENS.colors.error,
+        }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p style={{ ...typo.title, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+          PT en uso por otro almacenista
+        </p>
+        <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: '8px 0 0' }}>
+          <strong>{ownerName}</strong> tiene el turno PT activo. No puedes operar el almacén
+          hasta que entregue el turno.
+        </p>
+        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '12px 0 0' }}>
+          Espera a que el almacenista actual entregue su turno y te lo asigne.
+        </p>
+        <button
+          onClick={onReload}
+          style={{
+            marginTop: 18, padding: '10px 18px', borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+            color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 700,
+            fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
+          }}
+        >
+          Refrescar estado
+        </button>
       </div>
     </div>
   )
