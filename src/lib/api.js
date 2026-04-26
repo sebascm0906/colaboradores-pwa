@@ -5574,21 +5574,28 @@ async function directEntregas(method, path, body) {
     // Construir meta desde sesión. Sebas (2026-04-26) confirmó que el guard
     // gf_saleops resuelve analytic_account_id a partir de warehouse_id, así
     // que el BFF NO necesita mandar analytic_account_id explícito.
-    // Meta mínima recomendada por Sebas:
-    //   { employee_id, employee_ref, warehouse_id, request_id, idempotency_key }
+    //
+    // Identidad (Sebas 2026-04-26): el guard resuelve empleado en este orden:
+    //   1) meta.employee_id (preferido, sin ambigüedad)
+    //   2) meta.employee_ref → busca por id si es numérico, luego barcode/work_phone
+    // Por eso: enviamos employee_id cuando existe; employee_ref SOLO como
+    // fallback si la sesión no trae id (caso bypass / barcode-only).
     const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
     const sessionWarehouseId = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
-    const employeeRef = String(session.employee_ref || session.barcode || employeeId || '')
     const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
       ? `pwa-load-${crypto.randomUUID()}`
       : `pwa-load-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
     const meta = {
-      employee_id: employeeId || undefined,
-      employee_ref: employeeRef || undefined,
       warehouse_id: sessionWarehouseId || undefined,
       request_id: requestId,
       idempotency_key: requestId,
+    }
+    if (employeeId) {
+      meta.employee_id = employeeId
+    } else {
+      const fallbackRef = String(session.employee_ref || session.barcode || session.work_phone || '')
+      if (fallbackRef) meta.employee_ref = fallbackRef
     }
 
     const envelope = await odooJson('/gf/salesops/warehouse/load/execute', {
