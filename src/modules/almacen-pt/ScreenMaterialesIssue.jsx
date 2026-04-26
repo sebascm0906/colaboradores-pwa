@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getActiveShift } from '../supervision/api'
-import { getMaterialIssues, stateLabel, lineOf } from './materialsService'
+import { getMaterialIssues, stateLabel, lineOf, validateMaterialIssueReceipt } from './materialsService'
 import { buildMaterialesNavState, resolveMaterialesBackTo } from './materialsNavigation'
 import { fmtNum, DEFAULT_WAREHOUSE_ID } from './ptService'
 import { logScreenError } from '../shared/logScreenError'
@@ -41,8 +41,34 @@ export default function ScreenMaterialesIssue() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Form inline de validacion de recepcion para issues draft
+  const [validatingId, setValidatingId] = useState(null)
+  const [qtyReceived, setQtyReceived] = useState('')
+  const [validatingSubmit, setValidatingSubmit] = useState(false)
+  const [validateError, setValidateError] = useState('')
 
   useEffect(() => { loadData() }, [])
+
+  async function handleValidateReceipt(issueId) {
+    if (!(Number(qtyReceived) > 0)) return
+    setValidatingSubmit(true)
+    setValidateError('')
+    try {
+      await validateMaterialIssueReceipt({
+        issueId,
+        qtyReceived: Number(qtyReceived),
+        employeeId: session?.employee_id,
+      })
+      setValidatingId(null)
+      setQtyReceived('')
+      await loadData()
+    } catch (e) {
+      logScreenError('ScreenMaterialesIssue', 'validateReceipt', e)
+      setValidateError(e?.message || 'Error al validar recepcion')
+    } finally {
+      setValidatingSubmit(false)
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -124,12 +150,110 @@ export default function ScreenMaterialesIssue() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {g.items.map(it => {
-                  const st = it.settlement_state || it.state || 'draft'
-                  const canReport = st === 'draft' || st === 'issued'
+                  const issueState = it.state || 'draft'
+                  const settlementState = it.settlement_state
+                  // Issue 'draft' = entrega pendiente de que el operador valide recepcion.
+                  const isPendingReceipt = issueState === 'draft' && !settlementState
+                  const displayState = settlementState || issueState
+                  const canReport = !isPendingReceipt && (displayState === 'draft' || displayState === 'issued')
+                  const issueId = it.id || it.issue_id
+                  const isValidating = validatingId === issueId
+
+                  if (isPendingReceipt) {
+                    return (
+                      <div key={issueId} style={{ ...rowStyle, flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ ...typo.body, color: TOKENS.colors.text, margin: 0, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {it.product_name || it.material_name || '—'}
+                            </p>
+                            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                              Gerente envió: <b style={{ color: TOKENS.colors.textSoft }}>{fmtNum(it.qty_issued)}</b> {it.uom || ''}
+                            </p>
+                          </div>
+                          <span style={{
+                            ...typo.caption,
+                            padding: '3px 8px', borderRadius: TOKENS.radius.pill,
+                            background: `${TOKENS.colors.warning}14`,
+                            color: TOKENS.colors.warning,
+                            border: `1px solid ${TOKENS.colors.warning}40`,
+                            fontWeight: 700, flexShrink: 0,
+                          }}>
+                            Por recibir
+                          </span>
+                        </div>
+                        {!isValidating ? (
+                          <button
+                            onClick={() => {
+                              setValidatingId(issueId)
+                              setQtyReceived(String(it.qty_issued || ''))
+                              setValidateError('')
+                            }}
+                            style={{
+                              padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                              background: 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                              color: 'white', fontSize: 13, fontWeight: 700,
+                            }}
+                          >
+                            Validar recepción
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <label style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>
+                              ¿Cuántas {it.uom || 'unidades'} recibiste realmente?
+                            </label>
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="any"
+                              value={qtyReceived}
+                              onChange={e => setQtyReceived(e.target.value)}
+                              placeholder={`${fmtNum(it.qty_issued)} (propuesto)`}
+                              style={{
+                                padding: '10px 14px', borderRadius: TOKENS.radius.md,
+                                background: 'rgba(255,255,255,0.05)',
+                                border: `1px solid ${TOKENS.colors.border}`,
+                                color: 'white', fontSize: 16, fontWeight: 600, outline: 'none',
+                              }}
+                            />
+                            {validateError && (
+                              <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{validateError}</p>
+                            )}
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => { setValidatingId(null); setQtyReceived(''); setValidateError('') }}
+                                disabled={validatingSubmit}
+                                style={{
+                                  flex: 1, padding: '10px', borderRadius: TOKENS.radius.md,
+                                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                  color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
+                                }}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => handleValidateReceipt(issueId)}
+                                disabled={validatingSubmit || !(Number(qtyReceived) > 0)}
+                                style={{
+                                  flex: 2, padding: '10px', borderRadius: TOKENS.radius.md,
+                                  background: validatingSubmit ? TOKENS.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                                  color: 'white', fontSize: 13, fontWeight: 700,
+                                  opacity: (validatingSubmit || !(Number(qtyReceived) > 0)) ? 0.5 : 1,
+                                }}
+                              >
+                                {validatingSubmit ? 'Validando…' : 'Confirmar recepción'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }
+
                   return (
                   <button
-                    key={it.id || it.issue_id}
-                    onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${it.id || it.issue_id}`, {
+                    key={issueId}
+                    onClick={() => canReport && navigate(`/almacen-pt/materiales/report/${issueId}`, {
                       state: buildMaterialesNavState({ ...location.state, issue: it }, '/almacen-pt/materiales', session?.role),
                     })}
                     style={{ ...rowStyle, opacity: canReport ? 1 : 0.7, cursor: canReport ? 'pointer' : 'default' }}
@@ -147,12 +271,12 @@ export default function ScreenMaterialesIssue() {
                     <span style={{
                       ...typo.caption,
                       padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                      background: `${colorForState(it.settlement_state || it.state)}14`,
-                      color: colorForState(it.settlement_state || it.state),
-                      border: `1px solid ${colorForState(it.settlement_state || it.state)}40`,
+                      background: `${colorForState(displayState)}14`,
+                      color: colorForState(displayState),
+                      border: `1px solid ${colorForState(displayState)}40`,
                       fontWeight: 700, flexShrink: 0, marginLeft: 8,
                     }}>
-                      {stateLabel(it.settlement_state || it.state)}
+                      {stateLabel(displayState)}
                     </span>
                   </button>
                   )

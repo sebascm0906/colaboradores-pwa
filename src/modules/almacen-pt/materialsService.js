@@ -74,6 +74,21 @@ export async function createMaterialIssue({
   return res?.data ?? res ?? {}
 }
 
+// ── Validar recepción de un issue draft (operador confirma qty recibida) ─────
+export async function validateMaterialIssueReceipt({
+  issueId, qtyReceived, employeeId,
+} = {}) {
+  if (!issueId) throw new Error('issue_id requerido')
+  if (!(Number(qtyReceived) > 0)) throw new Error('qty_received debe ser mayor a 0')
+  const res = await api('POST', '/api/production/materials/issue/validate-receipt', {
+    issue_id: Number(issueId),
+    qty_received: Number(qtyReceived),
+    employee_id: Number(employeeId || 0) || undefined,
+  })
+  if (res?.error) throw new Error(res.error)
+  return res?.data ?? res ?? {}
+}
+
 // ── Cancelar issue (solo mientras settlement esté en draft) ───────────────────
 export async function cancelMaterialIssue({ issueId, employeeId, notes } = {}) {
   if (!issueId) throw new Error('issue_id requerido')
