@@ -87,12 +87,53 @@ export default function ScreenOperacionDia() {
     } finally { setSearching(false) }
   }
 
+  // BLD-20260426-P0-2: el endpoint legacy /public_api/sale_order/validate_deliveries
+  // devuelve {success: bool, message|error} — shape DISTINTA al resto del
+  // stack gf_logistics_ops ({ok, message, data}). Antes el cliente solo
+  // chequeaba try/catch y un response {success:false, error} pasaba como
+  // éxito (toast verde, ticket "despachado") sin que la entrega ocurriera.
+  // Además: bloqueamos despacho si el ticket pertenece a otro warehouse,
+  // porque el backend NO valida scope (auditado runtime 2026-04-26 — desde
+  // sesión Iguala se despacharon 3 órdenes ajenas con success:true).
+  function getTicketWarehouseId(t) {
+    if (!t) return 0
+    const w = t.warehouse_id
+    if (typeof w === 'number') return w
+    if (Array.isArray(w) && typeof w[0] === 'number') return w[0]
+    return 0
+  }
+  function isTicketFromMyWarehouse(t) {
+    const tw = getTicketWarehouseId(t)
+    if (!warehouseId) return false
+    if (!tw) return true // backend no devolvió warehouse → permitir y dejar que server decida
+    return tw === warehouseId
+  }
+
   async function handleDispatch() {
     if (!ticket?.id) return
+    if (!isTicketFromMyWarehouse(ticket)) {
+      const tw = getTicketWarehouseId(ticket)
+      setTicketError(`Este ticket pertenece a otro almacén (warehouse ${tw}). No puedes despacharlo desde aquí.`)
+      setConfirmOpen(false)
+      return
+    }
     setDispatching(true)
     setTicketError('')
     try {
-      await dispatchTicket(ticket.id)
+      const result = await dispatchTicket(ticket.id)
+      // Defensa runtime: el endpoint puede devolver {success:false, error}
+      // con HTTP 200 sin lanzar excepción. ANTES mostrábamos éxito igual.
+      if (result && result.success === false) {
+        setTicketError(result.error || result.message || 'Backend rechazó el despacho')
+        setConfirmOpen(false)
+        return
+      }
+      // También cubrimos shape ambigua (null, {}) que tampoco probaría éxito.
+      if (!result || (typeof result === 'object' && !result.success && !result.ok)) {
+        setTicketError('Respuesta del servidor no confirmó el despacho. Verifica en Odoo antes de reintentar.')
+        setConfirmOpen(false)
+        return
+      }
       setTicketSuccess(`Ticket ${ticket.name} despachado correctamente`)
       setTicket(null)
       setFolio('')
@@ -250,19 +291,41 @@ export default function ScreenOperacionDia() {
                     <span style={{ fontSize: 22, fontWeight: 700, color: TOKENS.colors.text }}>${ticket.total?.toFixed(2)}</span>
                   </div>
 
+                  {/* BLD-20260426-P0-2: aviso si el ticket es de OTRO warehouse.
+                      Backend no valida scope; el cliente bloquea defensivamente. */}
+                  {!isTicketFromMyWarehouse(ticket) && (
+                    <div style={{
+                      padding: 12, marginTop: 8, borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.3)',
+                      color: TOKENS.colors.error, fontSize: 13, textAlign: 'center',
+                    }}>
+                      ⚠️ Este ticket pertenece a otro almacén
+                      {getTicketWarehouseId(ticket) ? ` (ID ${getTicketWarehouseId(ticket)})` : ''}.
+                      No puedes despacharlo desde tu sesión.
+                    </div>
+                  )}
+
                   {/* Dispatch button */}
                   {!ticket.dispatched && (
                     <button
                       onClick={() => setConfirmOpen(true)}
-                      disabled={dispatching}
+                      disabled={dispatching || !isTicketFromMyWarehouse(ticket)}
                       style={{
                         width: '100%', padding: 14, marginTop: 10, borderRadius: TOKENS.radius.lg,
-                        background: 'linear-gradient(90deg, #22c55e, #16a34a)', color: 'white',
+                        background: isTicketFromMyWarehouse(ticket)
+                          ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                          : TOKENS.colors.surface,
+                        color: isTicketFromMyWarehouse(ticket) ? 'white' : TOKENS.colors.textMuted,
                         fontSize: 15, fontWeight: 600, opacity: dispatching ? 0.6 : 1,
-                        boxShadow: '0 10px 24px rgba(34,197,94,0.30)',
+                        boxShadow: isTicketFromMyWarehouse(ticket)
+                          ? '0 10px 24px rgba(34,197,94,0.30)' : 'none',
                       }}
                     >
-                      {dispatching ? 'Despachando...' : 'Confirmar Despacho'}
+                      {dispatching
+                        ? 'Despachando...'
+                        : isTicketFromMyWarehouse(ticket)
+                          ? 'Confirmar Despacho'
+                          : 'Bloqueado: ticket de otro almacén'}
                     </button>
                   )}
                 </div>

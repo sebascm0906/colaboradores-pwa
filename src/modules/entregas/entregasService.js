@@ -387,19 +387,47 @@ export async function getScrapHistory(warehouseId) {
  * Backend (gf_logistics_ops): creates gf.shift.handover with stock snapshot,
  * validates no duplicate (warehouse+date+employee), state → submitted.
  *
+ * BLD-20260426-P0-1: backend ahora exige `shift_in_employee_id` (id del
+ * almacenista entrante). Antes el campo no se mandaba y la operación
+ * quedaba bloqueada con "shift_in_employee_id es obligatorio".
+ *
  * @param {number} warehouseId
- * @param {number} employeeId
+ * @param {number} employeeId        - empleado saliente (yo)
+ * @param {number} shiftInEmployeeId - empleado entrante (a quien le entrego)
  * @param {Object[]} lines - [{product_id, qty_declared, note?}]
  * @param {string} [notes]
  * @returns {Promise<Object>} { success, handover_id, total_products, has_differences }
  */
-export async function createShiftHandover(warehouseId, employeeId, lines, notes) {
+export async function createShiftHandover(warehouseId, employeeId, shiftInEmployeeId, lines, notes) {
   return api('POST', '/pwa-entregas/shift-handover-create', {
     warehouse_id: warehouseId,
     employee_id: employeeId,
+    shift_in_employee_id: shiftInEmployeeId,
     lines,
     notes: notes || '',
   })
+}
+
+/**
+ * BLD-20260426-P0-1: Lista de almacenistas de entregas elegibles para
+ * recibir un handover. Filtra por mismo warehouse + mismo puesto y
+ * excluye al saliente. Llamado desde ScreenCierreTurno para poblar el
+ * selector de empleado entrante.
+ *
+ * @param {number} warehouseId
+ * @param {number} excludeEmployeeId - id del saliente (yo) para excluirlo
+ * @returns {Promise<Array<{id:number, name:string, barcode:string, job:string}>>}
+ */
+export async function getEligibleReceivers(warehouseId, excludeEmployeeId) {
+  if (!warehouseId) return []
+  const params = new URLSearchParams({ warehouse_id: String(warehouseId) })
+  if (excludeEmployeeId) params.set('exclude_employee_id', String(excludeEmployeeId))
+  try {
+    const result = await api('GET', `/pwa-entregas/eligible-receivers?${params.toString()}`)
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
 }
 
 /**
