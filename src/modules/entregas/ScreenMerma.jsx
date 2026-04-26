@@ -125,7 +125,15 @@ export default function ScreenMerma() {
     setSubmitting(true)
     setError('')
     try {
-      await createScrap(
+      // BLD-20260426-P0-MERMA: defensa contra falso éxito.
+      // Backend (gf_logistics_ops /warehouse_scrap/create) responde con
+      // HTTP 200 + {ok:false, message} ante errores de negocio (sin stock,
+      // producto inválido, motivo inválido, etc.). Antes el code solo
+      // manejaba try/catch, así que un response ok:false pasaba como éxito
+      // y se mostraba "Merma registrada correctamente" en verde sin que
+      // stock.scrap se hubiera creado en Odoo. Mismo patrón que ya
+      // arreglamos en mostrador (PR #21) y devoluciones (PR #22).
+      const result = await createScrap(
         warehouseId,
         employeeId,
         selectedProduct.product_id,
@@ -133,6 +141,24 @@ export default function ScreenMerma() {
         selectedReason.id,
         notes.trim() || undefined
       )
+
+      if (result && result.ok === false) {
+        // Log estructurado con contexto mínimo para diagnóstico en campo.
+        logScreenError('ScreenMerma', 'scrap_create_rejected', {
+          warehouse_id: warehouseId,
+          employee_id: employeeId,
+          product_id: selectedProduct.product_id,
+          qty,
+          reason_id: selectedReason.id,
+          message: result.message || null,
+        })
+        setError(result.message || 'Backend rechazó la merma')
+        setConfirmOpen(false)
+        // NO success, NO clearForm, NO refresh history — el operador debe
+        // corregir (típicamente bajar la qty o elegir otro producto) y
+        // reintentar. Mantenemos el formulario tal cual lo dejó.
+        return
+      }
 
       // Voice feedback best-effort: dispara fire-and-forget a W122 si hubo voz previa.
       if (voiceContext?.trace_id) {
