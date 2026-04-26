@@ -5456,24 +5456,37 @@ async function directEntregas(method, path, body) {
 
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
     // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
-    // por introspección live (2026-04-26):
+    // por Sebastián + introspección live (2026-04-26):
     //   - NO existen: route_plan_id, warehouse_id, qty, notes, plan_id
-    //   - SÍ existen: stop_id, product_id, quantity, line_type, reason,
-    //     reception_state, received_qty, received_by_id, received_at,
+    //   - SÍ existen: stop_id, product_id, product_uom_id, quantity, line_type,
+    //     reason, reception_state, received_qty, received_by_id, received_at,
     //     reception_notes, create_date, company_id
     // El warehouse del CEDIS se resuelve por la cadena:
     //   stop_id → gf.route.stop.route_plan_id → gf.route.plan.route_id →
     //   gf.route.warehouse_dispatch_id (= warehouse del CEDIS, ej. 89 = CEDIS Iguala)
     // Sin esto la consulta fallaba con "Invalid field ..." y pickListResponse
     // devolvía [] silenciosamente, ocultando devoluciones reales.
+    //
+    // Filtros oficiales (Sebas, 2026-04-26):
+    //   - line_type = 'return' (NO mezclar 'scrap' en esta pantalla)
+    //   - reception_state = 'pending'
+    //   - plan en estados activos (published/in_progress/closed/reconciled)
+    //   - plan.date = hoy
+    const today = new Date().toISOString().slice(0, 10)
     const routePlanId = Number(query.get('route_plan_id') || 0)
-    const domain = [['line_type', 'in', ['return', 'scrap']]]
+    const domain = [
+      ['line_type', '=', 'return'],
+      ['reception_state', '=', 'pending'],
+      ['stop_id.route_plan_id.state', 'in', ['published', 'in_progress', 'closed', 'reconciled']],
+      ['stop_id.route_plan_id.date', '=', today],
+    ]
     if (routePlanId) domain.push(['stop_id.route_plan_id', '=', routePlanId])
     if (companyId) domain.push(['company_id', '=', companyId])
     if (warehouseId) domain.push(['stop_id.route_plan_id.route_id.warehouse_dispatch_id', '=', warehouseId])
     const result = await readModelSorted('gf.route.stop.line', {
-      fields: ['id', 'stop_id', 'product_id', 'quantity', 'line_type', 'reason', 'create_date',
-        'received_by_id', 'received_at', 'received_qty', 'reception_state', 'reception_notes'],
+      fields: ['id', 'stop_id', 'product_id', 'product_uom_id', 'quantity', 'line_type',
+        'reason', 'create_date', 'received_by_id', 'received_at', 'received_qty',
+        'reception_state', 'reception_notes', 'company_id'],
       domain,
       sort_column: 'create_date',
       sort_desc: true,
@@ -5534,11 +5547,44 @@ async function directEntregas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-entregas/return-accept' && method === 'POST') {
+    // BLD-20260426-P0-RETURNS-BFF: contrato oficial confirmado por Sebas
+    // (2026-04-26):
+    //   - payload al backend: { plan_id, lines:[{stop_line_id, received_qty, notes}] }
+    //   - identidad la resuelve el backend desde gf_employee_token; NO mandar
+    //     employee_id ni warehouse_id como fuente de verdad.
+    //   - el plan_id se deriva del stop_line_id (línea → stop → route_plan_id)
+    //     para no obligar a la UI a cambiar su contrato actual.
+    const lines = Array.isArray(body?.lines) ? body.lines.filter((l) => l?.stop_line_id) : []
+    if (!lines.length) return { ok: false, message: 'Sin líneas para aceptar.', data: {} }
+    let planId = Number(body?.plan_id || 0)
+    if (!planId) {
+      // Resolver plan_id desde la primera línea: stop_line.stop_id.route_plan_id
+      const firstLineId = Number(lines[0].stop_line_id)
+      const lineRes = pickListResponse(await readModelSorted('gf.route.stop.line', {
+        fields: ['id', 'stop_id'],
+        domain: [['id', '=', firstLineId]],
+        sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+      }))
+      const stopId = lineRes[0]?.stop_id?.[0] || lineRes[0]?.stop_id || 0
+      if (stopId) {
+        const stopRes = pickListResponse(await readModelSorted('gf.route.stop', {
+          fields: ['id', 'route_plan_id'],
+          domain: [['id', '=', stopId]],
+          sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+        }))
+        planId = stopRes[0]?.route_plan_id?.[0] || stopRes[0]?.route_plan_id || 0
+      }
+    }
+    if (!planId) {
+      return { ok: false, message: 'No se pudo resolver el plan de la devolución.', data: {} }
+    }
     return odooJson('/gf/logistics/api/employee/route_return/accept', {
-      stop_line_ids: body?.stop_line_ids || [],
-      employee_id: body?.employee_id || getEmployeeId() || 0,
-      warehouse_id: body?.warehouse_id || warehouseId,
-      lines: body?.lines || [],
+      plan_id: planId,
+      lines: lines.map((l) => ({
+        stop_line_id: Number(l.stop_line_id),
+        received_qty: Number(l.received_qty || 0),
+        notes: typeof l.notes === 'string' ? l.notes : '',
+      })),
     })
   }
 
