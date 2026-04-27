@@ -353,6 +353,7 @@ export default function ScreenCargaUnidades() {
       {/* Confirm dialog */}
       {confirmRoute && (
         <ConfirmDialog
+          open
           title="Confirmar carga"
           message={`Confirmar que la carga de la ruta "${confirmRoute.name || confirmRoute.id}" fue despachada?`}
           confirmLabel="Confirmar"
