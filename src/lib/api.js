@@ -3721,6 +3721,16 @@ async function directRuta(method, path, body) {
   if (cleanPath === '/pwa-ruta/my-plan' && method === 'GET') {
     const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
     if (!empId) return null
+    // BLD-20260427-P0-MY-PLAN-TODAY: la pantalla de aceptación de carga de
+    // jefe_ruta debe operar sobre el plan de HOY. Sin filtro de fecha el
+    // sort por date desc devolvía un plan futuro (mañana) cuando existían
+    // ambos, dejando "Sin carga asignada" para Manuel y bloqueando la
+    // aceptación de la carga real del día. Filtrar por today_str hace que
+    // un plan futuro no contamine la operación de hoy. Si no hay plan de
+    // hoy, devuelve null intencionalmente (no fallback a mañana).
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
     const result = await readModelSorted('gf.route.plan', {
       fields: [
         'id',
@@ -3745,7 +3755,13 @@ async function directRuta(method, path, body) {
         'corte_validated_at',
         'closure_time',
       ],
-      domain: ['|', ['driver_employee_id', '=', empId], ['salesperson_employee_id', '=', empId]],
+      domain: [
+        '&',
+        ['date', '=', todayStr],
+        '|',
+        ['driver_employee_id', '=', empId],
+        ['salesperson_employee_id', '=', empId],
+      ],
       sort_column: 'date',
       sort_desc: true,
       limit: 1,
