@@ -5974,7 +5974,7 @@ async function directSupervisorVentas(method, path, body) {
       date_target: body?.date_target || new Date().toISOString().slice(0, 10),
       created_by_employee_id: Number(employeeId || getEmployeeId() || 0) || undefined,
       company_id: Number(body?.company_id || companyId || 0) || undefined,
-      analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || 0) || undefined,
+      analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || getSession()?.employee?.x_analytic_account_id?.[0] || 0) || undefined,
       state: 'draft',
       line_ids: Array.isArray(body?.lines)
         ? body.lines
