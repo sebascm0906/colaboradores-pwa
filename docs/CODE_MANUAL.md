@@ -78,7 +78,7 @@ Datos extraídos del inventario realizado el 2026-04-27. Las columnas **Validado
 | `admin` | Auxiliar Admin, Gerente, Dirección | 14 | 70%–79% | parcial | no | Liquidaciones desktop-only; cash-closing/authorize stub | Sebastián |
 | `produccion` | Operador Rolito, Operador Barra, Auxiliar Producción (secundario) | 17 | 55%–65% | desconocido | parcial (8 unit tests) | PIN verification TODO en Rolito; legacy fallbacks `action_close_shift` | Sebastián |
 | `supervision` | Jefe de Producción | 6 | 70%–80% | desconocido | parcial (3 unit tests) | Brine readings PoC voice; dashboards no validados runtime | Sebastián |
-| `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | `gf.inventory.posting._action_done()` confirmado roto en producción (G013, 56% records en error) | Sebastián |
+| `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | G013 cerrado 2026-04-27; validación de inventario físico pendiente durante rollout de capacitación. Mitigación preventiva en G026 | Sebastián |
 | `entregas` | Almacenista Entregas | 9 | 80%–89% | parcial | parcial (1 unit test) | Pallet reject sin log de responsable; live-inventory bug arreglado 2026-04-27 (commit `52b7b5f`) | Sebastián |
 | `ruta` | Jefe de Ruta, Auxiliar de Ruta (secundario) | 11 | 70%–82% | desconocido | no | Corte/liquidación persisten en localStorage; integración Kold Field externa | Sebastián |
 | `supervisor-ventas` | Supervisor de Ventas | 12 | 75%–92% | parcial | no | Tareas y notas en `IS_STUB` (localStorage) | Sebastián |
@@ -201,6 +201,16 @@ graph TB
 
 ### 4.3 Flujo de autenticación real
 
+El sistema **NO usa JWT** para autenticar requests. Los tokens reales que valida el backend son opacos:
+
+| Token | Tipo | TTL | Scope | Validación backend |
+|-------|------|-----|-------|--------------------|
+| `gf_employee_token` | opaco (`secrets.token_urlsafe(32)`) | 30 días sliding | Por empleado | Tabla en BD Odoo (`gf.employee.session` o equivalente) |
+| `gf_salesops_token` | string estático | nunca expira | Global compartido entre todos los empleados | `ir.config_parameter` |
+| `api_key` | opaco | sin expiración explícita | Por empleado | Tabla en BD Odoo |
+
+El frontend almacena todos estos tokens en `localStorage.gf_session` junto con un campo llamado `session_token` que **NO es lo que autoriza** los requests — es un placeholder local con metadatos del empleado (envuelto en formato JWT-like, ver §4.4).
+
 ```mermaid
 sequenceDiagram
   participant U as Usuario
@@ -212,26 +222,25 @@ sequenceDiagram
   U->>L: PIN + barcode + Enter
   L->>V: POST /api-odoo/employee-sign-in<br/>{jsonrpc, method:"call", params:{barcode, pin, app, app_ver, device_name}}
   V->>O: POST /api/employee-sign-in<br/>(forwarded)
-  O-->>V: {result:{status:200, case:1, employee:{...}, api_key, gf_employee_token, gf_salesops_token, ...}}
+  O-->>V: {result:{status:200, case:1, employee:{...},<br/>api_key, gf_employee_token (opaco, 30d sliding),<br/>gf_salesops_token (estático global), ...}}
   V-->>L: response
-  Note over L: buildSessionFromOdoo()<br/>1. resolveRole(employee, jobTitle)<br/>2. inferCompanyId(role)<br/>3. exp = now + 7 días
-  Note over L: Si NO viene session_token del backend,<br/>el frontend construye un JWT<br/>UNSIGNED (alg:"none") localmente
-  L->>LS: localStorage.setItem('gf_session', JSON)
+  Note over L: buildSessionFromOdoo()<br/>1. resolveRole(employee, jobTitle)<br/>2. inferCompanyId(role)<br/>3. exp = now + 7 días (UI hint)
+  L->>LS: localStorage.setItem('gf_session', {...tokens, exp})
   L->>L: navigate('/', replace:true)
 
-  Note over LS: Sesión persistida con campos:<br/>session_token, role, employee_id,<br/>company_id, warehouse_id,<br/>api_key, gf_employee_token,<br/>gf_salesops_token, exp
+  Note over LS: Tokens persistidos:<br/>· gf_employee_token (autoriza por empleado)<br/>· gf_salesops_token (global, scope reducido server-side)<br/>· api_key
 ```
 
 Cada request posterior añade headers desde la sesión local (ver [`src/lib/api.js:133-156`](../src/lib/api.js)):
 
-| Header | Origen | Cuándo |
-|--------|--------|--------|
-| `Authorization: Bearer <session_token>` | `session.session_token` | Siempre, si existe |
-| `Api-Key` | `session.odoo_api_key` o `session.api_key` | Siempre, si existe |
-| `X-GF-Employee-Token` | `session.odoo_employee_token` o `session.gf_employee_token` | Siempre, si existe |
-| `X-GF-Token` | `session.gf_salesops_token` o `VITE_GF_SALESOPS_TOKEN` | Solo en paths que empiezan con `/gf/salesops/` |
+| Header | Origen | Cuándo | Función real |
+|--------|--------|--------|--------------|
+| `X-GF-Employee-Token` | `session.gf_employee_token` | Siempre | **Fuente de verdad para autorización por empleado.** Backend valida contra BD y deriva el rol desde aquí. |
+| `X-GF-Token` | `session.gf_salesops_token` o `VITE_GF_SALESOPS_TOKEN` | Solo paths `/gf/salesops/*` | Token compartido global. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva del `X-GF-Employee-Token` (ver ADR-08). |
+| `Api-Key` | `session.api_key` | Siempre, si existe | Compatibilidad con controllers Odoo legacy que la requieren. |
+| `Authorization: Bearer <session_token>` | `session.session_token` | Siempre, si existe | Compatibilidad con clientes que esperan formato Bearer. **NO es el header que autoriza** los endpoints `/pwa-*` críticos. |
 
-> [!NOTE] El JWT que se almacena puede ser el real devuelto por Odoo **o** uno construido en frontend con `alg:"none"`. Esto último es una elección deliberada de fallback ([`ScreenLogin.jsx:55-59`](../src/screens/ScreenLogin.jsx)) y representa un riesgo de seguridad: cualquier persona con acceso al `localStorage` del navegador puede modificar el payload. Documentado como gap G002 con severidad P1.
+> [!NOTE] Lo que hay en `session_token` puede ser un string firmado por Odoo o un placeholder local construido por [`ScreenLogin.jsx:55-59`](../src/screens/ScreenLogin.jsx) (`buildLocalSessionToken`) en formato JWT-like. **Esto NO es un riesgo de seguridad por sí solo** porque el backend NO autoriza basándose en ese campo — autoriza con `X-GF-Employee-Token` validado contra BD. La preocupación inicial sobre "JWT alg:'none'" en G002 fue corregida durante la auditoría: el vector real era distinto (privilege escalation en `gf_saleops` via `employee_id` no verificado en payload), resuelto por Sebastián el 2026-05-05.
 
 ### 4.4 Matriz rol × módulo (11 operativos: 9 primarios + 2 secundarios)
 
@@ -473,7 +482,7 @@ Campos consumidos por el frontend (subset):
 | ZIHUATANEJO | 60, 61 |
 | MANZANILLO | 62 |
 
-> [!NOTE] Suposición: este mapeo es defensivo (Fase 0 voice PoC). Cuando Odoo añada `plaza_id` directo al JWT, el cliente debería leerlo de ahí.
+> [!NOTE] Suposición: este mapeo es defensivo (Fase 0 voice PoC). Cuando Odoo añada `plaza_id` directo a la respuesta de `/api/employee-sign-in`, el cliente debería leerlo de ahí en lugar de derivarlo desde `warehouse_id`.
 
 ### 6.4 Compañías
 
@@ -580,7 +589,7 @@ Respuesta éxito:
     "status": 200,
     "case": 1,
     "message": "Bienvenido, Arturo",
-    "session_token": "<JWT firmado por Odoo, OPCIONAL>",
+    "session_token": "<placeholder local con formato JWT-like, NO autoriza requests>",
     "api_key": "<base64>",
     "gf_employee_token": "<base64>",
     "gf_salesops_token": "<base64>",
@@ -674,7 +683,7 @@ Endpoints ~25 en [`src/modules/almacen-pt/`](../src/modules/almacen-pt/) + [`ent
 
 | Endpoint | Método | Side effects |
 |----------|--------|--------------|
-| `/pwa-pt/reception-create` | POST | Crea `stock.picking` IN. **Depende** de `gf.inventory.posting._action_done()` para postear inventario. **Bloqueador real confirmado en producción 2026-04-27:** 73 de 130 registros (56.2%) en estado `error`. Ver gap G013. El modelo vive en módulo `gf_production_ops` (no `gf_logistics_ops`). |
+| `/pwa-pt/reception-create` | POST | Crea `stock.picking` IN. **Depende** de `gf.inventory.posting._action_done()` (modelo en `gf_production_ops`, no `gf_logistics_ops`) para postear inventario. **Estado funcional confirmado tras G013 cerrado el 2026-04-27.** Setup de nuevas plantas debe seguir `setup-plantas-produccion.md` (en repo backend de Odoo) para evitar la recurrencia descrita en G026. |
 | `/pwa-pt/transfer-orchestrate` | POST | Orquesta `stock.picking` PT→Entregas |
 | `/pwa-pt/shift-handover-create` / `accept` | POST | `gf.shift.handover` — relevo PT entre turnos |
 | `/pwa-pt/eligible-receivers` | GET | `res.partner` filtrados por warehouse del receptor |
@@ -835,7 +844,7 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Estado | 75%–83% completitud frontend |
 | Validado E2E | parcial |
 | Tests | parcial (materialsNavigation, materialDispatchConfig, ptHandoverState, bagCustodyService, requisitionReceiptState) |
-| Bloqueador propio | `gf.inventory.posting._action_done()` — gap G013 |
+| Bloqueador propio | Estado funcional confirmado tras remediación de G013 (2026-04-27). Las 4 sub-causas de configuración corregidas en plaza Iguala. Inventario PT en proceso de validación contra físico durante rollout de capacitación. Ver G013 (resuelto) y G026 (mitigación preventiva con `setup-plantas-produccion.md` en repo backend de Odoo modules). |
 
 ### 8.7 Almacenista Entregas
 
@@ -957,6 +966,8 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Modelos accedidos | `hr.employee`, `gf.cash.closing`, `gf.production.shift|cycle|packing|harvest|tank|brine_reading|downtime|scrap|maintenance|energy|machine|line`, `gf.route.plan|target|load|delivery|return|incident|stop|liquidation`, `gf.saleops.forecast|kpi.snapshot`, `gf.shift.handover`, `gf.transformation.order`, `gf.pwa.requisition`, `gf.ops.event_log`, `gf.inventory.posting`, `gf.task.task`, `gf.note.note`, `gf.supv.note`, `gf.pallet`, `gf.pt.reception`, `sale.order`, `purchase.order`, `purchase.order.line`, `stock.warehouse|quant|picking|move|location|scrap|transfer`, `res.partner`, `account.analytic.account`, `ir.attachment`, `ir.config_parameter`, `ir.model.fields`. |
 | Métodos | JSON-RPC `web/dataset/call_kw` con `read`, `search_read`, `create`, `write`, `unlink`. Wrappers en [`src/lib/api.js`](../src/lib/api.js): `readModel`, `readModelSorted`, `createUpdate`, `odooJson`, `odooHttp`. |
 | Warehouse context | Extraído del empleado al login (`hr.employee.warehouse_id` o `default_source_warehouse_id`). Pasado explícitamente como query param o en context a queries de inventario, cash-closing, materia prima, today-sales, today-expenses. |
+
+> [!IMPORTANT] **Setup de nuevas plantas de producción.** Cualquier expansión a nuevas plantas (León, etc.) debe seguir el procedimiento documentado en `setup-plantas-produccion.md` (en el repo backend de Odoo modules de Sebastián). Ese documento incluye tabla de `production_location_id` por empresa, configuración de `mp_turno_location_id`, asignación de turnos a líneas, empresa por planta, y el incidente de Iguala 2026-04-27 como caso de estudio. **Saltarse este procedimiento reproduce el bug raíz de G013** (4 sub-causas de configuración que dejaron 56% de las recepciones PT en error en plaza Iguala). Ver también gap G026 con la mejora futura sugerida (validador en modelo `gf.production.line`).
 
 ### 9.2 n8n
 
@@ -1113,7 +1124,8 @@ npm test
 - [ ] No hay variables prohibidas (`META_ACCESS_TOKEN`, `WA_PHONE_NUMBER_ID`, `ODOO_PASS`, `kold-secret-dev`) en `.env.local` ni en Vercel.
 - [ ] `VITE_N8N_VOICE_TOKEN` rotado en los últimos 30 días (gap G003).
 - [ ] Confirmar con backend que endpoints añadidos en el sprint están desplegados en Odoo.
-- [ ] Coordinar con Sebastián si el cambio toca `gf_logistics_ops` o `gf_pwa_admin`.
+- [ ] Coordinar con Sebastián si el cambio toca `gf_logistics_ops`, `gf_production_ops`, `gf_pwa_admin` o `gf_saleops`.
+- [ ] **Setup de nueva planta:** seguir `setup-plantas-produccion.md` (en repo backend de Odoo) y validar `production_location_id` + `mp_turno_location_id` antes de habilitar operación. Caso de estudio: incidente Iguala 2026-04-27 (G013, G026).
 
 ### 12.3 Rollback
 
@@ -1204,9 +1216,9 @@ Tomadas de la lectura del código real, no de un linter genérico.
 
 ### ADR-03 — Sesión en localStorage con `gf_session`
 
-- **Contexto.** PWA debe sobrevivir a reload y a switch de pestaña.
-- **Decisión.** `localStorage.gf_session` con JWT (firmado por Odoo o, fallback, unsigned `alg:"none"` construido en cliente). `App.jsx` valida `exp` cada carga y al cambiar de tab.
-- **Consecuencias.** Robusto para offline-friendliness. **Riesgo:** un JWT unsigned en cliente es modificable por cualquier persona con DevTools — gap G002 (P1). Mitigación pendiente: que Odoo siempre devuelva un `session_token` firmado y eliminar el fallback `alg:"none"`.
+- **Contexto.** PWA debe sobrevivir a reload y a switch de pestaña. Backend Odoo devuelve tokens opacos al login (`gf_employee_token` por empleado en BD con TTL sliding 30d, `gf_salesops_token` global estático en `ir.config_parameter`, `api_key` opaco).
+- **Decisión.** `localStorage.gf_session` guarda todos los tokens más metadatos del empleado (rol, company_id, warehouse_id, exp). El campo `session_token` es un placeholder local con formato JWT-like (puede venir firmado por Odoo o construirse en cliente con `buildLocalSessionToken`); **no es lo que autoriza** — la autorización real ocurre server-side validando `X-GF-Employee-Token` contra BD (ver ADR-08). `App.jsx` valida el campo `exp` cada carga y al cambiar de tab solo como UX hint.
+- **Consecuencias.** Robusto para offline-friendliness y multi-tab. La preocupación inicial sobre "JWT alg:none modificable" en G002 fue corregida: el campo modificable no autoriza. El vector real de privilege escalation estaba en `gf_saleops` y se resolvió con ADR-08.
 
 ### ADR-04 — Lazy loading por módulo
 
@@ -1231,6 +1243,15 @@ Tomadas de la lectura del código real, no de un linter genérico.
 - **Contexto.** Módulo `gf_metabase_embed` no instalable en Odoo. Antes del parche, 401 disparaba logout y trababa a los gerentes.
 - **Decisión.** Endpoint `/pwa-metabase-token` marcado como "optional" en `lib/api.js` (un 401 no dispara `gf:session-expired`). Frontend renderiza `MockMetabaseDashboard` con datos inventados visiblemente identificados.
 - **Consecuencias.** App estable. Gerentes ven mock en lugar de KPIs reales — gap G001 (P1).
+
+### ADR-08 — Autorización en `gf_saleops` derivada de token autenticado, no de payload
+
+- **Contexto.** El guard original de `gf_saleops` (`gf_saleops/services/guard.py:52`) derivaba el rol del usuario desde el `employee_id` enviado en el body del request. Combinado con `gf_salesops_token` global compartido entre todos los empleados, esto creaba un vector de privilege escalation: cualquier rol con sesión activa podía operar como Supervisor de Ventas (16 endpoints) o Gerente de Unidad (1 endpoint, `forecast/unlock`) mandando `employee_id` ajeno. Los demás módulos (`gf_logistics_ops`, `gf_production_ops`) ya validaban `X-GF-Employee-Token` correctamente y no estaban expuestos.
+- **Decisión.** El rol del usuario se deriva exclusivamente del `X-GF-Employee-Token` validado contra BD. El `employee_id` del payload sigue siendo válido para contexto (qué datos consultar, ej. supervisor revisando datos de un vendedor) pero no autoriza. Implementación con flag `require_employee_token` para rollout gradual: modo permisivo durante 7 días planeados (reducidos a 3 tras inventario de consumidores con cero impacto externo) → modo estricto. Sistema de logging permanente `gf.saleops.guard.log` con cron diario provee observabilidad del vector y de cualquier intento futuro (ver G027 cerrado en simultáneo).
+- **Consecuencias.**
+  - Cualquier consumidor de `gf_saleops/*` debe enviar `X-GF-Employee-Token` válido (PWA Colaboradores y KOLD Field ya lo hacen). Otros futuros consumidores deben implementarlo desde el inicio.
+  - Si se requiere conceder permisos cross-empleado en el futuro (supervisor escribiendo en nombre de vendedor), debe hacerse a nivel de lógica de negocio, no de autorización del guard.
+  - Rollout completado 2026-05-05 con flag `require_employee_token=True` activo en producción. Si se vuelve a abrir el flag a `False`, debe documentarse la razón en este manual y avisarse a Yamil — la activación del modo permisivo solo es válida durante migraciones controladas con monitoreo activo.
 
 ---
 
@@ -1268,11 +1289,19 @@ Una entrada por trampa: síntoma → causa → fix.
 - **Causa:** `resolveRole(employee, jobTitle)` no matcheó ningún roleMap y `inferCompanyId('')` retorna 0.
 - **Fix:** Asegurar `pwa_job_key` en `hr.employee` correctamente en Odoo. Si no, agregar el `job_title` al roleMap en `ScreenLogin.jsx:114-130`.
 
-### G15.6 — `gf.inventory.posting._action_done()` posiblemente no se llama
+### G15.6 — [Resuelto 2026-04-27] `gf.inventory.posting._action_done()` fallaba por configuración cross-company
 
-- **Síntoma:** Recepción de PT se crea pero el inventario no actualiza.
-- **Causa:** Hipótesis (no verificada desde frontend) de que el módulo Odoo no llama `_action_done()` después del create. Ver gap G013.
-- **Fix:** Backend (Sebastián). Test manual reproducible: crear recepción desde `/almacen-pt/recepcion`, luego consultar `stock.quant` en Odoo backend → si no aparece, el bug es real.
+- **Síntoma histórico:** Recepción de PT se creaba en `gf.inventory.posting` pero quedaba en estado `error` y el inventario no se actualizaba. 73 de 130 registros (56.2%) afectados al momento de la auditoría.
+- **Causa raíz (4 sub-causas, todas en plaza Iguala):** (1) Líneas 1 y 2 con `production_location_id` apuntando a ubicación virtual de empresa CSC GF en lugar de FABRICACION DE CONGELADOS (empresa 35); Odoo 18 bloquea movimientos cross-company. (2) Turnos 21 y 25 sin línea asignada. (3) 10 entradas de packing sin línea resuelta. (4) Línea 1 sin `mp_turno_location_id` configurado. El modelo `gf.inventory.posting` vive en módulo `gf_production_ops` (no `gf_logistics_ops`).
+- **Fix aplicado:** Sebastián 2026-04-27. 131 postings procesados (done), 0 en error post-fix. Procedimiento de setup documentado en `setup-plantas-produccion.md` (en repo backend de Odoo modules) para evitar la recurrencia en nuevas plantas. Ver G013 (resuelto) y G026 (mitigación preventiva).
+- **Si vuelve a aparecer:** abrir un registro en estado error en Odoo, revisar el campo de error/log en chatter, validar que `production_location_id` y `mp_turno_location_id` de la línea correspondan a la company correcta.
+
+### G15.11 — [Resuelto 2026-05-05] Privilege escalation en `gf_saleops` via `employee_id` no verificado
+
+- **Síntoma histórico:** Cualquier rol con sesión activa podía operar como Supervisor de Ventas (o Gerente de Unidad en `forecast/unlock`) mandando `employee_id` ajeno en el body del request.
+- **Causa:** `gf_salesops_token` global + guard (`gf_saleops/services/guard.py:52`) derivando rol del payload, no del token autenticado.
+- **Fix:** Header `X-GF-Employee-Token` ahora es fuente de verdad del rol. Flag `require_employee_token=True` activo en producción desde 2026-05-05 AM. Sistema de monitoreo `gf.saleops.guard.log` activo permanentemente. Detalle completo en ADR-08 y en G002 (resuelto).
+- **Si se vuelve a abrir el flag a `False`:** documenta razón en este manual y avisa a Yamil. La activación del modo permisivo solo es válida durante migraciones controladas con monitoreo activo del log.
 
 ### G15.7 — `parseFloat("12abc") || 0` = 12 (false positive)
 
@@ -1299,20 +1328,20 @@ Una entrada por trampa: síntoma → causa → fix.
 
 ## 16. Roadmap técnico abierto
 
-Lista priorizada en [`docs/GAPS_BACKLOG.md`](./GAPS_BACKLOG.md). Resumen de los 10 más urgentes:
+Lista priorizada en [`docs/GAPS_BACKLOG.md`](./GAPS_BACKLOG.md). Resumen de los 10 más urgentes (post-cierre del ciclo de seguridad/inventario 2026-05-05):
 
-1. **G001** — Implementar `/pwa-metabase-token` real en backend (P1, Sebastián).
-2. **G002** — Eliminar fallback JWT unsigned, exigir token firmado por Odoo siempre (P1, Sebastián + Yamil).
-3. **G006** — Conectar `tareasService` y `notasService` a backend real (P1, Sebastián).
-4. **G013** — Verificar `gf.inventory.posting._action_done()` en `gf_logistics_ops` (P1, Sebastián).
-5. **G014** — Resolver duplicidad de clases en `gf_logistics_ops` (P1, Sebastián).
-6. **G003** — Migrar `VITE_GF_SALESOPS_TOKEN` y `VITE_N8N_VOICE_TOKEN` a server-side proxy (P2, Carlos + Sebastián).
-7. **G004** — Cubrir tests en `admin/`, `ruta/`, `gerente/`, `supervisor-ventas/` (P2, TBD).
-8. **G005** — Configurar GitHub Actions CI/CD (P2, Carlos).
-9. **G008** — Endpoint centralizado `/pwa/evidence/upload` (P2, Sebastián).
-10. **G012** — PIN verification en flujo de Operador Rolito (P2, Sebastián).
+1. **G001** — Implementar `/pwa-metabase-token` real en backend (P1, Sebastián). Bloquea KPIs reales para Gerente, Supervisor Ventas y Jefe de Ruta.
+2. **G006** — Conectar `tareasService` y `notasService` a backend real (P1, Sebastián). Datos del Supervisor de Ventas en localStorage.
+3. **G016** — Persistir corte y liquidación de ruta en backend (P1, Sebastián). Hoy en localStorage; Jefe de Ruta pierde estado.
+4. **G024** — Configurar dominio custom `colaboradores.grupofrio.mx` o actualizar referencias (P2, Carlos + Yamil).
+5. **G003** — Migrar `VITE_GF_SALESOPS_TOKEN` y `VITE_N8N_VOICE_TOKEN` a server-side proxy (P2, Carlos + Sebastián).
+6. **G004** — Cubrir tests en `admin/`, `ruta/`, `gerente/`, `supervisor-ventas/` (P2, TBD).
+7. **G005** — Configurar GitHub Actions CI/CD (P2, Carlos).
+8. **G008** — Endpoint centralizado `/pwa/evidence/upload` (P2, Sebastián).
+9. **G012** — PIN verification en flujo de Operador Rolito (P2, Sebastián).
+10. **G018** — Validación server-side de umbrales de cierre de caja (P2, Sebastián).
 
-Ver detalles, evidencia y acciones concretas en GAPS_BACKLOG.md.
+Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_saleops`, cerrado 2026-05-05), **G013** (`gf.inventory.posting` 56% en error, cerrado 2026-04-27), **G014** (clases duplicadas — falsa alarma), **G017** (deploy verificado), **G025** (corrección documental), **G027** (audit trail `gf_saleops`). Ver `GAPS_BACKLOG.md` sección "Resueltos durante auditoría".
 
 ---
 
@@ -1349,7 +1378,9 @@ Ver detalles, evidencia y acciones concretas en GAPS_BACKLOG.md.
 | Direct (en `api.js`) | Handler que resuelve el endpoint hablando directo con Odoo (saltando n8n). |
 | `NO_DIRECT` | Símbolo que retorna un handler direct cuando NO hay caso para ese path (=> fallback n8n). |
 | Optional endpoint | Path cuyo 401 no dispara `gf:session-expired`. |
-| Session token | JWT (firmado por Odoo o unsigned local). Va en `Authorization: Bearer`. |
+| Session token | Placeholder local con metadatos del empleado, formato JWT-like. Persiste en `localStorage.gf_session.session_token`. **No es lo que autoriza** los requests — se manda como `Authorization: Bearer` por compatibilidad, pero el backend autoriza con `X-GF-Employee-Token` (token opaco validado contra BD). |
+| `gf_employee_token` | Token opaco generado con `secrets.token_urlsafe(32)`, validado contra BD Odoo. TTL 30d sliding por empleado. **Fuente de verdad de autorización** en endpoints `/pwa-*` y `gf_saleops/*` (post ADR-08). |
+| `gf_salesops_token` | Token estático global guardado en `ir.config_parameter`. Compartido entre todos los empleados. Por sí solo NO autoriza acciones con `required_role` — el rol se deriva de `X-GF-Employee-Token` (ver ADR-08). |
 | Voice envelope | Estructura JSON normalizada que devuelve W120 después de pasar audio por Deepgram + OpenAI. |
 | `IS_STUB` | Flag en servicios que indica persistencia en localStorage en lugar de backend. |
 | `MODULE_ROLE_VARIANTS` | Mapa de módulos multirol a sus roles compatibles (registro_produccion → barra/rolito/aux). |
@@ -1364,3 +1395,4 @@ Ver detalles, evidencia y acciones concretas en GAPS_BACKLOG.md.
 |-------|-------|--------|
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
+| 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD, `gf_salesops_token` estático global). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, `gf_salesops_token`, `session_token`. |
