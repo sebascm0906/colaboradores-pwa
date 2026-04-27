@@ -6042,7 +6042,14 @@ async function directSupervisorVentas(method, path, body) {
             .map((l) => [0, 0, {
               product_id: Number(l.product_id),
               qty: Number(l.qty || 0),
-              channel: l.channel ? String(l.channel).toLowerCase() : undefined,
+              // BLD-20260427-P0-SUPV-FORECAST-CHANNEL: el modelo
+              // gf.saleops.forecast.line.channel es un Selection con keys
+              // lowercase ('van', 'mostrador', ...) pero la UI usa labels
+              // capitalizados ('Van', 'Mostrador') en los botones. El BFF
+              // normaliza el casing antes de mandar al modelo para no
+              // romper el contrato visual de la UI. .trim() defiende contra
+              // espacios accidentales del input.
+              channel: l.channel ? String(l.channel).trim().toLowerCase() : undefined,
             }])
         : [],
     }
