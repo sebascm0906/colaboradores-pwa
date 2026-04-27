@@ -5982,7 +5982,7 @@ async function directSupervisorVentas(method, path, body) {
             .map((l) => [0, 0, {
               product_id: Number(l.product_id),
               qty: Number(l.qty || 0),
-              channel: l.channel || undefined,
+              channel: l.channel ? String(l.channel).toLowerCase() : undefined,
             }])
         : [],
     }
