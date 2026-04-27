@@ -78,6 +78,7 @@ const ScreenDevolucionesV2  = lazy(() => import('./modules/entregas/ScreenDevolu
 const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'))
 const ScreenCierreTurno     = lazy(() => import('./modules/entregas/ScreenCierreTurno'))
 const ScreenTransformacionEntregas = lazy(() => import('./modules/entregas/ScreenTransformacionEntregas'))
+const ScreenInventarioEntregas     = lazy(() => import('./modules/entregas/ScreenInventarioEntregas'))
 // Ruta V2 — V1 eliminado 2026-04-17
 const ScreenMiRutaV2        = lazy(() => import('./modules/ruta/ScreenMiRutaV2'))
 const ScreenChecklistUnidad = lazy(() => import('./modules/ruta/ScreenChecklistUnidad'))
@@ -461,7 +462,7 @@ export default function App() {
             {/* Legacy route aliases — eliminado V1 2026-04-17 */}
             <Route path="/entregas/aceptar-turno" element={<Navigate to="/entregas/cierre-turno" replace />} />
             <Route path="/entregas/validar" element={<Navigate to="/entregas/operacion" replace />} />
-            <Route path="/entregas/inventario" element={<Navigate to="/entregas/operacion" replace />} />
+            <Route path="/entregas/inventario" element={<PrivateRoute><ScreenInventarioEntregas /></PrivateRoute>} />
 
             {/* ── Jefe de Ruta ─────────────────────────────────────────── */}
             {/* Role gating: solo jefe_ruta y auxiliar_ruta acceden por URL directa. */}

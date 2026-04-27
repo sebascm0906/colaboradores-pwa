@@ -5855,6 +5855,79 @@ async function directEntregas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-entregas/live-inventory' && method === 'GET') {
+    const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
+    if (!reqWarehouseId) return { items: [], warehouse_name: '', generated_at: new Date().toISOString() }
+
+    // 1. Resolver lot_stock_id del warehouse (misma ubicación que valida scrap)
+    const whRows = await readModelSorted('stock.warehouse', {
+      fields: ['id', 'name', 'lot_stock_id'],
+      domain: [['id', '=', reqWarehouseId]],
+      limit: 1,
+      sudo: 1,
+    })
+    const wh = whRows?.[0]
+    if (!wh?.lot_stock_id) return { items: [], warehouse_name: wh?.name || '', generated_at: new Date().toISOString() }
+    const lotStockId = wh.lot_stock_id[0]
+    const warehouseName = wh.name
+
+    // 2. Quants con child_of(lot_stock_id) — misma regla que warehouse_scrap/create
+    const quants = await readModelSorted('stock.quant', {
+      fields: ['product_id', 'location_id', 'quantity', 'reserved_quantity', 'in_date'],
+      domain: [
+        ['location_id', 'child_of', lotStockId],
+        ['product_id', '!=', false],
+      ],
+      sort_column: 'product_id',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+
+    // 3. Agrupar por producto sumando on_hand y reserved
+    const byProduct = {}
+    for (const q of (quants || [])) {
+      const pid = q.product_id?.[0]
+      const pname = q.product_id?.[1] || ''
+      if (!pid) continue
+      const onHand = Number(q.quantity || 0)
+      const reserved = Number(q.reserved_quantity || 0)
+      if (!byProduct[pid]) {
+        byProduct[pid] = { product_id: pid, product_name: pname, on_hand_qty: 0, reserved_qty: 0, location_ids: new Set() }
+      }
+      byProduct[pid].on_hand_qty += onHand
+      byProduct[pid].reserved_qty += reserved
+      if (q.location_id?.[0]) byProduct[pid].location_ids.add(q.location_id[1] || q.location_id[0])
+    }
+
+    const items = Object.values(byProduct).map(p => {
+      const available = Math.max(0, p.on_hand_qty - p.reserved_qty)
+      return {
+        product_id: p.product_id,
+        product_name: p.product_name,
+        on_hand_qty: Math.round(p.on_hand_qty * 1000) / 1000,
+        reserved_qty: Math.round(p.reserved_qty * 1000) / 1000,
+        available_qty: Math.round(available * 1000) / 1000,
+        quantity: Math.round(p.on_hand_qty * 1000) / 1000, // legacy compat
+        locations: Array.from(p.location_ids),
+      }
+    })
+    items.sort((a, b) => a.product_name.localeCompare(b.product_name, 'es'))
+
+    return {
+      warehouse_id: reqWarehouseId,
+      warehouse_name: warehouseName,
+      items,
+      totals: {
+        products: items.length,
+        on_hand: Math.round(items.reduce((s, i) => s + i.on_hand_qty, 0) * 1000) / 1000,
+        reserved: Math.round(items.reduce((s, i) => s + i.reserved_qty, 0) * 1000) / 1000,
+        available: Math.round(items.reduce((s, i) => s + i.available_qty, 0) * 1000) / 1000,
+      },
+      generated_at: new Date().toISOString(),
+    }
+  }
+
   return NO_DIRECT
 }
 
