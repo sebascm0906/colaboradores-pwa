@@ -3819,10 +3819,16 @@ async function directRuta(method, path, body) {
   }
 
   if (cleanPath === '/pwa-ruta/load-lines' && method === 'GET') {
+    // BLD-20260427-P0-LOAD-LINES-QTY: el field 'quantity_done' NO existe en
+    // stock.move (Odoo 18 lo renombró a 'quantity'). Antes la consulta
+    // fallaba con "Invalid field 'quantity_done'" y pickListResponse
+    // devolvía [] silenciosamente, dejando ScreenAceptarCarga sin líneas
+    // y mostrando "Sin carga asignada" aunque el picking estuviera done.
+    // Mismo patrón que el fix aplicado en PR #24 a /pwa-entregas/returns.
     const pickingId = Number(query.get('picking_id') || 0)
     if (!pickingId) return []
     const result = await readModelSorted('stock.move', {
-      fields: ['id', 'picking_id', 'product_id', 'product_uom_qty', 'quantity_done', 'name', 'state'],
+      fields: ['id', 'picking_id', 'product_id', 'product_uom_qty', 'quantity', 'name', 'state'],
       domain: [['picking_id', '=', pickingId]],
       sort_column: 'id',
       sort_desc: false,
@@ -3834,8 +3840,8 @@ async function directRuta(method, path, body) {
       picking_id: row.picking_id?.[0] || pickingId,
       product_id: row.product_id,
       product_name: row.product_id?.[1] || row.name || '',
-      qty: Number(row.product_uom_qty || row.quantity_done || 0),
-      quantity: Number(row.product_uom_qty || row.quantity_done || 0),
+      qty: Number(row.product_uom_qty || row.quantity || 0),
+      quantity: Number(row.product_uom_qty || row.quantity || 0),
       state: row.state || '',
     }))
   }
