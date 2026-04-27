@@ -79,9 +79,9 @@ Datos extraídos del inventario realizado el 2026-04-27. Las columnas **Validado
 | `produccion` | Operador Rolito, Operador Barra, Auxiliar Producción (secundario) | 17 | 55%–65% | desconocido | parcial (8 unit tests) | PIN verification TODO en Rolito; legacy fallbacks `action_close_shift` | Sebastián |
 | `supervision` | Jefe de Producción | 6 | 70%–80% | desconocido | parcial (3 unit tests) | Brine readings PoC voice; dashboards no validados runtime | Sebastián |
 | `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | G013 cerrado 2026-04-27; validación de inventario físico pendiente durante rollout de capacitación. Mitigación preventiva en G026 | Sebastián |
-| `entregas` | Almacenista Entregas | 9 | 80%–89% | parcial | parcial (1 unit test) | Pallet reject sin log de responsable; live-inventory bug arreglado 2026-04-27 (commit `52b7b5f`) | Sebastián |
-| `ruta` | Jefe de Ruta, Auxiliar de Ruta (secundario) | 11 | 70%–82% | desconocido | no | Corte/liquidación persisten en localStorage; integración Kold Field externa | Sebastián |
-| `supervisor-ventas` | Supervisor de Ventas | 12 | 75%–92% | parcial | no | Tareas y notas en `IS_STUB` (localStorage) | Sebastián |
+| `entregas` | Almacenista Entregas | 9 | 82%–90% | **parcial — QA PASS para load-execute (PR #25, Héctor + Manuel), return picking (PR #24), live-inventory producto 760 (PR #27)** | parcial (1 unit test) | Pallet reject sin log de responsable (G019). Merma positiva con stock libre real pendiente de QA explícito. | Sebastián |
+| `ruta` | Jefe de Ruta, Auxiliar de Ruta (secundario) | 11 | 75%–85% | **parcial — `accept-load` validado en QA con carga por forecast 2026-04-26 (PR #25). Vehicle checklist backend validado e integrado en frontend (`/pwa-ruta/vehicle-checklist*`)** | no | Corte/liquidación persisten en localStorage (G016); tenancy split van + CEDIS resuelto en backend (no aplica al PWA) | Sebastián |
+| `supervisor-ventas` | Supervisor de Ventas | 12 | 78%–93% | **parcial — forecast-create QA PASS con Aida 2026-04-27 (forecast id=18, state=`draft`, analytic_account_id=820, channel `van`). `forecast-confirm` no fue ejecutado en ese QA.** | no | Tareas y notas en `IS_STUB` (localStorage) (G006) | Sebastián |
 | `torre` | Operador Torres (fuera de scope) | 2 | desconocido | desconocido | no | Validación requisiciones | Sebastián |
 | `transformaciones` | Transversal | 1 + helpers | desconocido | desconocido | sí (helpers) | — | Sebastián |
 | `screens/` (universales) | Todos | 6 (Login, Home, KPIs, Surveys, Badges, Profile) | 80% | parcial (login validado) | no | Metabase token stub; surveys/badges via n8n no validado | Sebastián |
@@ -690,7 +690,18 @@ Endpoints ~25 en [`src/modules/almacen-pt/`](../src/modules/almacen-pt/) + [`ent
 
 ### 7.8 Familia `/pwa-entregas/*`
 
-Endpoints ~17 en [`src/modules/entregas/api.js`](../src/modules/entregas/api.js). Hub diario de Almacenista Entregas con flujo guiado de 7 pasos. Crítico: `/pwa-entregas/live-inventory` arreglado el 2026-04-27 (commit `52b7b5f`) — el frontend ahora desempaca `readModelSorted` con `pickListResponse`.
+Endpoints ~17 en [`src/modules/entregas/api.js`](../src/modules/entregas/api.js) y handlers en [`src/lib/api.js:5500-5860`](../src/lib/api.js). Hub diario de Almacenista Entregas con flujo guiado de 7 pasos. Endpoints críticos validados en QA durante el ciclo de fixes operativos (PR #21–#27):
+
+| Endpoint | Método | Side effects / Notas |
+|----------|--------|----------------------|
+| `/pwa-entregas/today-routes` | GET | Plan del día con stops y status. |
+| `/pwa-entregas/load-execute` | POST | **PR #25.** Wrapper sobre `POST /gf/salesops/warehouse/load/execute` (envelope gf_saleops). Resuelve `picking_ids` desde `plan_id` automáticamente, mueve stock CEDIS → unidad. Backend resuelve `analytic_account_id` desde `warehouse_id`. Requiere `VITE_GF_SALESOPS_TOKEN` configurado en Vercel. NO sella el plan; el sello `load_sealed=true` lo hace el vendedor con `accept-load`. Idempotente: respuestas con `already_done:true` se traducen a `ok:true` con mensaje "ya estaba ejecutada". |
+| `/pwa-entregas/confirm-load` | POST | Alias legacy de `load-execute` mantenido para no tocar UI. Mismo handler. |
+| `/pwa-entregas/returns` | GET | **PR #24.** Lista líneas de retorno desde `gf.route.stop.line` (campos reales del modelo). Devuelve líneas + datos del stop. |
+| `/pwa-entregas/return-accept` | POST | **PR #24.** Acepta líneas de devolución. Crea return picking sin auto-validación. Backend autoriza `almacenista_entregas` por `warehouse_id`. **QA PASS** con return picking creado. |
+| `/pwa-entregas/scrap-create` | POST | **PR #23.** Merma defensiva: detecta respuesta `ok:false` con diagnóstico estructurado del backend (sin stock, productos no válidos, etc.) y NO muestra falso éxito. Implementación en [`ScreenMerma.jsx:130-145`](../src/modules/entregas/ScreenMerma.jsx). |
+| `/pwa-entregas/live-inventory` | GET | **PR #27.** Stock vivo del CEDIS de Entregas. Devuelve `{items: [...], totals, generated_at}` con `on_hand_qty`, `reserved_qty`, `available_qty`. Regla: `available = quantity - reserved_quantity`. Domain: `child_of(lot_stock_id)`. **QA PASS** con producto 760 contra totales reales. Pantalla en [`ScreenInventarioEntregas.jsx`](../src/modules/entregas/ScreenInventarioEntregas.jsx). |
+| `/pwa-entregas/shift-handover-*` | POST/GET | Relevo de turno entre almacenistas; bloqueo por shift ownership. |
 
 ### 7.9 Familia `/pwa-ruta/*` (Jefe de Ruta)
 
@@ -698,11 +709,12 @@ Endpoints ~13 en [`src/modules/ruta/api.js`](../src/modules/ruta/api.js). Server
 
 | Endpoint | Notas |
 |----------|-------|
-| `/pwa-ruta/my-plan`, `/my-target`, `/my-load`, `/load-lines` | Carga del día |
-| `/pwa-ruta/accept-load` | Acepta carga del CEDIS |
-| `/pwa-ruta/validate-corte`, `/corte-confirm` | Corte de ruta. Hoy persistencia parcial en `localStorage` (gap pendiente backend, BACKEND_TODO #3) |
+| `/pwa-ruta/my-plan`, `/my-target`, `/my-load`, `/load-lines` | Carga del día. **PR #25:** `my-plan` filtra solo planes del día; `load-lines` devuelve la cantidad correcta. |
+| `/pwa-ruta/accept-load` | Acepta carga del CEDIS y sella `load_sealed=true` en `gf.route.plan`. **QA PASS** con carga por forecast 2026-04-26 (PR #25). |
+| `/pwa-ruta/validate-corte`, `/corte-confirm` | Corte de ruta. Hoy persistencia parcial en `localStorage` (gap G016 pendiente backend, BACKEND_TODO #3) |
 | `/pwa-ruta/liquidation`, `/close-route` | Liquidación final |
 | `/pwa-ruta/incident-create`, `/my-incidents`, `/team-incidents` | Incidencias en ruta |
+| `/pwa-ruta/vehicle-checklist`, `/vehicle-checklist-create`, `/vehicle-checklist-init`, `/vehicle-checklist-complete` | Checklist de unidad pre-ruta. Backend validado, integrado en frontend en [`src/modules/ruta/api.js`](../src/modules/ruta/api.js). |
 
 ### 7.10 Familia `/pwa-supv/*` (Supervisor de Ventas)
 
@@ -711,7 +723,8 @@ Endpoints ~20 en [`src/modules/supervisor-ventas/api.js`](../src/modules/supervi
 | Endpoint | Estado |
 |----------|--------|
 | `/pwa-supv/team`, `/team-routes`, `/team-targets`, `/kpi-snapshots` | live |
-| `/pwa-supv/forecast-*` | live (commit reciente normaliza `channel` a lowercase y fallback de analytic_account_id) |
+| `/pwa-supv/forecast-create` | **PR #26 + commits `b968e43`, `46c262b`, `2dd0b08`.** Live. Resuelve `analytic_account_id` en cascada: (1) `body.analytic_account_id` override; (2) `body.sucursal` legacy; (3) `getSession().employee.x_analytic_account_id` desde JWT; (4) **fallback RPC** sobre `hr.employee.x_analytic_account_id` cuando JWT no lo trae todavía. Si falta en todos, lanza `ApiError` accionable con `code: 'missing_x_analytic_account_id'` y mensaje claro al usuario. Normaliza `channel` a lowercase (`'Van'` → `'van'`) antes de mandar al modelo. **QA PASS Aida 2026-04-27**: forecast id=18, state=`draft`, analytic_account_id=820, channel=`van`. Implementación en [`src/lib/api.js:6046-6145`](../src/lib/api.js). |
+| `/pwa-supv/forecasts`, `/forecast-confirm`, `/forecast-cancel` | live (forecast-confirm no fue ejercitado en QA del 2026-04-27). |
 | `/pwa-supv/tasks/*`, `/notes/*` | **Stub frontend** — `IS_STUB=true` en [`tareasService.js`](../src/modules/supervisor-ventas/tareasService.js) y [`notasService.js`](../src/modules/supervisor-ventas/notasService.js). Datos en localStorage. Gap G006 (P1). |
 | `/pwa-supv/customers/inactive`, `/recovery` | live |
 
@@ -856,11 +869,12 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Módulos visibles | `almacen_entregas`, universales |
 | Rutas | `/entregas`, `/entregas/recibir-pt`, `/transformacion`, `/carga`, `/operacion`, `/devoluciones`, `/merma`, `/cierre-turno`, `/inventario` |
 | Pantallas (9) | `ScreenHubDia`, `ScreenRecibirPT`, `ScreenCargaUnidades`, `ScreenOperacionDia`, `ScreenDevolucionesV2`, `ScreenMerma`, `ScreenCierreTurno`, `ScreenTransformacionEntregas`, `ScreenInventarioEntregas` |
-| Endpoints clave | `/pwa-entregas/today-routes`, `/returns`, `/return-accept`, `/scrap-create`, `/shift-handover-*`, `/live-inventory` |
-| Restricciones | `computeStepStatuses` bloquea cada paso hasta que el anterior esté completo; ownership check server-side |
-| Estado | 80%–89% completitud frontend |
-| Validado E2E | parcial |
+| Endpoints clave | `/pwa-entregas/today-routes`, `/returns`, `/return-accept`, `/scrap-create`, `/shift-handover-*`, `/live-inventory`, `/load-execute`, `/confirm-load` (alias legacy) |
+| Restricciones | `computeStepStatuses` bloquea cada paso hasta que el anterior esté completo; ownership check server-side; backend autoriza `almacenista_entregas` por `warehouse_id` en devoluciones (PR #24). |
+| Estado | 82%–90% completitud frontend |
+| Validado E2E | **parcial — QA PASS** para load-execute (PR #25, Héctor + Manuel), return picking (PR #24), live-inventory producto 760 (PR #27). Merma defensiva (PR #23) detecta `ok:false` y diagnóstico estructurado. |
 | Tests | parcial (1: entregasShiftHandover.test.mjs) |
+| Fixes recientes | PR #21 (cambio de turno + mostrador defensivo), PR #22 (defensa contra falso éxito en devoluciones legacy), PR #23 (defensa contra falso éxito en merma), PR #24 (BFF de devoluciones con `gf.route.stop.line` real), PR #25 (load-execute + filtros ruta + ConfirmDialog open), PR #27 (live-inventory desempaca con `pickListResponse`). |
 
 ### 8.8 Jefe de Ruta
 
@@ -872,12 +886,13 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Módulos visibles | `cierre_ruta`, universales |
 | Rutas | `/ruta`, `/ruta/checklist`, `/carga`, `/incidencias`, `/kpis`, `/conciliacion`, `/control`, `/inventario`, `/corte`, `/liquidacion`, `/cierre` |
 | Pantallas (11) | `ScreenMiRutaV2` + 10 más |
-| Endpoints clave | `/pwa-ruta/my-plan`, `/my-target`, `/my-load`, `/accept-load`, `/validate-corte`, `/incident-create`, `/liquidation`, `/close-route`, `/team-incidents` |
-| Restricciones | `RouteRoleRoute` (`App.jsx:150`): solo `jefe_ruta` y `auxiliar_ruta`; otros redirigidos a home. Server-side tenancy: "No tienes acceso a este plan" si no es dueño. |
-| Estado | 70%–82% completitud frontend |
-| Validado E2E | desconocido |
+| Endpoints clave | `/pwa-ruta/my-plan`, `/my-target`, `/my-load`, `/load-lines`, `/accept-load`, `/validate-corte`, `/incident-create`, `/liquidation`, `/close-route`, `/team-incidents`, `/vehicle-checklist*` |
+| Restricciones | `RouteRoleRoute` (`App.jsx:150`): solo `jefe_ruta` y `auxiliar_ruta`; otros redirigidos a home. Server-side tenancy: "No tienes acceso a este plan" si no es dueño. Backend resolvió tenancy split van + CEDIS para `accept-load` (fix backend, no aplica al PWA). |
+| Estado | 75%–85% completitud frontend |
+| Validado E2E | **parcial — `accept-load` validado en QA con carga por forecast 2026-04-26 (PR #25). Vehicle checklist backend validado e integrado en frontend.** |
 | Tests | no |
-| Riesgos abiertos | Corte y liquidación persisten en `localStorage` ([`routeControlService.js:332-407`](../src/modules/ruta/routeControlService.js)). Si el vendedor cierra la app antes del cierre final, pierde estado. BACKEND_TODO #3. |
+| Riesgos abiertos | Corte y liquidación persisten en `localStorage` ([`routeControlService.js:332-407`](../src/modules/ruta/routeControlService.js)). Si el vendedor cierra la app antes del cierre final, pierde estado. BACKEND_TODO #3 (gap G016). |
+| Fixes recientes | PR #25 (`/pwa-entregas/load-execute` + `accept-load` valida con carga por forecast + `my-plan` filtra hoy + `load-lines` cantidad correcta + `ConfirmDialog open`). |
 
 ### 8.9 Supervisor de Ventas
 
@@ -891,10 +906,11 @@ Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primar
 | Pantallas (12) | `ScreenControlComercial`, `ScreenDashboardVentas`, `ScreenPronostico`, `ScreenMetasVendedores`, `ScreenTareasSupervisor`, `ScreenNotasCliente`, `ScreenClientesRecuperacion`, `ScreenDetalleVendedor`, `ScreenClientesSinVisitar`, `ScreenScoreSemanal`, `ScreenCierreOperativo`, `ScreenNotaRapida` |
 | Endpoints clave | `/pwa-supv/team`, `/team-routes`, `/forecast-*`, `/team-targets`, `/kpi-snapshots`, `/tasks/*`, `/notes/*`, `/customers/*` |
 | Restricciones | Sin role-gating de ruta específico (solo PrivateRoute). |
-| Estado | 75%–92% completitud frontend |
-| Validado E2E | parcial |
+| Estado | 78%–93% completitud frontend |
+| Validado E2E | **parcial — forecast-create QA PASS con Aida 2026-04-27**: forecast id=18, state=`draft`, analytic_account_id=820, channel=`van`. `forecast-confirm` no fue ejecutado en ese QA. |
 | Tests | no |
 | Riesgos abiertos | Tareas y notas en `IS_STUB` (localStorage). Banner visible "modo temporal". Datos no sincronizan entre dispositivos. Gap G006. |
+| Fixes recientes | PR #26 + commits `b968e43`, `46c262b`, `2dd0b08`. `forecast-create` ahora resuelve `analytic_account_id` en cascada (body → JWT → RPC fallback `hr.employee.x_analytic_account_id`); normaliza `channel` a lowercase; lanza `ApiError` accionable cuando RRHH no tiene `x_analytic_account_id` poblado. |
 
 ### 8.10 Auxiliar de Producción (rol secundario)
 
@@ -1043,7 +1059,7 @@ Para reactivar, según comentarios y BACKEND_TODO:
 | `VITE_N8N_VOICE_FEEDBACK_URL` | solo si voice activo | sí | `voiceFeedback.js:4` | `https://n8n.grupofrio.mx/webhook/voice-feedback` |
 | `VITE_N8N_VOICE_TOKEN` | solo si voice activo | sí | `VoiceInputButton.jsx:41`, `voiceFeedback.js:5` | (rotar con `scripts/voice/init_token.mjs`) |
 | `VITE_ODOO_URL` | sí | sí | `vite.config.js` proxy, `ScreenSurveys.jsx` | `https://grupofrio.odoo.com` |
-| `VITE_GF_SALESOPS_TOKEN` | opcional (fallback) | sí | `lib/api.js:69` (header `X-GF-Token`) | Se prefiere desde sesión `gf_salesops_token` |
+| `VITE_GF_SALESOPS_TOKEN` | **requerida en Vercel** para producción | sí | `lib/api.js:69, 76` (header `X-GF-Token`) | Token compartido global usado por todos los endpoints `/gf/salesops/*`, especialmente `/gf/salesops/warehouse/load/execute` (consumido por `/pwa-entregas/load-execute`, PR #25). El sistema prefiere `session.gf_salesops_token` cuando viene en el JWT, pero hace fallback a esta env var si la sesión no lo trae. **Si falta en Vercel**, los endpoints responden `UNAUTHORIZED: X-GF-Token inválido`. Sebastián confirmó configuración en Vercel para el deploy actual. NO incluir el valor real en `.env.example`. La autorización por rol se deriva del header `X-GF-Employee-Token` (ver ADR-08), no de este token. |
 | `VITE_METABASE_URL` | sí | sí | `ScreenDashboardGerente.jsx`, `ScreenDashboardVentas.jsx` | `https://bi.grupofrio.mx` |
 | `VITE_WA_PHONE_ID_OPERACIONES` | informativo | sí (referencia) | NO se usa programáticamente en `src/` | (ID línea operaciones) |
 | `WA_ACCESS_TOKEN_OPERACIONES` | server-side n8n | **no** (sin VITE) | NO en frontend; vive en `/opt/kold-n8n/.env` de n8n | (token Cloud API) |
@@ -1324,6 +1340,19 @@ Una entrada por trampa: síntoma → causa → fix.
 
 - **Estado:** Cero casos en `src/` al 2026-04-27. Si añades uno, refactor a tokens antes de mergear.
 
+### G15.12 — `forecast-create` falla con "missing_x_analytic_account_id"
+
+- **Síntoma:** Supervisor de Ventas intenta crear forecast y recibe error claro: "Tu empleado no tiene sucursal asignada. Pide a administración que configure x_analytic_account_id en RRHH."
+- **Causa:** El empleado en `hr.employee` no tiene `x_analytic_account_id` poblado, y el JWT del supervisor no trae el campo. El BFF intenta resolverlo en cascada (body → JWT → RPC fallback) y lanza `ApiError` con `code: 'missing_x_analytic_account_id'` cuando ninguno responde.
+- **Fix (datos):** RRHH debe poblar `hr.employee.x_analytic_account_id` para todos los supervisores activos. Hoy 1 supervisor = 1 sucursal, sin selector UI.
+- **Mejora futura sugerida:** que el login service incluya `x_analytic_account_id` en el JWT desde el principio para evitar el RPC fallback (gap G033).
+
+### G15.13 — `/pwa-entregas/load-execute` responde "UNAUTHORIZED: X-GF-Token inválido"
+
+- **Síntoma:** Almacenista Entregas presiona "Ejecutar carga" y el endpoint responde 401.
+- **Causa:** `VITE_GF_SALESOPS_TOKEN` no está configurado en Vercel, o el JWT del usuario no trae `gf_salesops_token`, o ambos.
+- **Fix:** Configurar `VITE_GF_SALESOPS_TOKEN` en Vercel Project Settings → Environment Variables (valor en Odoo: `gf_salesops.api_token`). El frontend prefiere `session.gf_salesops_token` cuando viene en el JWT y cae a la env var como fallback. Sebastián confirmó configuración en Vercel para el deploy actual.
+
 ---
 
 ## 16. Roadmap técnico abierto
@@ -1396,3 +1425,4 @@ Ya cerrados durante el ciclo de auditoría: **G002** (privilege escalation `gf_s
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
 | 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |
 | 2026-05-05 | Claude (Fase 4 — cierre del ciclo de seguridad/inventario) | §4.3 reescrito: el sistema NO usa JWT, los tokens reales son opacos (`gf_employee_token` en BD, `gf_salesops_token` estático global). §6 actualiza modelo de sesión. §7.7 cierra el aviso de bloqueador en `/pwa-pt/reception-create`. §8.6 (Almacenista PT) marca G013 cerrado y referencia G026 con la mitigación preventiva (`setup-plantas-produccion.md` en repo backend). §9.1 y §12.2 incorporan referencia obligatoria al setup de plantas. ADR-03 corregido para reflejar diagnóstico real del session_token. **Nuevo ADR-08:** autorización en `gf_saleops` derivada de `X-GF-Employee-Token`, no de payload, con flag `require_employee_token=True` en producción desde 2026-05-05. §15 actualiza gotcha G15.6 (gf.inventory.posting resuelto) y agrega G15.11 (privilege escalation resuelto). §16 reordena top 10 sin G002/G013. §17 expande glosario con definiciones precisas de `gf_employee_token`, `gf_salesops_token`, `session_token`. |
+| 2026-04-27 | Claude (actualización post-fixes operativos PR #21–#29) | Revisión incremental tras los fixes operativos ya en `main`. **§2 estado actual:** entregas/ruta/supervisor-ventas con QA PASS reciente y rangos de completitud actualizados. **§7.8 `/pwa-entregas/*`:** tabla detallada con `load-execute` (envelope gf_saleops, requiere `VITE_GF_SALESOPS_TOKEN`), `confirm-load` (alias legacy), `returns`/`return-accept` (modelo `gf.route.stop.line`), `scrap-create` (defensa `ok:false`), `live-inventory` (`available = quantity - reserved_quantity`). **§7.9 `/pwa-ruta/*`:** filtros de `my-plan`, `accept-load` validado con carga por forecast, `vehicle-checklist*` integrados. **§7.10 `/pwa-supv/*`:** detalle de cascada de `analytic_account_id` y normalización de `channel` a lowercase. **§8.7, §8.8, §8.9** actualizadas con QA PASS y fixes recientes. **§10:** `VITE_GF_SALESOPS_TOKEN` documentada como requerida con mensaje de error si falta. **§15:** nuevos gotchas G15.12 (`missing_x_analytic_account_id`) y G15.13 (UNAUTHORIZED X-GF-Token). |
