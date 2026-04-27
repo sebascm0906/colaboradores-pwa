@@ -5969,12 +5969,72 @@ async function directSupervisorVentas(method, path, body) {
     // employee_id: si se pasa, el forecast es per-vendor.
     // Si no, es global de sucursal (created_by queda como referencia).
     const employeeId = Number(body?.employee_id || 0)
+
+    // BLD-20260427-P0-SUPV-FORECAST-ANALYTIC: la sesión del supervisor NO
+    // contiene analytic_account_id ni sucursal_id (sólo plaza_id como string).
+    // Sin ese valor, gf.saleops.forecast.analytic_account_id (NOT NULL)
+    // rechaza el insert con el error críptico:
+    //   "null value in column \"analytic_account_id\" violates not-null"
+    // Sebas (2026-04-27) confirmó:
+    //   - hr.employee.x_analytic_account_id es la fuente oficial
+    //     supervisor → sucursal/analytic
+    //   - todos los supervisores activos deben tenerlo poblado
+    //   - hoy 1 supervisor = 1 sucursal (no requiere selector UI)
+    //   - si falta, bloquear con error claro (no permitir NULL)
+    // Resolución en cascada (mantiene compat con futuro override desde UI):
+    //   1) body.analytic_account_id (override directo)
+    //   2) body.sucursal (legacy)
+    //   3) JWT: getSession().employee.x_analytic_account_id (rápido, 0 RPC)
+    //      → coincide con el commit b968e43 de Sebas en main
+    //   4) RPC fallback: hr.employee.x_analytic_account_id (si el JWT no
+    //      lo trae todavía, garantiza que el flujo no se bloquea hasta
+    //      que login service propague el campo)
+    let analyticAccountId =
+      Number(
+        body?.analytic_account_id ||
+        body?.sucursal ||
+        getSession()?.employee?.x_analytic_account_id?.[0] ||
+        0
+      ) || 0
+    if (!analyticAccountId) {
+      const supervisorEmpId = Number(getEmployeeId() || 0) || 0
+      if (supervisorEmpId) {
+        try {
+          const empRes = pickListResponse(await readModelSorted('hr.employee', {
+            fields: ['id', 'x_analytic_account_id'],
+            domain: [['id', '=', supervisorEmpId]],
+            sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
+          }))
+          const xAaa = empRes[0]?.x_analytic_account_id
+          analyticAccountId = Number(xAaa?.[0] || xAaa || 0) || 0
+        } catch {
+          analyticAccountId = 0
+        }
+      }
+      if (!analyticAccountId) {
+        // Log estructurado sin tokens — para diagnosticar empleados mal
+        // configurados en RRHH sin esperar a que el usuario reporte.
+        try {
+          console.warn('[forecast-create] missing_x_analytic_account_id', {
+            employee_id: supervisorEmpId,
+            role: getSession()?.role || null,
+            body_keys: Object.keys(body || {}),
+            reason: 'missing_x_analytic_account_id',
+          })
+        } catch { /* noop */ }
+        throw new ApiError(
+          'Tu empleado no tiene sucursal asignada. Pide a administración que configure x_analytic_account_id en RRHH.',
+          { status: 400, code: 'missing_x_analytic_account_id' }
+        )
+      }
+    }
+
     const dict = {
       name: body?.name || `Pronóstico ${new Date().toISOString().slice(0, 10)}`,
       date_target: body?.date_target || new Date().toISOString().slice(0, 10),
       created_by_employee_id: Number(employeeId || getEmployeeId() || 0) || undefined,
       company_id: Number(body?.company_id || companyId || 0) || undefined,
-      analytic_account_id: Number(body?.analytic_account_id || body?.sucursal || getSession()?.employee?.x_analytic_account_id?.[0] || 0) || undefined,
+      analytic_account_id: analyticAccountId,
       state: 'draft',
       line_ids: Array.isArray(body?.lines)
         ? body.lines
