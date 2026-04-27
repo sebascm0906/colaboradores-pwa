@@ -31,9 +31,11 @@
 
 ## 1. Resumen ejecutivo
 
-El PWA Colaboradores es una aplicación web instalable (PWA) construida en Vite + React 18 que sirve como interfaz operativa única para 9 roles operativos de sucursal de Grupo Frío. Reemplaza flujos antes hechos en Odoo backend, Excel, WhatsApp y procesos en papel.
+El PWA Colaboradores es una aplicación web instalable (PWA) construida en Vite + React 18 que sirve como interfaz operativa única para 11 roles operativos de sucursal de Grupo Frío (9 primarios + 2 secundarios). Reemplaza flujos antes hechos en Odoo backend, Excel, WhatsApp y procesos en papel.
 
-**A quién sirve.** Nueve roles operativos:
+**A quién sirve.** Once roles operativos:
+
+**Roles primarios (9):**
 
 1. Gerente
 2. Auxiliar Admin
@@ -45,7 +47,12 @@ El PWA Colaboradores es una aplicación web instalable (PWA) construida en Vite 
 8. Jefes de Ruta
 9. Supervisor de Ventas
 
-(El detalle por rol está en la sección [8](#8-sistema-de-roles-y-permisos). Existen 7 roles adicionales fuera del scope operativo de sucursal — corporativo, soporte, expansión — listados en la subsección [8.10](#810-roles-presentes-en-código-fuera-del-scope-operativo-de-sucursal).)
+**Roles secundarios (2) — cubren a los titulares cuando faltan:**
+
+10. Auxiliar de Producción (cubre Operador Rolito y Operador Barra)
+11. Auxiliar de Ruta (cubre Jefes de Ruta)
+
+(El detalle por rol está en la sección [8](#8-sistema-de-roles-y-permisos). Existen 5 roles adicionales fuera del scope operativo de sucursal — corporativo, soporte, expansión — listados en la subsección [8.12](#812-roles-presentes-en-código-fuera-del-scope-operativo-de-sucursal).)
 
 **Qué problema resuelve.** Captura digital end-to-end del ciclo operativo diario: turnos de producción, recepción y traspasos de producto terminado, despacho y conciliación de rutas, POS de mostrador, gastos, requisiciones, cierre de caja, alertas de gerente y supervisión comercial.
 
@@ -69,11 +76,11 @@ Datos extraídos del inventario realizado el 2026-04-27. Las columnas **Validado
 |--------|---------|-----------|--------------------------|--------------|-------|--------------------------|-------------|
 | `gerente` | Gerente | 5 propias + acceso a `admin` | 70%–80% | desconocido | no | Forecast unlock no validado E2E; KPIs degradan a mock | Sebastián (backend) |
 | `admin` | Auxiliar Admin, Gerente, Dirección | 14 | 70%–79% | parcial | no | Liquidaciones desktop-only; cash-closing/authorize stub | Sebastián |
-| `produccion` | Operador Rolito, Operador Barra, Auxiliar Producción | 17 | 55%–65% | desconocido | parcial (8 unit tests) | PIN verification TODO en Rolito; legacy fallbacks `action_close_shift` | Sebastián |
+| `produccion` | Operador Rolito, Operador Barra, Auxiliar Producción (secundario) | 17 | 55%–65% | desconocido | parcial (8 unit tests) | PIN verification TODO en Rolito; legacy fallbacks `action_close_shift` | Sebastián |
 | `supervision` | Jefe de Producción | 6 | 70%–80% | desconocido | parcial (3 unit tests) | Brine readings PoC voice; dashboards no validados runtime | Sebastián |
-| `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | `gf.inventory.posting._action_done()` no verificable desde frontend | Sebastián |
+| `almacen-pt` | Almacenista PT | 12 | 75%–83% | parcial | parcial (5 unit tests) | `gf.inventory.posting._action_done()` confirmado roto en producción (G013, 56% records en error) | Sebastián |
 | `entregas` | Almacenista Entregas | 9 | 80%–89% | parcial | parcial (1 unit test) | Pallet reject sin log de responsable; live-inventory bug arreglado 2026-04-27 (commit `52b7b5f`) | Sebastián |
-| `ruta` | Jefe de Ruta | 11 | 70%–82% | desconocido | no | Corte/liquidación persisten en localStorage; integración Kold Field externa | Sebastián |
+| `ruta` | Jefe de Ruta, Auxiliar de Ruta (secundario) | 11 | 70%–82% | desconocido | no | Corte/liquidación persisten en localStorage; integración Kold Field externa | Sebastián |
 | `supervisor-ventas` | Supervisor de Ventas | 12 | 75%–92% | parcial | no | Tareas y notas en `IS_STUB` (localStorage) | Sebastián |
 | `torre` | Operador Torres (fuera de scope) | 2 | desconocido | desconocido | no | Validación requisiciones | Sebastián |
 | `transformaciones` | Transversal | 1 + helpers | desconocido | desconocido | sí (helpers) | — | Sebastián |
@@ -226,11 +233,13 @@ Cada request posterior añade headers desde la sesión local (ver [`src/lib/api.
 
 > [!NOTE] El JWT que se almacena puede ser el real devuelto por Odoo **o** uno construido en frontend con `alg:"none"`. Esto último es una elección deliberada de fallback ([`ScreenLogin.jsx:55-59`](../src/screens/ScreenLogin.jsx)) y representa un riesgo de seguridad: cualquier persona con acceso al `localStorage` del navegador puede modificar el payload. Documentado como gap G002 con severidad P1.
 
-### 4.4 Matriz rol × módulo (9 operativos)
+### 4.4 Matriz rol × módulo (11 operativos: 9 primarios + 2 secundarios)
+
+Líneas continuas = rol primario; líneas punteadas = rol secundario que cubre al primario cuando falta.
 
 ```mermaid
 graph LR
-  subgraph Roles
+  subgraph Primarios["Roles primarios (9)"]
     R1[Gerente]
     R2[Auxiliar Admin]
     R3[Operador Rolito]
@@ -242,7 +251,12 @@ graph LR
     R9[Supervisor de Ventas]
   end
 
-  subgraph Modulos
+  subgraph Secundarios["Roles secundarios (2)"]
+    R10[Auxiliar de Producción]
+    R11[Auxiliar de Ruta]
+  end
+
+  subgraph Modulos["Módulos del PWA"]
     M1[admin]
     M2[gerente]
     M3[produccion]
@@ -265,6 +279,9 @@ graph LR
   R8 --> M7
   R9 --> M8
 
+  R10 -.cubre.-> M3
+  R11 -.cubre.-> M7
+
   R1 --> MU
   R2 --> MU
   R3 --> MU
@@ -274,6 +291,8 @@ graph LR
   R7 --> MU
   R8 --> MU
   R9 --> MU
+  R10 -.-> MU
+  R11 -.-> MU
 ```
 
 ### 4.5 Role-gating en 3 niveles
@@ -655,7 +674,7 @@ Endpoints ~25 en [`src/modules/almacen-pt/`](../src/modules/almacen-pt/) + [`ent
 
 | Endpoint | Método | Side effects |
 |----------|--------|--------------|
-| `/pwa-pt/reception-create` | POST | Crea `stock.picking` IN. **Depende** de `gf.inventory.posting._action_done()` para postear inventario. Ver gap G013. |
+| `/pwa-pt/reception-create` | POST | Crea `stock.picking` IN. **Depende** de `gf.inventory.posting._action_done()` para postear inventario. **Bloqueador real confirmado en producción 2026-04-27:** 73 de 130 registros (56.2%) en estado `error`. Ver gap G013. El modelo vive en módulo `gf_production_ops` (no `gf_logistics_ops`). |
 | `/pwa-pt/transfer-orchestrate` | POST | Orquesta `stock.picking` PT→Entregas |
 | `/pwa-pt/shift-handover-create` / `accept` | POST | `gf.shift.handover` — relevo PT entre turnos |
 | `/pwa-pt/eligible-receivers` | GET | `res.partner` filtrados por warehouse del receptor |
@@ -700,9 +719,25 @@ Endpoints ~20 en [`src/modules/supervisor-ventas/api.js`](../src/modules/supervi
 
 ## 8. Sistema de roles y permisos
 
-Los 9 roles operativos de sucursal son el scope oficial del sistema. Cada subsección los documenta con: propósito, módulos visibles, rutas, endpoints, restricciones, mapeo Odoo, y estado de implementación.
+Los 11 roles operativos de sucursal son el scope oficial del sistema: **9 primarios** (titulares de cada función) + **2 secundarios** (auxiliares que cubren a los titulares cuando faltan, comparten módulos con su rol primario y necesitan documentación para operar). Cada subsección los documenta con: propósito, módulos visibles, rutas, endpoints, restricciones, mapeo Odoo, y estado de implementación.
 
 > [!NOTE] Suposición sobre el "grupo Odoo (groups_id)": el código frontend NO conoce los `groups_id` de Odoo. La autorización efectiva ocurre server-side validando `pwa_job_key` del empleado contra reglas en cada controller `/pwa-*`. Por eso cada subsección lista `pwa_job_key` (string en `hr.employee`) en lugar del `groups_id` numérico. Verificar con Sebastián los `groups_id` reales en Odoo si hace falta el mapeo formal.
+
+### 8.0 Estructura de los 11 roles operativos
+
+| # | Tipo | job_key | Nombre operativo |
+|---|------|---------|------------------|
+| 1 | primario | `gerente_sucursal` | Gerente |
+| 2 | primario | `auxiliar_admin` | Auxiliar Admin |
+| 3 | primario | `operador_rolito` | Operador Rolito |
+| 4 | primario | `operador_barra` | Operador Barra |
+| 5 | primario | `supervisor_produccion` | Jefe de Producción |
+| 6 | primario | `almacenista_pt` | Almacenista PT |
+| 7 | primario | `almacenista_entregas` | Almacenista Entregas |
+| 8 | primario | `jefe_ruta` | Jefe de Ruta |
+| 9 | primario | `supervisor_ventas` | Supervisor de Ventas |
+| 10 | secundario | `auxiliar_produccion` | Auxiliar de Producción (cubre Rolito y Barra) |
+| 11 | secundario | `auxiliar_ruta` | Auxiliar de Ruta (cubre Jefe de Ruta) |
 
 ### 8.1 Gerente
 
@@ -852,16 +887,54 @@ Los 9 roles operativos de sucursal son el scope oficial del sistema. Cada subsec
 | Tests | no |
 | Riesgos abiertos | Tareas y notas en `IS_STUB` (localStorage). Banner visible "modo temporal". Datos no sincronizan entre dispositivos. Gap G006. |
 
-### 8.10 Roles presentes en código fuera del scope operativo de sucursal
+### 8.10 Auxiliar de Producción (rol secundario)
 
-7 roles adicionales aparecen en el código pero no son operativos de sucursal. Se documentan como referencia, sin auditoría en profundidad.
+| Atributo | Valor |
+|----------|-------|
+| `pwa_job_key` | `auxiliar_produccion` |
+| Tipo | Secundario — cubre a Operador Rolito y Operador Barra |
+| Empresa | 35 (Fab Congelados) |
+| Propósito | Cubrir al titular Rolito o Barra cuando falta. No es un rol independiente: usa exactamente las mismas pantallas y endpoints que el primario al que cubra. |
+| Módulos visibles | `registro_produccion` (mismo que Rolito/Barra), universales |
+| Rutas | Las mismas que Operador Rolito y Operador Barra (todas bajo `/produccion/*`) |
+| Pantallas | Comparte las 17 pantallas del módulo `produccion/`. **No tiene pantallas exclusivas.** |
+| Endpoints | Los mismos `/pwa-prod/*` que los primarios |
+| ¿El sistema diferencia primario vs secundario? | **Parcialmente.** En `MODULE_ROLE_VARIANTS['registro_produccion']` (en [`src/lib/roleContext.js:2`](../src/lib/roleContext.js)) los tres roles están listados juntos: `['operador_barra', 'operador_rolito', 'auxiliar_produccion']`. El `ProductionOperatorRoute` en [`App.jsx:184`](../src/App.jsx) **solo valida `operador_barra` y `operador_rolito`**, no `auxiliar_produccion` directamente. En la práctica el auxiliar entra al módulo si tiene `additional_job_keys` con barra/rolito. |
+| Mapeo `inferCompanyId` | [`ScreenLogin.jsx:82-84`](../src/screens/ScreenLogin.jsx) — incluye `auxiliar_produccion` explícitamente para asignar company 35 |
+| Bypass admin | Listado en `ADMIN_EMPLOYEES` con id 691 ("Julio Raul de la Cruz González") |
+| Estado | 55%–65% completitud frontend (idéntico al primario que cubra) |
+| Validado E2E | desconocido |
+| Tests | parcial (los mismos del primario: cycleTiming, checklistContext, miTurnoActions, brineReadings) |
+| Bloqueador propio | `ProductionOperatorRoute` no contempla `auxiliar_produccion` por sí solo. Si el empleado tiene SOLO ese job_key, el route gate puede bloquearlo. Verificar comportamiento real (gap candidato si falla). |
+
+### 8.11 Auxiliar de Ruta (rol secundario)
+
+| Atributo | Valor |
+|----------|-------|
+| `pwa_job_key` | `auxiliar_ruta` |
+| Tipo | Secundario — cubre a Jefe de Ruta |
+| Empresa | 34 (GLACIEM) |
+| Propósito | Cubrir al titular Jefe de Ruta cuando falta. Comparte el flujo guiado de 6 estaciones del módulo. |
+| Módulos visibles | `cierre_ruta`, universales |
+| Rutas | Las mismas que Jefe de Ruta — todas bajo `/ruta/*` |
+| Pantallas | Comparte las 11 pantallas del módulo `ruta/`. **No tiene pantallas exclusivas.** |
+| Endpoints | Los mismos `/pwa-ruta/*` que el primario |
+| ¿El sistema diferencia primario vs secundario? | **Sí, en route gating.** `RUTA_ALLOWED_ROLES` en [`App.jsx:148`](../src/App.jsx) incluye explícitamente `['jefe_ruta', 'auxiliar_ruta']`. Ambos pueden entrar a `/ruta/*`. La validación de tenancy server-side seguirá restringiendo a los planes del empleado loggeado. |
+| Mapeo `inferCompanyId` | [`ScreenLogin.jsx:85-87`](../src/screens/ScreenLogin.jsx) — incluye `auxiliar_ruta` explícitamente para asignar company 34 |
+| Bypass admin | Listado en `ADMIN_EXTRA_ROLES` ("Auxiliar de Ruta — sin empleado asignado") en [`ScreenLogin.jsx:344-345`](../src/screens/ScreenLogin.jsx). No hay aún un empleado real con este job_key. |
+| Estado | 70%–82% completitud frontend (idéntico al primario que cubra) |
+| Validado E2E | desconocido |
+| Tests | no |
+| Bloqueador propio | No hay empleado real con `auxiliar_ruta` en producción al 2026-04-02 (auditoría de bypass admin). Si se asigna, validar que el flujo de tenancy (Jefe de Ruta vs su auxiliar) funciona correctamente — no es trivial: ¿el auxiliar ve solo sus propios planes, o también los del titular al que cubre? |
+
+### 8.12 Roles presentes en código fuera del scope operativo de sucursal
+
+5 roles adicionales aparecen en el código pero no son operativos de sucursal. Se documentan como referencia, sin auditoría en profundidad.
 
 | job_key | Categoría tentativa | Pantallas | Endpoints específicos | Recomendación |
 |---------|---------------------|-----------|------------------------|---------------|
-| `auxiliar_produccion` | Operativo planta complementario | Comparte 17 de `produccion/` con Rolito/Barra | mismos `/pwa-prod/*` | Documentar; no audit a profundidad. Confirmar con Yamil si pertenece al scope de los 9 (es operativo planta pero no aparece en la lista del prompt). |
-| `auxiliar_ruta` | Operativo logística complementario | Comparte 11 de `ruta/` con Jefe de Ruta | mismos `/pwa-ruta/*` | Documentar; no audit a profundidad. Igual nota que el anterior. |
 | `direccion_general` | Corporativo | Hereda de `admin_sucursal` (acceso elevado) | `/pwa-admin/*` con permisos máximos (aprobaciones de director) | Documentar; escalar a Yamil si requiere módulo dedicado. |
-| `operador_torres` | Soporte central (CSC GF) | 2 propias (`ScreenTorreRequisiciones`, `ScreenTorreDetail`) | `/pwa-admin/torre/*` | Documentar; expansión planeada (no en los 9). |
+| `operador_torres` | Soporte central (CSC GF) | 2 propias (`ScreenTorreRequisiciones`, `ScreenTorreDetail`) | `/pwa-admin/torre/*` | Documentar; expansión planeada (no en los 11). |
 | `director_ti` | Soporte / corporativo | Sin módulo asignado en `registry.js` | — | Limpiar si no se usa, o escalar a Yamil. |
 | `auxiliar_ti` | Soporte | Sin módulo asignado | — | Idem. |
 | `jefe_legal` | Corporativo | Sin módulo asignado | — | Idem. |
@@ -1028,7 +1101,8 @@ npm test
 - Branch productiva: `main`.
 - Framework auto-detectado: Vite.
 - Variables de entorno: configurar en Project Settings → Environment Variables. **No incluir** `WA_ACCESS_TOKEN_OPERACIONES` (vive en n8n).
-- Dominio personalizado: `colaboradores.grupofrio.mx`.
+- **URL pública activa al 2026-04-27 (confirmada por Yamil):** [`https://colaboradores-pwa.vercel.app/login`](https://colaboradores-pwa.vercel.app/login) — subdominio default de Vercel.
+- **Dominio personalizado esperado:** `colaboradores.grupofrio.mx` (referenciado en [`README.md:37`](../README.md) y [`.env.example:34`](../.env.example) como `VITE_APP_URL=https://colaboradores.grupofrio.mx`). **No está configurado o no apunta al deploy actual al 2026-04-27** — gap G024 (P2). Si los operadores reciben links al dominio custom (en SMS, WhatsApp o emails), no cargarán.
 - Deploy automático al push a `main`. PRs generan preview deploys.
 
 ### 12.2 Checklist pre-deploy
@@ -1047,7 +1121,7 @@ npm test
 - A nivel código: `git revert <commit>` en `main` y push. El siguiente deploy será el revert.
 - Los SW están con `selfDestroying: true` ([`vite.config.js:18`](../vite.config.js)), así que un cliente con versión vieja recibirá la nueva en la siguiente carga sin necesidad de unregister manual.
 
-> [!NOTE] Suposición: el deploy actual a `colaboradores.grupofrio.mx` está sirviendo el commit `52b7b5f`. **No se verificó runtime durante esta auditoría.** Yamil va a verificar manualmente.
+> [!NOTE] Confirmado por Yamil el 2026-04-27: el deploy productivo activo está en [`colaboradores-pwa.vercel.app/login`](https://colaboradores-pwa.vercel.app/login) (subdominio default de Vercel). El dominio custom `colaboradores.grupofrio.mx` referenciado en `vercel.json` y README **no está activo o no apunta al deploy** — ver gap G024.
 
 ---
 
@@ -1289,3 +1363,4 @@ Ver detalles, evidencia y acciones concretas en GAPS_BACKLOG.md.
 | Fecha | Autor | Cambio |
 |-------|-------|--------|
 | 2026-04-27 | Claude (auto-generado, review por Yamil) | Generación inicial. Cubre 18 secciones, 162+ endpoints, 9 roles operativos + 7 fuera de scope, 5 diagramas Mermaid embebidos. Branch: `docs/code-manual-initial`. Necesita review humano antes de considerarse fuente única de verdad. |
+| 2026-04-27 | Claude (verificación P1 + ajustes scope) | Reescritura de §8 a 11 roles operativos (9 primarios + 2 secundarios `auxiliar_produccion` y `auxiliar_ruta`). §8.12 reducida a 5 roles fuera de scope. Matriz Mermaid §4.4 actualizada con 2 nuevos nodos. §12 actualizada con dominio real `colaboradores-pwa.vercel.app`. §7.7 anota que `gf.inventory.posting` vive en `gf_production_ops` y que tiene 56.2% records en error en producción al momento de la auditoría. |

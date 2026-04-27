@@ -1,0 +1,185 @@
+2026-04-27 09:18:35,411 | ERROR | BLOCKED: method 'write' not in allow-list
+2026-04-27 09:19:01,646 | ERROR | BLOCKED: method 'write' not in allow-list
+2026-04-27 09:19:01,646 | ERROR | BLOCKED: method 'create' not in allow-list
+2026-04-27 09:19:01,646 | ERROR | BLOCKED: method 'action_done' not in allow-list
+2026-04-27 09:19:01,647 | ERROR | BLOCKED: method 'unlink' not in allow-list
+2026-04-27 09:19:01,647 | INFO | SAFETY_NET validated: write, create, action_done, unlink all blocked
+2026-04-27 09:26:11,960 | ERROR | BLOCKED: method 'write' not in allow-list
+2026-04-27 09:26:11,960 | ERROR | BLOCKED: method 'create' not in allow-list
+2026-04-27 09:26:11,960 | ERROR | BLOCKED: method 'action_done' not in allow-list
+2026-04-27 09:26:11,960 | ERROR | BLOCKED: method 'unlink' not in allow-list
+2026-04-27 09:26:11,960 | INFO | SAFETY_NET validated: write, create, action_done, unlink all blocked
+2026-04-27 09:26:22,063 | INFO | AUTH ok user_domain=<redacted> uid=2
+2026-04-27 09:26:22,064 | INFO | CALL model=ir.module.module method=search_read args_len=2 kwargs_keys=[]
+2026-04-27 09:26:22,760 | ERROR | XMLRPC FAULT ir.module.module.search_read: Traceback (most recent call last):
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 165, in xmlrpc_2
+    response = self._xmlrpc(service)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 139, in _xmlrpc
+    result = dispatch_rpc(service, method, params)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/http.py", line 412, in dispatch_rpc
+    return dispatch(method, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 59, in dispatch
+    res = execute_kw(db, uid, *params[3:])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 82, in execute_kw
+    return execute(db, uid, obj, method, *args, **kw or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 88, in execute
+    res = execute_cr(cr, uid, obj, method, *args, **kw)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 73, in execute_cr
+    result = retrying(partial(odoo.api.call_kw, recs, method, args, kw), env)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 157, in retrying
+    result = func()
+             ^^^^^^
+  File "/home/odoo/src/odoo/odoo/api.py", line 535, in call_kw
+    result = getattr(recs, name)(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 6143, in search_read
+    records = self.search_fetch(domain or [], fields, offset=offset, limit=limit, order=order)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 1784, in search_fetch
+    fields_to_fetch = self._determine_fields_to_fetch(field_names)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 4192, in _determine_fields_to_fetch
+    raise ValueError(f"Invalid field {field_name!r} on model {self._name!r}")
+ValueError: Invalid field 'fields' on model 'ir.module.module'
+
+2026-04-27 09:27:01,667 | INFO | AUTH ok user_domain=<redacted> uid=2
+2026-04-27 09:27:01,669 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:01,965 | INFO | OK   model=ir.module.module method=search_read list_len=1
+2026-04-27 09:27:01,966 | INFO | CALL model=ir.model method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:02,258 | INFO | OK   model=ir.model method=search_read list_len=1
+2026-04-27 09:27:02,258 | INFO | CALL model=gf.inventory.posting method=fields_get args_len=1 kwargs_keys=['attributes']
+2026-04-27 09:27:02,545 | INFO | OK   model=gf.inventory.posting method=fields_get dict_keys=['activity_calendar_event_id', 'activity_date_deadline', 'activity_exception_decoration', 'activity_exception_icon', 'activity_ids']
+2026-04-27 09:27:02,546 | INFO | CALL model=gf.inventory.posting method=search_count args_len=1 kwargs_keys=[]
+2026-04-27 09:27:02,818 | INFO | OK   model=gf.inventory.posting method=search_count scalar=130
+2026-04-27 09:27:02,819 | INFO | CALL model=gf.inventory.posting method=read_group args_len=1 kwargs_keys=['fields', 'groupby']
+2026-04-27 09:27:03,091 | INFO | OK   model=gf.inventory.posting method=read_group list_len=2
+2026-04-27 09:27:03,091 | INFO | CALL model=gf.inventory.posting method=search_read args_len=1 kwargs_keys=['fields', 'limit', 'order']
+2026-04-27 09:27:03,363 | ERROR | XMLRPC FAULT gf.inventory.posting.search_read: Traceback (most recent call last):
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 165, in xmlrpc_2
+    response = self._xmlrpc(service)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 139, in _xmlrpc
+    result = dispatch_rpc(service, method, params)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/http.py", line 412, in dispatch_rpc
+    return dispatch(method, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 59, in dispatch
+    res = execute_kw(db, uid, *params[3:])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 82, in execute_kw
+    return execute(db, uid, obj, method, *args, **kw or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 88, in execute
+    res = execute_cr(cr, uid, obj, method, *args, **kw)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 73, in execute_cr
+    result = retrying(partial(odoo.api.call_kw, recs, method, args, kw), env)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 157, in retrying
+    result = func()
+             ^^^^^^
+  File "/home/odoo/src/odoo/odoo/api.py", line 535, in call_kw
+    result = getattr(recs, name)(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 6143, in search_read
+    records = self.search_fetch(domain or [], fields, offset=offset, limit=limit, order=order)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 1784, in search_fetch
+    fields_to_fetch = self._determine_fields_to_fetch(field_names)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 4192, in _determine_fields_to_fetch
+    raise ValueError(f"Invalid field {field_name!r} on model {self._name!r}")
+ValueError: Invalid field 'name' on model 'gf.inventory.posting'
+
+2026-04-27 09:27:55,046 | INFO | AUTH ok user_domain=<redacted> uid=2
+2026-04-27 09:27:55,047 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:55,678 | INFO | OK   model=ir.module.module method=search_read list_len=1
+2026-04-27 09:27:55,679 | INFO | CALL model=ir.model method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:55,969 | INFO | OK   model=ir.model method=search_read list_len=1
+2026-04-27 09:27:55,970 | INFO | CALL model=gf.inventory.posting method=fields_get args_len=1 kwargs_keys=['attributes']
+2026-04-27 09:27:56,256 | INFO | OK   model=gf.inventory.posting method=fields_get dict_keys=['activity_calendar_event_id', 'activity_date_deadline', 'activity_exception_decoration', 'activity_exception_icon', 'activity_ids']
+2026-04-27 09:27:56,257 | INFO | CALL model=gf.inventory.posting method=search_count args_len=1 kwargs_keys=[]
+2026-04-27 09:27:56,534 | INFO | OK   model=gf.inventory.posting method=search_count scalar=130
+2026-04-27 09:27:56,535 | INFO | CALL model=gf.inventory.posting method=read_group args_len=1 kwargs_keys=['fields', 'groupby']
+2026-04-27 09:27:56,826 | INFO | OK   model=gf.inventory.posting method=read_group list_len=2
+2026-04-27 09:27:56,827 | INFO | CALL model=gf.inventory.posting method=search_read args_len=1 kwargs_keys=['fields', 'limit', 'order']
+2026-04-27 09:27:57,228 | INFO | OK   model=gf.inventory.posting method=search_read list_len=130
+2026-04-27 09:27:57,313 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:57,677 | INFO | OK   model=ir.module.module method=search_read list_len=1
+2026-04-27 09:27:57,678 | INFO | CALL model=ir.model.data method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:27:58,076 | INFO | OK   model=ir.model.data method=search_read list_len=28
+2026-04-27 09:27:58,077 | INFO | CALL model=ir.model method=read args_len=1 kwargs_keys=['fields']
+2026-04-27 09:27:58,452 | ERROR | XMLRPC FAULT ir.model.read: Traceback (most recent call last):
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 165, in xmlrpc_2
+    response = self._xmlrpc(service)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/addons/base/controllers/rpc.py", line 139, in _xmlrpc
+    result = dispatch_rpc(service, method, params)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/http.py", line 412, in dispatch_rpc
+    return dispatch(method, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 59, in dispatch
+    res = execute_kw(db, uid, *params[3:])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 82, in execute_kw
+    return execute(db, uid, obj, method, *args, **kw or {})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 88, in execute
+    res = execute_cr(cr, uid, obj, method, *args, **kw)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 73, in execute_cr
+    result = retrying(partial(odoo.api.call_kw, recs, method, args, kw), env)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/service/model.py", line 157, in retrying
+    result = func()
+             ^^^^^^
+  File "/home/odoo/src/odoo/odoo/api.py", line 535, in call_kw
+    result = getattr(recs, name)(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 3862, in read
+    self._origin.fetch(fields)
+  File "/home/odoo/src/odoo/odoo/models.py", line 4138, in fetch
+    fields_to_fetch = self._determine_fields_to_fetch(field_names, ignore_when_in_cache=True)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/models.py", line 4193, in _determine_fields_to_fetch
+    if ignore_when_in_cache and not any(cache.get_missing_ids(self, field)):
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/odoo/src/odoo/odoo/api.py", line 1411, in get_missing_ids
+    cache_value = field_cache.get(record_id, False)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: unhashable type: 'list'
+
+2026-04-27 09:28:41,006 | INFO | AUTH ok user_domain=<redacted> uid=2
+2026-04-27 09:28:41,008 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:41,270 | INFO | OK   model=ir.module.module method=search_read list_len=1
+2026-04-27 09:28:41,282 | INFO | CALL model=ir.model method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:41,568 | INFO | OK   model=ir.model method=search_read list_len=1
+2026-04-27 09:28:41,569 | INFO | CALL model=gf.inventory.posting method=fields_get args_len=1 kwargs_keys=['attributes']
+2026-04-27 09:28:41,840 | INFO | OK   model=gf.inventory.posting method=fields_get dict_keys=['activity_calendar_event_id', 'activity_date_deadline', 'activity_exception_decoration', 'activity_exception_icon', 'activity_ids']
+2026-04-27 09:28:41,841 | INFO | CALL model=gf.inventory.posting method=search_count args_len=1 kwargs_keys=[]
+2026-04-27 09:28:42,188 | INFO | OK   model=gf.inventory.posting method=search_count scalar=130
+2026-04-27 09:28:42,189 | INFO | CALL model=gf.inventory.posting method=read_group args_len=1 kwargs_keys=['fields', 'groupby']
+2026-04-27 09:28:42,479 | INFO | OK   model=gf.inventory.posting method=read_group list_len=2
+2026-04-27 09:28:42,481 | INFO | CALL model=gf.inventory.posting method=search_read args_len=1 kwargs_keys=['fields', 'limit', 'order']
+2026-04-27 09:28:42,777 | INFO | OK   model=gf.inventory.posting method=search_read list_len=130
+2026-04-27 09:28:42,785 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:43,070 | INFO | OK   model=ir.module.module method=search_read list_len=1
+2026-04-27 09:28:43,071 | INFO | CALL model=ir.model.data method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:43,349 | INFO | OK   model=ir.model.data method=search_read list_len=28
+2026-04-27 09:28:43,350 | INFO | CALL model=ir.model method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:43,659 | INFO | OK   model=ir.model method=search_read list_len=28
+2026-04-27 09:28:43,660 | INFO | CALL model=ir.model method=search_read args_len=1 kwargs_keys=['fields']
+2026-04-27 09:28:43,958 | INFO | OK   model=ir.model method=search_read list_len=28
+2026-04-27 09:28:43,959 | INFO | CALL model=ir.model.data method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:44,347 | INFO | OK   model=ir.model.data method=search_read list_len=969
+2026-04-27 09:28:44,389 | INFO | CALL model=ir.module.module method=search_read args_len=1 kwargs_keys=['fields', 'limit']
+2026-04-27 09:28:44,743 | INFO | OK   model=ir.module.module method=search_read list_len=37

@@ -1,0 +1,730 @@
+{
+  "g013": {
+    "gap": "G013",
+    "checked_at": "2026-04-27T15:28:40.152293+00:00",
+    "module": {
+      "id": 1404,
+      "name": "gf_logistics_ops",
+      "state": "installed",
+      "latest_version": "18.0.1.0.1",
+      "installed_version": "18.0.1.0.1",
+      "shortdesc": "GF Logistics Ops"
+    },
+    "model": {
+      "id": 2400,
+      "name": "GF Inventory Posting Batch",
+      "model": "gf.inventory.posting",
+      "modules": "gf_production_ops",
+      "transient": false
+    },
+    "state_field_meta": {
+      "selection": [
+        [
+          "pending",
+          "Pendiente"
+        ],
+        [
+          "processing",
+          "Procesando"
+        ],
+        [
+          "done",
+          "Listo"
+        ],
+        [
+          "error",
+          "Error"
+        ]
+      ],
+      "string": "State",
+      "type": "selection"
+    },
+    "total_records": 130,
+    "state_distribution": {
+      "done": 57,
+      "error": 73
+    },
+    "sample_fields": [
+      "id",
+      "state",
+      "create_date",
+      "write_date",
+      "display_name"
+    ],
+    "recent_total": 130,
+    "recent_errors": 73,
+    "error_sample_ids": [
+      778,
+      777,
+      776,
+      775,
+      774,
+      773,
+      772,
+      771,
+      770,
+      769,
+      768,
+      767,
+      766,
+      765,
+      764,
+      763,
+      747,
+      625,
+      623,
+      622
+    ],
+    "stuck_count": 4,
+    "stuck_sample_ids": [
+      536,
+      535,
+      531,
+      242
+    ],
+    "stuck_pct": 3.08,
+    "error_pct_recent": 56.15,
+    "total_error_pct": 56.15,
+    "verdict": "real_blocker",
+    "note": "73/130 (56.2%) registros en estado error globalmente. En los \u00faltimos 30 d\u00edas: 73 en error y 4 stuck (>7d sin done). Evidencia DIRECTA de _action_done() fallando en una fracci\u00f3n cr\u00edtica de registros. IDs de muestra para investigar disponibles en el reporte JSON."
+  },
+  "g014": {
+    "gap": "G014",
+    "checked_at": "2026-04-27T15:28:42.785863+00:00",
+    "module": {
+      "id": 1404,
+      "name": "gf_logistics_ops",
+      "state": "installed",
+      "latest_version": "18.0.1.0.1",
+      "installed_version": "18.0.1.0.1",
+      "shortdesc": "GF Logistics Ops"
+    },
+    "models_declared": 28,
+    "intra_module_duplicates": {},
+    "cross_module_overlaps": [
+      {
+        "model": "res.partner",
+        "declared_by": [
+          "account",
+          "account_edi_ubl_cii",
+          "account_followup",
+          "account_online_synchronization",
+          "account_reports",
+          "auth_signup",
+          "base",
+          "base_geolocalize",
+          "base_vat",
+          "bus",
+          "calendar",
+          "contacts",
+          "crm",
+          "custom_customer_discount",
+          "custom_res_partner",
+          "data_normalizer",
+          "delivery",
+          "documents",
+          "fleet",
+          "gf_business_line",
+          "gf_customer_zoning",
+          "gf_logistics_ops",
+          "gf_partner_loyalty",
+          "gf_partner_routing",
+          "gf_partner_whatsapp",
+          "gf_pwa_auth",
+          "gf_route_optimizer_v2",
+          "gf_saleops",
+          "gf_sales_channel",
+          "gf_website_customer_forms",
+          "helpdesk",
+          "hr",
+          "hr_calendar",
+          "hr_holidays",
+          "industry_fsm",
+          "kold_demand",
+          "kold_score",
+          "l10n_mx_edi",
+          "l10n_mx_edi_pos",
+          "l10n_mx_reports",
+          "l10n_sa_edi",
+          "loyalty",
+          "mail",
+          "mail_mobile",
+          "mrp_subcontracting",
+          "os_customer_zones",
+          "partner_autocomplete",
+          "partner_commercial_chain",
+          "payment",
+          "phone_validation",
+          "point_of_sale",
+          "portal",
+          "pos_loyalty",
+          "pos_settle_due",
+          "privacy_lookup",
+          "product",
+          "project",
+          "purchase",
+          "purchase_stock",
+          "sale",
+          "sale_subscription",
+          "sms",
+          "snailmail",
+          "snailmail_account",
+          "snailmail_account_followup",
+          "stock",
+          "stock_barcode",
+          "survey",
+          "web",
+          "web_map",
+          "web_mobile",
+          "website",
+          "website_partner",
+          "website_sale",
+          "website_sale_wishlist",
+          "website_slides"
+        ],
+        "ir_model_id": 87
+      },
+      {
+        "model": "hr.employee",
+        "declared_by": [
+          "attendance_face_recognition",
+          "documents_hr",
+          "gf_hr_ops",
+          "gf_logistics_ops",
+          "gf_production_control",
+          "gf_route_optimizer_v2",
+          "hr",
+          "hr_attendance",
+          "hr_contract",
+          "hr_expense",
+          "hr_fleet",
+          "hr_holidays",
+          "hr_hourly_cost",
+          "hr_maintenance",
+          "hr_org_chart",
+          "hr_payroll",
+          "hr_skills",
+          "hr_skills_slides",
+          "hr_timesheet",
+          "hr_work_entry",
+          "hr_work_entry_contract",
+          "l10n_mx_hr",
+          "mrp_workorder",
+          "os_customer_zones",
+          "pos_hr",
+          "project_timesheet_holidays",
+          "sale_timesheet",
+          "sale_timesheet_enterprise",
+          "timesheet_grid",
+          "timesheet_grid_holidays"
+        ],
+        "ir_model_id": 828
+      },
+      {
+        "model": "gf.route.plan",
+        "declared_by": [
+          "gf_logistics_ops",
+          "gf_w26_intake_router"
+        ],
+        "ir_model_id": 2339
+      },
+      {
+        "model": "gf.route.stop",
+        "declared_by": [
+          "gf_logistics_ops",
+          "gf_w26_intake_router"
+        ],
+        "ir_model_id": 2340
+      },
+      {
+        "model": "account.payment",
+        "declared_by": [
+          "account",
+          "account_accountant",
+          "account_payment",
+          "gf_logistics_ops",
+          "hr_expense",
+          "hr_payroll_account",
+          "l10n_mx_edi",
+          "os_customer_zones",
+          "point_of_sale",
+          "pos_online_payment",
+          "website_payment"
+        ],
+        "ir_model_id": 503
+      },
+      {
+        "model": "sale.order",
+        "declared_by": [
+          "custom_customer_discount",
+          "data_normalizer",
+          "delivery",
+          "gf_logistics_ops",
+          "gf_pwa_admin",
+          "gf_route_integration_fields",
+          "gf_saleops",
+          "gf_w26_intake_router",
+          "industry_fsm_sale",
+          "industry_fsm_stock",
+          "invoice_controller",
+          "l10n_mx_edi_sale",
+          "l10n_mx_edi_website_sale",
+          "os_customer_zones",
+          "partner_commercial_chain",
+          "pos_sale",
+          "project_sale_subscription",
+          "sale",
+          "sale_async_emails",
+          "sale_crm",
+          "sale_edi_ubl",
+          "sale_expense",
+          "sale_loyalty",
+          "sale_loyalty_delivery",
+          "sale_management",
+          "sale_mrp",
+          "sale_pdf_quote_builder",
+          "sale_product_matrix",
+          "sale_project",
+          "sale_purchase",
+          "sale_purchase_inter_company_rules",
+          "sale_purchase_stock",
+          "sale_purchase_stock_inter_company_rules",
+          "sale_stock",
+          "sale_subscription",
+          "sale_subscription_stock",
+          "sale_timesheet",
+          "spreadsheet_sale_management",
+          "stock_delivery",
+          "website_sale",
+          "website_sale_loyalty",
+          "website_sale_stock",
+          "website_sale_subscription"
+        ],
+        "ir_model_id": 582
+      },
+      {
+        "model": "stock.picking",
+        "declared_by": [
+          "data_normalizer",
+          "delivery_stock_picking_batch",
+          "gf_logistics_ops",
+          "gf_w14_loyalty_engine",
+          "gf_w26_intake_router",
+          "invoice_controller",
+          "mrp",
+          "mrp_subcontracting",
+          "mrp_subcontracting_account",
+          "mrp_subcontracting_purchase",
+          "os_customer_zones",
+          "point_of_sale",
+          "pos_sale",
+          "product_expiry",
+          "project_stock",
+          "purchase_stock",
+          "sale_project_stock",
+          "sale_purchase_stock_inter_company_rules",
+          "sale_stock",
+          "sale_subscription_stock",
+          "stock",
+          "stock_account",
+          "stock_barcode",
+          "stock_barcode_mrp",
+          "stock_barcode_mrp_subcontracting",
+          "stock_barcode_picking_batch",
+          "stock_delivery",
+          "stock_fleet",
+          "stock_picking_batch",
+          "stock_sms",
+          "website_sale_stock"
+        ],
+        "ir_model_id": 750
+      },
+      {
+        "model": "fleet.vehicle",
+        "declared_by": [
+          "account_disallowed_expenses_fleet",
+          "account_fleet",
+          "documents_fleet",
+          "fleet",
+          "gf_logistics_ops",
+          "hr_fleet"
+        ],
+        "ir_model_id": 985
+      },
+      {
+        "model": "gf.delivery.zone",
+        "declared_by": [
+          "gf_delivery_coverage",
+          "gf_logistics_ops"
+        ],
+        "ir_model_id": 2407
+      }
+    ],
+    "ir_model_data_counts_top": [
+      [
+        "ir.model.fields",
+        631
+      ],
+      [
+        "ir.model.fields.selection",
+        94
+      ],
+      [
+        "ir.model.access",
+        76
+      ],
+      [
+        "ir.ui.view",
+        34
+      ],
+      [
+        "ir.model",
+        28
+      ],
+      [
+        "ir.model.inherit",
+        17
+      ],
+      [
+        "ir.ui.menu",
+        16
+      ],
+      [
+        "gf.route.incident",
+        12
+      ],
+      [
+        "ir.rule",
+        12
+      ],
+      [
+        "ir.actions.act_window",
+        11
+      ],
+      [
+        "gf.route.vehicle.checklist.template",
+        9
+      ],
+      [
+        "ir.model.constraint",
+        9
+      ],
+      [
+        "gf.not.visited.reason",
+        5
+      ],
+      [
+        "res.groups",
+        4
+      ],
+      [
+        "ir.actions.server",
+        3
+      ]
+    ],
+    "ir_model_data_total": 969,
+    "verdict": "partial",
+    "note": "9 modelos est\u00e1n declarados/extendidos por gf_logistics_ops y otros m\u00f3dulos. Probable uso leg\u00edtimo de _inherit. Para confirmar duplicaci\u00f3n real, Sebasti\u00e1n debe inspeccionar que cada modelo aqu\u00ed use _inherit y no _name nuevo."
+  },
+  "modules": {
+    "modules": [
+      {
+        "id": 1407,
+        "name": "gf_control_tower_v2",
+        "state": "installed",
+        "latest_version": "18.0.2.0.0",
+        "installed_version": "18.0.2.0.0",
+        "shortdesc": "Torre de Control (DSD)"
+      },
+      {
+        "id": 1446,
+        "name": "gf_hr_ops",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF HR Ops \u2014 Control de Tardanzas"
+      },
+      {
+        "id": 1404,
+        "name": "gf_logistics_ops",
+        "state": "installed",
+        "latest_version": "18.0.1.0.1",
+        "installed_version": "18.0.1.0.1",
+        "shortdesc": "GF Logistics Ops"
+      },
+      {
+        "id": 1405,
+        "name": "gf_production_ops",
+        "state": "installed",
+        "latest_version": "18.0.1.0.1",
+        "installed_version": "18.0.1.0.1",
+        "shortdesc": "GF Production Ops"
+      },
+      {
+        "id": 1409,
+        "name": "gf_route_optimizer_v2",
+        "state": "installed",
+        "latest_version": "18.0.2.0.0",
+        "installed_version": "18.0.2.0.0",
+        "shortdesc": "Optimizador de Ruteo DSD (V2.0)"
+      },
+      {
+        "id": 1432,
+        "name": "kold_demand",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "KoldDemand"
+      },
+      {
+        "id": 1431,
+        "name": "kold_score",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "KoldScore"
+      },
+      {
+        "id": 1434,
+        "name": "gf_business_line",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Business Line"
+      },
+      {
+        "id": 1408,
+        "name": "gf_customer_zoning",
+        "state": "installed",
+        "latest_version": "18.0.1.0",
+        "installed_version": "18.0.1.0",
+        "shortdesc": "KOLD OS - Customer Zoning & Governance"
+      },
+      {
+        "id": 1412,
+        "name": "gf_delivery_coverage",
+        "state": "installed",
+        "latest_version": "18.0.1.1.0",
+        "installed_version": "18.0.1.1.0",
+        "shortdesc": "GF Delivery Coverage Zones"
+      },
+      {
+        "id": 1421,
+        "name": "gf_ice_brine",
+        "state": "installed",
+        "latest_version": "18.0.2.1.1",
+        "installed_version": "18.0.2.1.1",
+        "shortdesc": "GF Ice Brine \u2014 Alberca y Log de Producci\u00f3n"
+      },
+      {
+        "id": 1443,
+        "name": "gf_lead_map",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Lead Map"
+      },
+      {
+        "id": 1438,
+        "name": "gf_n8n_w19_w20_w21_automations",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF N8N W19/W20/W21 Automations"
+      },
+      {
+        "id": 1413,
+        "name": "gf_partner_loyalty",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Partner Loyalty & CSAT"
+      },
+      {
+        "id": 1414,
+        "name": "gf_partner_routing",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Partner Routing Fields"
+      },
+      {
+        "id": 1415,
+        "name": "gf_partner_whatsapp",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Partner WhatsApp / KOLD Fields"
+      },
+      {
+        "id": 1422,
+        "name": "gf_plant_config",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Plant Config \u2014 Configuraci\u00f3n de Planta"
+      },
+      {
+        "id": 1444,
+        "name": "gf_production_blindaje",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Production Blindaje"
+      },
+      {
+        "id": 1429,
+        "name": "gf_production_control",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Production Control - GFSC"
+      },
+      {
+        "id": 1406,
+        "name": "gf_production_ops_ice_brine",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Production Ops - Ice Brine Bridge"
+      },
+      {
+        "id": 1419,
+        "name": "gf_production_ops_webhooks",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "KOLD \u2014 Production Ops Webhooks"
+      },
+      {
+        "id": 1436,
+        "name": "gf_proforma_special",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Proforma Especial"
+      },
+      {
+        "id": 1430,
+        "name": "gf_prospector",
+        "state": "installed",
+        "latest_version": "18.0.2.1.0",
+        "installed_version": "18.0.2.1.0",
+        "shortdesc": "KOLD Prospectador"
+      },
+      {
+        "id": 1442,
+        "name": "gf_pwa_admin",
+        "state": "installed",
+        "latest_version": "18.0.2.0.0",
+        "installed_version": "18.0.2.0.0",
+        "shortdesc": "GF PWA Admin - Auxiliar Administrativo"
+      },
+      {
+        "id": 1416,
+        "name": "gf_pwa_auth",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF PWA Auth Fields"
+      },
+      {
+        "id": 1435,
+        "name": "gf_route_integration_fields",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Route Integration Fields"
+      },
+      {
+        "id": 1399,
+        "name": "gf_saleops",
+        "state": "installed",
+        "latest_version": "18.0.1.2.7",
+        "installed_version": "18.0.1.2.7",
+        "shortdesc": "GF SalesOps (n8n API) "
+      },
+      {
+        "id": 1433,
+        "name": "gf_sales_channel",
+        "state": "installed",
+        "latest_version": "18.0.1.0.1",
+        "installed_version": "18.0.1.0.1",
+        "shortdesc": "GF Sales Channel"
+      },
+      {
+        "id": 1445,
+        "name": "gf_voice_intake",
+        "state": "installed",
+        "latest_version": "18.0.2.0.0",
+        "installed_version": "18.0.2.0.0",
+        "shortdesc": "GF Voice Intake"
+      },
+      {
+        "id": 1417,
+        "name": "gf_w14_loyalty_engine",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF W14 Loyalty Engine"
+      },
+      {
+        "id": 1411,
+        "name": "gf_w26_intake_router",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF W26 Event Intake Router"
+      },
+      {
+        "id": 1398,
+        "name": "gf_wa_idempotency",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF WhatsApp Idempotency (Auditable)"
+      },
+      {
+        "id": 1423,
+        "name": "gf_website_customer_forms",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Website Customer Forms"
+      },
+      {
+        "id": 1396,
+        "name": "gf_whatsapp_webhook",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF WhatsApp Cloud Webhook (Router to n8n)"
+      },
+      {
+        "id": 1425,
+        "name": "gf_workflow_log_ext",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "GF Workflow Log Extension (GFSC)"
+      },
+      {
+        "id": 1393,
+        "name": "koldhome_occasiones",
+        "state": "installed",
+        "latest_version": "18.0.1.0.0",
+        "installed_version": "18.0.1.0.0",
+        "shortdesc": "Kold Home - Ocasiones (Flagship)"
+      },
+      {
+        "id": 1403,
+        "name": "koldhome_v4",
+        "state": "installed",
+        "latest_version": "18.0.4.0.0",
+        "installed_version": "18.0.4.0.0",
+        "shortdesc": "K\u00f6ldHome V4 - Context Commerce Edition"
+      }
+    ],
+    "suspicious": []
+  }
+}
