@@ -5860,13 +5860,18 @@ async function directEntregas(method, path, body) {
     if (!reqWarehouseId) return { items: [], warehouse_name: '', generated_at: new Date().toISOString() }
 
     // 1. Resolver lot_stock_id del warehouse (misma ubicación que valida scrap)
+    // BLD-20260427-P1-LIVE-INVENTORY-FIX: readModelSorted devuelve un envelope
+    // {result:{response:[...],status,...}}, no un array. Sin pickListResponse,
+    // `whRows?.[0]` era undefined → early-return con items:[] → la pantalla
+    // mostraba "Sin inventario" aunque el ground truth (verificado live)
+    // tuviera 4 productos en child_of(1290) para wh 89 (Hector).
     const whRows = await readModelSorted('stock.warehouse', {
       fields: ['id', 'name', 'lot_stock_id'],
       domain: [['id', '=', reqWarehouseId]],
       limit: 1,
       sudo: 1,
     })
-    const wh = whRows?.[0]
+    const wh = pickListResponse(whRows)[0]
     if (!wh?.lot_stock_id) return { items: [], warehouse_name: wh?.name || '', generated_at: new Date().toISOString() }
     const lotStockId = wh.lot_stock_id[0]
     const warehouseName = wh.name
@@ -5886,7 +5891,7 @@ async function directEntregas(method, path, body) {
 
     // 3. Agrupar por producto sumando on_hand y reserved
     const byProduct = {}
-    for (const q of (quants || [])) {
+    for (const q of pickListResponse(quants)) {
       const pid = q.product_id?.[0]
       const pname = q.product_id?.[1] || ''
       if (!pid) continue
