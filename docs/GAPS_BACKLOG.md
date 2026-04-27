@@ -8,16 +8,16 @@
 
 ## Resumen ejecutivo
 
-**Total de gaps emitidos:** 27 (15 obligatorios + 8 Fase 2 + 2 Fase 3 + 2 Fase 4). **Cerrados durante el ciclo de auditoría:** 7 (G002, G013, G014, G017, G025, G027 + G026 entró ya cerrado preventivamente). **Activos en backlog:** 19.
+**Total de gaps emitidos:** 33 (15 obligatorios + 8 Fase 2 + 2 Fase 3 + 2 Fase 4 + 5 retroactivos PR #21–#27 + 1 nuevo G033). **Cerrados durante el ciclo de auditoría y los fixes operativos:** 13 (G002, G013, G014, G017, G025, G027 + G028–G032 retroactivos + G026 entró ya cerrado preventivamente). **Activos en backlog:** 20 (19 anteriores + G033 nuevo).
 
 ### Distribución por severidad (gaps activos)
 
-| Severidad | Cantidad | Cambio en Fase 4 |
-|-----------|----------|------------------|
-| P0 — Bloquea producción | 0 | sin cambio (G013 cerrado antes era el único candidato) |
-| P1 — Bloquea rol(es) | 6 | **-1** (G002 cerrado por Sebastián 2026-05-05) |
+| Severidad | Cantidad | Cambio en post-fixes 2026-04-27 |
+|-----------|----------|----------------------------------|
+| P0 — Bloquea producción | 0 | sin cambio |
+| P1 — Bloquea rol(es) | 6 | sin cambio (G028–G032 nunca tuvieron ID activo; entran como Resueltos retroactivos) |
 | P2 — Funcionalidad parcial / sistémico | 8 | sin cambio |
-| P3 — Cosmético / deuda | 5 | -1 (G025 cerrado), -1 (G017 ya cerrado), -1 (G027 nuevo cerrado), +1 (G026 nuevo preventivo) |
+| P3 — Cosmético / deuda | 6 | **+1** (G033: `x_analytic_account_id` no viene en JWT, fallback RPC funciona pero suma latencia) |
 
 ### Distribución por categoría (activos)
 
@@ -26,7 +26,7 @@
 | Implementación | 3 |
 | Contrato | 1 |
 | Permisos | 1 |
-| Integración | 3 |
+| Integración | 4 |
 | Datos | 1 |
 | Seguridad | 1 |
 | Deuda | 6 |
@@ -88,6 +88,32 @@ Los dos bloqueadores más críticos del ciclo (G002 privilege escalation, G013 i
 | G025 | ~~Documentación inicial atribuyó `gf.inventory.posting` al módulo equivocado~~ | Deuda | RESUELTO (cerrado en este PR) | — | Claude | — | Verificación 2026-04-27 vía `scripts/odoo_audit.py`: el modelo `gf.inventory.posting` (id=2400) está declarado en módulo `gf_production_ops` v18.0.1.0.1, no en `gf_logistics_ops`. | **Movido a sección "Resueltos durante auditoría".** Corrección aplicada en `CODE_MANUAL.md` §7.7 y en el cuerpo de G013. No afecta endpoints frontend ni comportamiento. |
 | G026 | `production_location_id` por defecto incorrecto en líneas de empresa 35 (FABRICACION DE CONGELADOS) — descubierto durante remediación de G013 | Configuración / Datos | P3 (preventivo) | S | Sebastián (cuando tenga ciclo libre) | Ninguna | Las líneas de producción de empresa 35 tenían `production_location_id` apuntando a la ubicación virtual de empresa CSC GF. Odoo 18 bloquea movimientos entre compañías incompatibles → fallos silenciosos en `_action_done()`. Ubicación correcta para empresa 35: `id=1085`. Riesgo de recurrencia al montar nuevas plantas (ej. León). | **Mitigación implementada (cierra el riesgo operativo):** documentación creada por Sebastián en `setup-plantas-produccion.md` (en repo backend de Odoo modules) con tabla de `production_location_id` por empresa, checklist de setup de nueva planta, e incidente de Iguala como caso de estudio. **Mejora futura sugerida (no bloqueante):** agregar validación en modelo `gf.production.line` que rechace guardado si `production_location_id` no pertenece a la company del registro. |
 | G027 | ~~Sin audit trail en `gf_saleops` endpoints~~ | Seguridad | RESUELTO (cerrado simultáneamente con G002) | — | Sebastián | — | Endpoints de `gf_saleops` con `required_role` no tenían trazabilidad de quién hizo qué request. Sin observabilidad del vector de privilege escalation. | **Resuelto 2026-05-05.** Modelo Odoo `gf.saleops.guard.log` con campos `endpoint`, `payload_employee_id`, `session_employee_id`, `ip`, `mismatch` (computed), `date`. Cada request a endpoint con `required_role` escribe registro (con `try/except`, nunca bloquea). Cron diario 23:00 envía resumen a equipo de seguridad (mailing list interna). Purga automática a 90 días. **Movido a sección "Resueltos durante auditoría"** con referencia cruzada a G002. |
+| G033 | Login service no incluye `x_analytic_account_id` en JWT (requiere RPC fallback en `forecast-create`) | Integración | P3 | S | Sebastián | Ningún bloqueo operativo (existe fallback) | [`src/lib/api.js:6065-6092`](../src/lib/api.js): fallback RPC sobre `hr.employee.x_analytic_account_id` cuando JWT no lo trae. Funciona pero suma ~200ms a la primera creación de forecast tras login. | Ampliar `/api/employee-sign-in` para incluir `x_analytic_account_id` en `result.employee` cuando RRHH lo tenga poblado. El fallback RPC seguiría como red de seguridad pero el camino normal sería 0 RPC adicionales. |
+
+---
+
+## Resueltos recientemente (post-fixes operativos PR #21–#27, ya en `main`)
+
+Bloqueos operativos identificados por QA y resueltos en los PRs #21–#27 antes del PR #28 (auditoría inicial). Estos no llegaron a tener ID en el backlog original porque cuando se escribió la auditoría ya estaban arreglados, pero los listamos aquí explícitamente para trazabilidad.
+
+| ID | Título | Cerrado por | Commit | QA |
+|----|--------|-------------|--------|-----|
+| G028 | Falso éxito en Merma de Entregas: backend respondía `ok:false` con diagnóstico estructurado pero el frontend lo trataba como éxito y descontaba mostrador en UI | PR #23 [`f94474c`](https://github.com/sebascm0906/colaboradores-pwa/commit/f94474c) | `f94474c` | Defensa `ok:false` agregada en [`ScreenMerma.jsx:130-145`](../src/modules/entregas/ScreenMerma.jsx). Backend devuelve diagnóstico estructurado para falta de stock. Merma positiva con stock libre real sigue pendiente de QA explícito si aplica. |
+| G029 | Devoluciones no listaban líneas / no se podían aceptar (BFF usaba campos inexistentes en modelo de Odoo) | PR #24 [`efe5b6f`](https://github.com/sebascm0906/colaboradores-pwa/commit/efe5b6f) | `efe5b6f` | BFF reescrito en [`src/lib/api.js:5664-5800`](../src/lib/api.js) usando campos reales de `gf.route.stop.line`. Payload del cliente: `plan_id + lines[]`. Backend autoriza `almacenista_entregas` por `warehouse_id`. **QA PASS** con return picking creado (no validado automáticamente). |
+| G030 | Carga por Forecast no ejecutaba: faltaba wrapper `/pwa-entregas/load-execute` que envuelva el envelope `gf_saleops` | PR #25 [`fa2dd91`](https://github.com/sebascm0906/colaboradores-pwa/commit/fa2dd91) | `fa2dd91` | Nuevo handler en [`src/lib/api.js:5547-5660`](../src/lib/api.js): wrapper sobre `POST /gf/salesops/warehouse/load/execute`, alias legacy `/pwa-entregas/confirm-load`, idempotencia con `already_done:true`. Backend resuelve `analytic_account_id` desde `warehouse_id`. `/pwa-ruta/accept-load` sella `load_sealed=true`. Fixes relacionados en el mismo PR: `ConfirmDialog open`, `/pwa-ruta/my-plan` filtra hoy, `/pwa-ruta/load-lines` cantidad correcta, header `X-GF-Token`. **QA PASS Héctor + Manuel** 2026-04-26. |
+| G031 | Supervisor Ventas — `forecast-create` rechazaba con error críptico (`null value in column "analytic_account_id"`) porque la sesión no traía el campo | PR #26 [`2dd0b08`](https://github.com/sebascm0906/colaboradores-pwa/commit/2dd0b08) + commits [`b968e43`](https://github.com/sebascm0906/colaboradores-pwa/commit/b968e43) (RPC fallback) y [`46c262b`](https://github.com/sebascm0906/colaboradores-pwa/commit/46c262b) (channel lowercase) | `2dd0b08`, `b968e43`, `46c262b` | Cascada de resolución implementada en [`src/lib/api.js:6046-6145`](../src/lib/api.js): `body.analytic_account_id` → `body.sucursal` → JWT `employee.x_analytic_account_id` → **RPC fallback** sobre `hr.employee.x_analytic_account_id`. Si nada responde, lanza `ApiError` con `code: 'missing_x_analytic_account_id'` y mensaje accionable. Normaliza `channel` a lowercase. **QA PASS Aida** 2026-04-27 (forecast id=18, state=`draft`, analytic_account_id=820, channel=`van`). |
+| G032 | Inventario Entregas no mostraba stock libre real (frontend recibía estructura cruda en lugar de items procesados) | PR #27 [`52b7b5f`](https://github.com/sebascm0906/colaboradores-pwa/commit/52b7b5f) | `52b7b5f` | BFF en [`src/lib/api.js:5858-5950`](../src/lib/api.js) ahora desempaca `readModelSorted` con `pickListResponse`; pantalla [`ScreenInventarioEntregas.jsx`](../src/modules/entregas/ScreenInventarioEntregas.jsx) muestra `on_hand_qty`, `reserved_qty`, `available_qty` (regla `available = quantity - reserved_quantity`). Domain `child_of(lot_stock_id)`. **QA PASS** con producto 760 contra totales reales. |
+
+### Confirmaciones de fixes backend asociados (no aplican al PWA)
+
+Estos fueron corregidos en backend Odoo (módulos `gf_saleops`, `gf_logistics_ops`) y no requieren cambios en el PWA. Se listan como **dependencia externa confirmada** para evitar re-abrirlos como gaps:
+
+- **Tenancy split van + CEDIS para `accept-load`** (Sebastián, 2026-04-26): el guard ahora separa correctamente al jefe_ruta (van) del almacenista (CEDIS) en validaciones cruzadas.
+- **`load/execute` resolviendo Branch Config por `warehouse_id`** (Sebastián, 2026-04-26): el endpoint ya no requiere que el BFF mande `analytic_account_id` explícito; lo deriva del warehouse.
+- **Devoluciones permitiendo `almacenista_entregas` por warehouse** (Sebastián, 2026-04-26): autorización por warehouse en lugar de por rol global.
+- **PT → Entregas funcionando end-to-end** (Sebastián, 2026-04-27): tras el cierre de G013 en `gf_production_ops`, el flujo completo de recepción → traspaso a Entregas opera sin errores.
+- **Vehicle checklist backend validado** (Sebastián, 2026-04-25): endpoints `/pwa-ruta/vehicle-checklist*` con backend operativo, integrados en frontend en [`src/modules/ruta/api.js`](../src/modules/ruta/api.js).
+- **`VITE_GF_SALESOPS_TOKEN` configurado en Vercel** (Sebastián, 2026-04-26): variable presente en Vercel Project Settings; el deploy actual la consume correctamente. Si falta, los endpoints `/gf/salesops/*` responden `UNAUTHORIZED: X-GF-Token inválido`.
 
 ---
 
@@ -146,7 +172,7 @@ Todos marcados con su severidad propuesta. **Ninguno baja la severidad de los 15
 
 ---
 
-## Anexo A — Mapeo de gaps activos a roles afectados (post-cierre G002 y G013)
+## Anexo A — Mapeo de gaps activos a roles afectados (post-fixes operativos)
 
 | Rol | Gaps activos que lo bloquean total/parcial |
 |-----|---------------------------------------------|
@@ -158,18 +184,18 @@ Todos marcados con su severidad propuesta. **Ninguno baja la severidad de los 15
 | Almacenista PT | G008 (foto), G024 |
 | Almacenista Entregas | G008, G019, G024 |
 | Jefe de Ruta | G016 (corte/liquidación localStorage), G024 |
-| Supervisor de Ventas | G001 (KPIs mock), G006 (tareas/notas), G024 |
+| Supervisor de Ventas | G001 (KPIs mock), G006 (tareas/notas), G024, G033 (latencia inicial al crear forecast hasta que JWT incluya `x_analytic_account_id`) |
 | Auxiliar de Producción (secundario) | mismos que Operador Rolito + Operador Barra |
 | Auxiliar de Ruta (secundario) | mismos que Jefe de Ruta |
 
-## Anexo B — Próximos pasos sugeridos (actualizado tras Fase 4: cierre G002 + G013)
+## Anexo B — Próximos pasos sugeridos (actualizado tras post-fixes operativos PR #21–#27)
 
 1. **Sprint 1 (esta semana):** **G024** (dominio custom) — Carlos/Yamil en < 1 día. **G001** (Metabase) — Sebastián cuando se priorice.
 2. **Sprint 2 (1-2 semanas):** G003 (tokens en bundle), G006 (tareas/notas backend), G016 (corte/liquidación backend).
 3. **Sprint 3 (2 semanas):** G018 (umbrales server-side), G019 (pallet reject log), G012 (PIN Rolito).
 4. **Continuo:** G004, G005 — tests + CI.
-5. **Limpieza paralela:** G007 (refactor api.js), G008 (evidence upload), G009 (README), G010 (eslint-disable), G011 (env vars), G015 (Magic Link), G020, G021, G022, G023, G026 (validador production_location_id).
+5. **Limpieza paralela:** G007 (refactor api.js), G008 (evidence upload), G009 (README), G010 (eslint-disable), G011 (env vars), G015 (Magic Link), G020, G021, G022, G023, G026 (validador production_location_id), G033 (incluir `x_analytic_account_id` en JWT).
 
 ---
 
-**Última actualización:** 2026-05-05 · Fase 4: cierre del ciclo de seguridad/inventario (G002 y G013 cerrados) · auto-generado por Claude · necesita review humano antes de planeación.
+**Última actualización:** 2026-04-27 · Actualización post-fixes operativos PR #21–#29 · 5 gaps retroactivos cerrados (G028–G032), 1 nuevo gap abierto (G033) · auto-generado por Claude · necesita review humano antes de planeación.
