@@ -4,11 +4,9 @@ import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
 import { getShiftOverview } from './rolitoService'
-import { resolveRejectedSettlement } from '../almacen-pt/materialsService'
 import {
   buildBagReturnDeclarationSummary,
   buildRolitoBagDeclarationItems,
-  buildRolitoBagResolutionPayloads,
   computeRolitoBagDeclarationTotals,
   normalizeBagCount,
   saveBagReturnDeclaration,
@@ -61,12 +59,13 @@ export default function ScreenDeclaracionBolsas() {
         setShift(overview.shift)
         setItems(declarationItems)
 
+        const totalReceived = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.issued), 0)
         const totalUsed = normalizeBagCount(
           manualSummary.bagsUsed
           || (overview.packing || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
         )
         const systemRemaining = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.remaining), 0)
-        const nextReceived = normalizeBagCount(manualSummary.bagsReceived)
+        const nextReceived = normalizeBagCount(manualSummary.bagsReceived || totalReceived)
         const nextRemaining = normalizeBagCount(manualSummary.bagsRemaining || systemRemaining)
 
         setManualSummary({
@@ -119,21 +118,6 @@ export default function ScreenDeclaracionBolsas() {
     setError('')
 
     try {
-      const payloads = buildRolitoBagResolutionPayloads(items, damagedByKey)
-      for (const payload of payloads) {
-        await resolveRejectedSettlement({
-          settlementId: payload.settlementId,
-          shiftId: payload.shiftId || shift?.id || null,
-          lineId: payload.lineId || 2,
-          materialId: payload.materialId,
-          qtyReturned: payload.qtyReturned,
-          qtyDamaged: payload.qtyDamaged,
-          qtyConsumed: payload.qtyConsumed,
-          employeeId,
-          notes: notes.trim(),
-        })
-      }
-
       const summary = buildBagReturnDeclarationSummary({
         shiftId: shift.id,
         bagsReceived: manualSummary.bagsReceived,
