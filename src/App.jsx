@@ -69,6 +69,7 @@ const ScreenDeclaracionBolsasPT = lazy(() => import('./modules/almacen-pt/Screen
 const ScreenCierreCaja      = lazy(() => import('./modules/admin/ScreenCierreCaja'))
 const ScreenMaterialesValidate = lazy(() => import('./modules/admin/ScreenMaterialesValidate'))
 const ScreenMaterialesResolverRejected = lazy(() => import('./modules/admin/ScreenMaterialesResolverRejected'))
+const AdminThemeScope = lazy(() => import('./modules/admin/components/AdminThemeScope'))
 // Entregas V2 (V1 eliminado 2026-04-17)
 const ScreenHubDia          = lazy(() => import('./modules/entregas/ScreenHubDia'))
 const ScreenRecibirPT       = lazy(() => import('./modules/entregas/ScreenRecibirPT'))
@@ -434,20 +435,22 @@ export default function App() {
             <Route path="/supervision/turno" element={<PrivateRoute><ScreenControlTurno /></PrivateRoute>} />
 
             {/* ── Admin Sucursal (POS + Gastos + Requisiciones) ────────── */}
-            <Route path="/admin" element={<PrivateRoute><ScreenAdminPanel /></PrivateRoute>} />
-            <Route path="/admin/pos" element={<PrivateRoute><ScreenPOS /></PrivateRoute>} />
-            <Route path="/admin/ticket/:orderId" element={<PrivateRoute><ScreenTicket /></PrivateRoute>} />
-            <Route path="/admin/gastos" element={<PrivateRoute><ScreenGastos /></PrivateRoute>} />
-            <Route path="/admin/gastos-historial" element={<PrivateRoute><ScreenGastosHistorial /></PrivateRoute>} />
-            <Route path="/admin/gastos/aprobar" element={<PrivateRoute><ScreenGastosAprobar /></PrivateRoute>} />
-            <Route path="/admin/requisiciones" element={<PrivateRoute><ScreenRequisiciones /></PrivateRoute>} />
-            <Route path="/admin/liquidaciones" element={<PrivateRoute><ScreenLiquidaciones /></PrivateRoute>} />
-            <Route path="/admin/materia-prima" element={<PrivateRoute><ScreenMateriaPrima /></PrivateRoute>} />
-            <Route path="/admin/traspaso-materia-prima" element={<PrivateRoute><ScreenTraspasoMateriaPrima /></PrivateRoute>} />
-            <Route path="/admin/bolsas/validar" element={<PrivateRoute><ScreenValidacionBolsas /></PrivateRoute>} />
-            <Route path="/admin/cierre" element={<PrivateRoute><ScreenCierreCaja /></PrivateRoute>} />
-            <Route path="/admin/materiales/validar" element={<PrivateRoute><ScreenMaterialesValidate /></PrivateRoute>} />
-            <Route path="/admin/materiales/resolver-rechazo" element={<PrivateRoute><ScreenMaterialesResolverRejected /></PrivateRoute>} />
+            <Route path="/admin" element={<PrivateRoute><AdminThemeScope /></PrivateRoute>}>
+              <Route index element={<ScreenAdminPanel />} />
+              <Route path="pos" element={<ScreenPOS />} />
+              <Route path="ticket/:orderId" element={<ScreenTicket />} />
+              <Route path="gastos" element={<ScreenGastos />} />
+              <Route path="gastos-historial" element={<ScreenGastosHistorial />} />
+              <Route path="gastos/aprobar" element={<ScreenGastosAprobar />} />
+              <Route path="requisiciones" element={<ScreenRequisiciones />} />
+              <Route path="liquidaciones" element={<ScreenLiquidaciones />} />
+              <Route path="materia-prima" element={<ScreenMateriaPrima />} />
+              <Route path="traspaso-materia-prima" element={<ScreenTraspasoMateriaPrima />} />
+              <Route path="bolsas/validar" element={<ScreenValidacionBolsas />} />
+              <Route path="cierre" element={<ScreenCierreCaja />} />
+              <Route path="materiales/validar" element={<ScreenMaterialesValidate />} />
+              <Route path="materiales/resolver-rechazo" element={<ScreenMaterialesResolverRejected />} />
+            </Route>
 
             {/* ── Almacenista Entregas ─────────────────────────────────── */}
             {/* Entregas V2 — flujo guiado */}
