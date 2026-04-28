@@ -13,7 +13,6 @@ import {
   getOpenIncidents, getIncidentTypeLabel,
 } from '../shared/incidentService'
 import {
-  areRequiredOperatorClosesDone,
   clearOperatorTurnClosed,
   getOperatorCloseSummary,
 } from '../shared/operatorTurnCloseStore'
@@ -75,7 +74,28 @@ function isIncidentReadinessItem(item) {
 
 function buildSupervisorCloseReadiness(rawReadiness, shiftLike) {
   const base = rawReadiness || { canClose: false, blockers: [], warnings: [] }
-  const operatorSummary = getOperatorCloseSummary(shiftLike)
+  const backendSummary = base.summary && typeof base.summary === 'object' ? base.summary : {}
+  const localOperatorSummary = getOperatorCloseSummary(shiftLike)
+  const operatorSummary = localOperatorSummary.map((item) => {
+    const summaryKey = item.role === 'operador_barra'
+      ? 'operator_barra_closed'
+      : item.role === 'operador_rolito'
+        ? 'operator_rolito_closed'
+        : ''
+    const summaryClosedAtKey = item.role === 'operador_barra'
+      ? 'operator_barra_closed_at'
+      : item.role === 'operador_rolito'
+        ? 'operator_rolito_closed_at'
+        : ''
+
+    if (!summaryKey || backendSummary[summaryKey] == null) return item
+
+    return {
+      ...item,
+      closed: Boolean(backendSummary[summaryKey]),
+      closed_at: backendSummary[summaryClosedAtKey] || item.closed_at || null,
+    }
+  })
   const operatorBlockers = operatorSummary
     .filter((item) => !item.closed)
     .map((item) => `${item.label} pendiente de cerrar su turno`)
@@ -100,8 +120,16 @@ function buildSupervisorCloseReadiness(rawReadiness, shiftLike) {
     blockers: [...keptBlockers, ...operatorBlockers],
     warnings,
     operatorSummary,
-    operatorsReady: areRequiredOperatorClosesDone(shiftLike),
+    operatorsReady: operatorSummary.every((item) => item.closed),
   }
+}
+
+function buildOperatorSummaryForSupervisor(shiftLike, backendSummary = null) {
+  if (!shiftLike) return []
+  return buildSupervisorCloseReadiness(
+    { canClose: false, blockers: [], warnings: [], summary: backendSummary || {} },
+    shiftLike,
+  ).operatorSummary
 }
 
 export default function ScreenControlTurno() {
@@ -195,7 +223,16 @@ export default function ScreenControlTurno() {
     try {
       const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
-      setOperatorSummary(s?.id ? getOperatorCloseSummary(s.id) : [])
+      let nextOperatorSummary = s?.id ? getOperatorCloseSummary(s) : []
+      if (s?.id && s.state !== 'draft') {
+        try {
+          const { summary } = await loadShiftReadiness(s.id)
+          nextOperatorSummary = buildOperatorSummaryForSupervisor(s, summary)
+        } catch {
+          nextOperatorSummary = buildOperatorSummaryForSupervisor(s, null)
+        }
+      }
+      setOperatorSummary(nextOperatorSummary)
       if (s?.id) {
         loadIncidents(s.id).then(setIncidents)
         if (s.state === 'draft') {
@@ -234,9 +271,12 @@ export default function ScreenControlTurno() {
     if (!shift?.id) return null
     setLoadingReadiness(true)
     try {
-      setOperatorSummary(getOperatorCloseSummary(shift.id))
-      const { readiness } = await loadShiftReadiness(shift.id)
-      const effectiveReadiness = buildSupervisorCloseReadiness(readiness, shift)
+      const { readiness, summary } = await loadShiftReadiness(shift.id)
+      const effectiveReadiness = buildSupervisorCloseReadiness(
+        { ...readiness, summary },
+        shift,
+      )
+      setOperatorSummary(effectiveReadiness.operatorSummary)
       setCloseReadiness(effectiveReadiness)
       return effectiveReadiness
     } catch (e) {
@@ -398,22 +438,41 @@ export default function ScreenControlTurno() {
       return
     }
 
-    setOperatorSummary(getOperatorCloseSummary(shift.id))
+    let active = true
+
+    async function refreshOperatorSummary() {
+      if (!active || !shift?.id) return
+      if (shift.state === 'draft') {
+        setOperatorSummary(getOperatorCloseSummary(shift))
+        return
+      }
+      try {
+        const { summary } = await loadShiftReadiness(shift.id)
+        if (!active) return
+        setOperatorSummary(buildOperatorSummaryForSupervisor(shift, summary))
+      } catch {
+        if (!active) return
+        setOperatorSummary(buildOperatorSummaryForSupervisor(shift, null))
+      }
+    }
+
+    refreshOperatorSummary()
     const intervalId = window.setInterval(() => {
-      setOperatorSummary(getOperatorCloseSummary(shift.id))
+      refreshOperatorSummary()
     }, 3000)
 
     function handleStorage(event) {
       if (event.key && event.key !== 'gfsc.operator_turn_close.v1') return
-      setOperatorSummary(getOperatorCloseSummary(shift.id))
+      refreshOperatorSummary()
     }
 
     window.addEventListener('storage', handleStorage)
     return () => {
+      active = false
       window.clearInterval(intervalId)
       window.removeEventListener('storage', handleStorage)
     }
-  }, [shift?.id])
+  }, [shift?.id, shift?.state])
 
   return (
     <div style={{
