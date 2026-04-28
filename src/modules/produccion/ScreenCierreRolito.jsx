@@ -14,6 +14,10 @@ import {
   getShiftOverview,
   saveBagReconciliation,
 } from './rolitoService'
+import {
+  getBagReturnDeclaration,
+  matchesBagReturnDeclaration,
+} from './bagReturnDeclarationStore'
 import { notifyOperatorClose } from './api'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
 import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
@@ -78,10 +82,17 @@ export default function ScreenCierreRolito() {
   const bagsRemainingNum = parseInt(bagsRemaining) || 0
   const bagsDiff = bagsReceivedNum > 0 ? bagsReceivedNum - totalBagsUsed - bagsRemainingNum : null
   const allChecked = checks.every(c => c.done)
+  const bagDeclaration = shift?.id ? getBagReturnDeclaration(shift) : null
+  const bagDeclarationRequired = !isBarraOperator && bagsReceivedNum > 0
+  const bagDeclarationReady = !bagDeclarationRequired || matchesBagReturnDeclaration(bagDeclaration, {
+    bagsReceived: bagsReceivedNum,
+    bagsUsed: totalBagsUsed,
+    bagsRemaining: bagsRemainingNum,
+  })
   const readiness = { warnings: [], blockers: [] }
   const backendCanClose = true
   const hasBlockers = false
-  const canClose = allChecked && !alreadyClosed
+  const canClose = allChecked && !alreadyClosed && bagDeclarationReady
 
   // Coherencia ciclos <-> empaque (Fase 3) — aviso UX-friendly
   const coherence = useMemo(
@@ -131,6 +142,10 @@ export default function ScreenCierreRolito() {
 
   async function handleClose() {
     if (!shift?.id) return
+    if (bagDeclarationRequired && !bagDeclarationReady) {
+      setError('Declara la devoluciÃ³n de bolsas antes de entregar el cierre')
+      return
+    }
     setClosing(true)
     setError('')
     try {
@@ -442,7 +457,14 @@ export default function ScreenCierreRolito() {
             {/* ── DECLARACIÓN DE BOLSAS (custodia gerente) ────── */}
             {!isBarraOperator && (
               <button
-                onClick={() => navigate('/produccion/declaracion-bolsas')}
+                onClick={() => navigate('/produccion/declaracion-bolsas', {
+                  state: {
+                    bagsReceived: bagsReceivedNum,
+                    bagsUsed: totalBagsUsed,
+                    bagsRemaining: bagsRemainingNum,
+                    backTo: '/produccion/cierre',
+                  },
+                })}
                 style={{
                   width: '100%', padding: '14px 18px', borderRadius: TOKENS.radius.lg,
                   background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
@@ -539,11 +561,13 @@ export default function ScreenCierreRolito() {
                 ? 'Entregando...'
                 : canClose
                   ? 'ENTREGAR CIERRE AL SUPERVISOR'
-                  : hasBlockers
-                    ? 'Corrige los pendientes para cerrar'
-                    : alreadyClosed
-                      ? 'TURNO YA ENTREGADO'
-                      : 'Completa el checklist para cerrar'}
+                    : hasBlockers
+                      ? 'Corrige los pendientes para cerrar'
+                      : bagDeclarationRequired && !bagDeclarationReady
+                        ? 'Declara la devoluciÃ³n de bolsas para cerrar'
+                        : alreadyClosed
+                          ? 'TURNO YA ENTREGADO'
+                          : 'Completa el checklist para cerrar'}
             </button>
 
             <div style={{ height: 24 }} />

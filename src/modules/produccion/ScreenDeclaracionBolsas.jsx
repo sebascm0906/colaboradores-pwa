@@ -1,182 +1,344 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
-import { getPendingBagCustody, declareBagCustody } from '../almacen-pt/bagCustodyService'
+import { getShiftOverview } from './rolitoService'
+import { resolveRejectedSettlement } from '../almacen-pt/materialsService'
+import {
+  buildBagReturnDeclarationSummary,
+  buildRolitoBagDeclarationItems,
+  buildRolitoBagResolutionPayloads,
+  computeRolitoBagDeclarationTotals,
+  normalizeBagCount,
+  saveBagReturnDeclaration,
+} from './bagReturnDeclarationStore'
 
 export default function ScreenDeclaracionBolsas() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { session } = useSession()
+  const backTo = location.state?.backTo || '/produccion/cierre'
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
 
-  const warehouseId = session?.warehouse_id || null
-  const employeeId = session?.employee_id || null
+  const employeeId = Number(session?.employee_id || 0) || 0
 
-  const [record, setRecord] = useState(null)
+  const [shift, setShift] = useState(null)
+  const [items, setItems] = useState([])
+  const [manualSummary, setManualSummary] = useState({
+    bagsReceived: normalizeBagCount(location.state?.bagsReceived),
+    bagsUsed: normalizeBagCount(location.state?.bagsUsed),
+    bagsRemaining: normalizeBagCount(location.state?.bagsRemaining),
+  })
+  const [damagedByKey, setDamagedByKey] = useState({})
+  const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [bagsDeclared, setBagsDeclared] = useState('')
-  const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const [successSummary, setSuccessSummary] = useState(null)
 
   useEffect(() => {
-    if (!warehouseId || !employeeId) {
-      setError('Sin warehouse o empleado en sesión')
+    if (!employeeId) {
+      setError('Sin empleado en sesión')
       setLoading(false)
       return
     }
+
     let alive = true
     async function load() {
       try {
-        const res = await getPendingBagCustody({ warehouseId, employeeId, role: 'operador_rolito' })
+        setError('')
+        const overview = await getShiftOverview()
         if (!alive) return
-        setRecord(res.items[0] || null)
+        if (!overview?.shift?.id) {
+          setError('Sin turno activo para declarar bolsas')
+          setLoading(false)
+          return
+        }
+
+        const declarationItems = buildRolitoBagDeclarationItems(overview.bagMaterials || [])
+        setShift(overview.shift)
+        setItems(declarationItems)
+
+        const totalUsed = normalizeBagCount(
+          manualSummary.bagsUsed
+          || (overview.packing || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+        )
+        const systemRemaining = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.remaining), 0)
+        const nextReceived = normalizeBagCount(manualSummary.bagsReceived)
+        const nextRemaining = normalizeBagCount(manualSummary.bagsRemaining || systemRemaining)
+
+        setManualSummary({
+          bagsReceived: nextReceived,
+          bagsUsed: totalUsed,
+          bagsRemaining: nextRemaining,
+        })
       } catch (e) {
-        logScreenError('ScreenDeclaracionBolsas', 'getPendingBagCustody', e)
-        if (alive) setError('Error cargando custodia de bolsas')
+        logScreenError('ScreenDeclaracionBolsas', 'load', e)
+        if (alive) setError(e?.message || 'Error cargando devolución de bolsas')
       } finally {
         if (alive) setLoading(false)
       }
     }
+
     load()
     return () => { alive = false }
-  }, [warehouseId, employeeId])
+  }, [employeeId])
+
+  const totals = useMemo(
+    () => computeRolitoBagDeclarationTotals(items, damagedByKey),
+    [items, damagedByKey]
+  )
+
+  const declaredSobrantes = normalizeBagCount(manualSummary.bagsRemaining)
+  const systemRemaining = totals.totalRemaining
+  const totalDamaged = totals.totalDamaged
+  const totalReturned = totals.totalReturned
+  const mismatchManualVsSystem = declaredSobrantes > 0 && declaredSobrantes !== systemRemaining
+  const canSubmit = Boolean(
+    shift?.id
+    && employeeId
+    && items.length > 0
+    && !submitting
+    && totalDamaged <= systemRemaining
+  )
+
+  function updateDamaged(key, value) {
+    setDamagedByKey((prev) => ({
+      ...prev,
+      [key]: normalizeBagCount(value),
+    }))
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!record?.id || !(Number(bagsDeclared) >= 0)) return
+    if (!canSubmit) return
+
     setSubmitting(true)
     setError('')
+
     try {
-      await declareBagCustody({ custodyId: record.id, bagsDeclaredByWorker: Number(bagsDeclared), employeeId, notes })
-      setSuccess(true)
+      const payloads = buildRolitoBagResolutionPayloads(items, damagedByKey)
+      for (const payload of payloads) {
+        await resolveRejectedSettlement({
+          settlementId: payload.settlementId,
+          shiftId: payload.shiftId || shift?.id || null,
+          lineId: payload.lineId || 2,
+          materialId: payload.materialId,
+          qtyReturned: payload.qtyReturned,
+          qtyDamaged: payload.qtyDamaged,
+          qtyConsumed: payload.qtyConsumed,
+          employeeId,
+          notes: notes.trim(),
+        })
+      }
+
+      const summary = buildBagReturnDeclarationSummary({
+        shiftId: shift.id,
+        bagsReceived: manualSummary.bagsReceived,
+        bagsUsed: manualSummary.bagsUsed,
+        bagsRemaining: manualSummary.bagsRemaining,
+        totalDamaged,
+        totalReturned,
+        notes,
+        lines: totals.lines.map((line) => ({
+          key: line.key,
+          name: line.name,
+          issued: line.issued,
+          consumed: line.qty_consumed,
+          remaining: line.remaining,
+          damaged: line.damaged,
+          returned: line.returned,
+          material_id: line.material_id,
+          settlement_id: line.settlement_id,
+          issue_id: line.issue_id,
+          product_id: line.product_id,
+        })),
+      })
+      saveBagReturnDeclaration(shift, summary)
+      setSuccessSummary(summary)
     } catch (e) {
-      logScreenError('ScreenDeclaracionBolsas', 'declareBagCustody', e)
-      setError(e?.message || 'Error al declarar bolsas')
+      logScreenError('ScreenDeclaracionBolsas', 'handleSubmit', e)
+      setError(e?.message || 'Error al declarar devolución de bolsas')
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (successSummary) {
+    return (
+      <PageShell typo={typo} title="Declaración de Bolsas" navigate={navigate}>
+        <SuccessState
+          typo={typo}
+          label="Devolución declarada"
+          sub={`Regresan ${successSummary.total_returned} bolsas útiles y ${successSummary.total_damaged} quedan como merma`}
+          onBack={() => navigate(backTo, {
+            replace: true,
+            state: { bagDeclarationUpdatedAt: Date.now() },
+          })}
+        />
+      </PageShell>
+    )
+  }
+
   return (
-    <div style={{
-      minHeight: '100dvh',
-      background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
-      paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)',
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
-        * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
-        button { border: none; background: none; cursor: pointer; }
-      `}</style>
+    <PageShell typo={typo} title="Declaración de Bolsas" navigate={navigate}>
+      {loading && <Spinner />}
+
+      {!loading && error && (
+        <ErrorBanner message={error} typo={typo} />
+      )}
+
+      {!loading && !error && items.length === 0 && (
+        <EmptyState
+          typo={typo}
+          title="Sin materiales de bolsas pendientes"
+          body="No encontramos bolsas MP activas para este turno. Si ya se consumieron o devolvieron, puedes volver al cierre."
+        />
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <SummaryCard
+            typo={typo}
+            bagsReceived={manualSummary.bagsReceived}
+            bagsUsed={manualSummary.bagsUsed}
+            bagsRemaining={manualSummary.bagsRemaining}
+            totalDamaged={totalDamaged}
+            totalReturned={totalReturned}
+          />
+
+          {mismatchManualVsSystem && (
+            <WarningBanner
+              typo={typo}
+              title="El conteo del cierre no coincide con el saldo del sistema"
+              body={`En cierre capturaste ${declaredSobrantes} sobrantes, pero los materiales activos del turno suman ${systemRemaining}. La devolución real se calculará con el saldo del sistema para no romper inventario.`}
+            />
+          )}
+
+          <div>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>DECLARACIÓN POR PRODUCTO MP</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {totals.lines.map((item) => (
+                <div
+                  key={item.key}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: TOKENS.radius.lg,
+                    background: TOKENS.glass.panel,
+                    border: `1px solid ${TOKENS.colors.border}`,
+                  }}
+                >
+                  <p style={{ ...typo.body, color: TOKENS.colors.text, margin: '0 0 6px', fontWeight: 700 }}>
+                    {item.name}
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 10px' }}>
+                    Entregadas {item.issued} · Usadas {item.qty_consumed} · Sobrantes {item.remaining}
+                  </p>
+
+                  <label style={{ ...typo.caption, color: TOKENS.colors.textLow, display: 'block', marginBottom: 6 }}>
+                    Bolsas rotas / merma
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={item.remaining}
+                    inputMode="numeric"
+                    value={damagedByKey[item.key] ?? ''}
+                    onChange={(event) => updateDamaged(item.key, event.target.value)}
+                    placeholder="0"
+                    style={numberInputStyle}
+                  />
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Regresa al gerente</span>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.success, fontWeight: 700 }}>
+                      {item.returned} bolsas
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
+              Notas (opcional)
+            </label>
+            <textarea
+              placeholder="Observaciones sobre bolsas dañadas o devolución..."
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={3}
+              style={textAreaStyle}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            style={{
+              width: '100%',
+              padding: '16px',
+              borderRadius: TOKENS.radius.lg,
+              background: canSubmit ? 'linear-gradient(90deg, #15499B, #2B8FE0)' : TOKENS.colors.surface,
+              color: canSubmit ? 'white' : TOKENS.colors.textLow,
+              fontSize: 16,
+              fontWeight: 700,
+              opacity: submitting ? 0.6 : 1,
+            }}
+          >
+            {submitting ? 'Declarando...' : 'CONFIRMAR DEVOLUCIÓN Y MERMA'}
+          </button>
+        </form>
+      )}
+    </PageShell>
+  )
+}
+
+function PageShell({ typo, title, navigate, children }) {
+  return (
+    <div style={pageStyle}>
+      <style>{globalCss}</style>
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 16 }}>
-          <button onClick={() => navigate(-1)} style={{
-            width: 38, height: 38, borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+          <button onClick={() => navigate(-1)} style={iconBtn}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>Declaración de Bolsas</span>
+          <span style={{ ...typo.title, color: TOKENS.colors.textSoft }}>{title}</span>
         </div>
-
-        {loading && <Spinner />}
-
-        {!loading && error && (
-          <ErrorBanner message={error} typo={typo} />
-        )}
-
-        {!loading && !error && !record && (
-          <div style={{
-            textAlign: 'center', paddingTop: 60,
-          }}>
-            <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: '0 0 8px' }}>Sin bolsas pendientes</p>
-            <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>
-              La gerente aún no ha registrado entrega de bolsas para este turno
-            </p>
-          </div>
-        )}
-
-        {!loading && !error && record && !success && (
-          <form onSubmit={handleSubmit}>
-            <div style={{
-              padding: '16px', borderRadius: TOKENS.radius.lg,
-              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-              marginBottom: 20,
-            }}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 12px' }}>BOLSAS ENTREGADAS POR GERENTE</p>
-              <p style={{ fontSize: 36, fontWeight: 700, color: TOKENS.colors.text, margin: '0 0 4px', letterSpacing: '-0.03em' }}>
-                {record.bags_issued}
-              </p>
-              {record.issued_at && (
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
-                  Entregadas: {new Date(record.issued_at).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-            </div>
-
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>¿CUÁNTAS DEVUELVES?</p>
-
-            <input
-              type="number"
-              required
-              min="0"
-              max={record.bags_issued * 2}
-              placeholder={`Bolsas que devuelves (entregadas: ${record.bags_issued})`}
-              value={bagsDeclared}
-              onChange={e => setBagsDeclared(e.target.value)}
-              style={{
-                width: '100%', padding: '14px 16px', borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                color: TOKENS.colors.text, fontSize: 18, fontWeight: 600, marginBottom: 12,
-              }}
-            />
-
-            <textarea
-              placeholder="Notas (si sobran o falta algo)"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              rows={2}
-              style={{
-                width: '100%', padding: '14px 16px', borderRadius: TOKENS.radius.md,
-                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                color: TOKENS.colors.text, fontSize: 14, resize: 'none', marginBottom: 20,
-              }}
-            />
-
-            {error && <p style={{ ...typo.caption, color: TOKENS.colors.error, marginBottom: 12 }}>{error}</p>}
-
-            <button
-              type="submit"
-              disabled={submitting || bagsDeclared === ''}
-              style={{
-                width: '100%', padding: '16px', borderRadius: TOKENS.radius.lg,
-                background: submitting ? TOKENS.colors.surface : 'linear-gradient(90deg, #15499B, #2B8FE0)',
-                border: 'none', cursor: submitting ? 'not-allowed' : 'pointer',
-                ...typo.title, color: 'white',
-                opacity: (submitting || bagsDeclared === '') ? 0.5 : 1,
-              }}
-            >
-              {submitting ? 'Enviando...' : 'Declarar devolución'}
-            </button>
-          </form>
-        )}
-
-        {!loading && success && (
-          <SuccessState
-            typo={typo}
-            label="Devolución declarada"
-            sub="La gerente validará el conteo final"
-            onBack={() => navigate(-1)}
-          />
-        )}
+        {children}
       </div>
+    </div>
+  )
+}
+
+function SummaryCard({ typo, bagsReceived, bagsUsed, bagsRemaining, totalDamaged, totalReturned }) {
+  return (
+    <div style={{
+      padding: '16px',
+      borderRadius: TOKENS.radius.lg,
+      background: TOKENS.glass.hero,
+      border: `1px solid ${TOKENS.colors.borderBlue}`,
+    }}>
+      <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '0 0 10px' }}>RESUMEN DE CIERRE</p>
+      <Row label="Bolsas recibidas" value={bagsReceived} typo={typo} />
+      <Row label="Bolsas usadas" value={bagsUsed} typo={typo} />
+      <Row label="Bolsas sobrantes" value={bagsRemaining} typo={typo} />
+      <Row label="Merma declarada" value={totalDamaged} typo={typo} accent={TOKENS.colors.warning} />
+      <Row label="Devolución real" value={totalReturned} typo={typo} accent={TOKENS.colors.success} />
+    </div>
+  )
+}
+
+function Row({ label, value, typo, accent }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 }}>
+      <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>{label}</span>
+      <span style={{ ...typo.caption, color: accent || TOKENS.colors.textSoft, fontWeight: 700 }}>{value}</span>
     </div>
   )
 }
@@ -196,6 +358,29 @@ function ErrorBanner({ message, typo }) {
       background: `${TOKENS.colors.error}14`, border: `1px solid ${TOKENS.colors.error}30`,
     }}>
       <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0 }}>{message}</p>
+    </div>
+  )
+}
+
+function WarningBanner({ title, body, typo }) {
+  return (
+    <div style={{
+      padding: '14px 16px',
+      borderRadius: TOKENS.radius.lg,
+      background: `${TOKENS.colors.warning}14`,
+      border: `1px solid ${TOKENS.colors.warning}30`,
+    }}>
+      <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: '0 0 6px', fontWeight: 700 }}>{title}</p>
+      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{body}</p>
+    </div>
+  )
+}
+
+function EmptyState({ typo, title, body }) {
+  return (
+    <div style={{ textAlign: 'center', paddingTop: 56 }}>
+      <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: '0 0 8px' }}>{title}</p>
+      <p style={{ ...typo.body, color: TOKENS.colors.textMuted, margin: 0 }}>{body}</p>
     </div>
   )
 }
@@ -222,8 +407,56 @@ function SuccessState({ typo, label, sub, onBack }) {
           ...typo.title, color: TOKENS.colors.text, cursor: 'pointer',
         }}
       >
-        Volver
+        Volver al cierre
       </button>
     </div>
   )
 }
+
+const pageStyle = {
+  minHeight: '100dvh',
+  background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`,
+  paddingTop: 'env(safe-area-inset-top)',
+  paddingBottom: 'env(safe-area-inset-bottom)',
+}
+
+const numberInputStyle = {
+  width: '100%',
+  padding: '14px 16px',
+  borderRadius: TOKENS.radius.md,
+  background: TOKENS.colors.surface,
+  border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.text,
+  fontSize: 18,
+  fontWeight: 600,
+}
+
+const textAreaStyle = {
+  width: '100%',
+  padding: '14px 16px',
+  borderRadius: TOKENS.radius.md,
+  background: TOKENS.colors.surface,
+  border: `1px solid ${TOKENS.colors.border}`,
+  color: TOKENS.colors.text,
+  fontSize: 14,
+  resize: 'none',
+}
+
+const iconBtn = {
+  width: 38,
+  height: 38,
+  borderRadius: TOKENS.radius.md,
+  background: TOKENS.colors.surface,
+  border: `1px solid ${TOKENS.colors.border}`,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+}
+
+const globalCss = `
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+  * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
+  button { border: none; background: none; cursor: pointer; }
+  input, textarea { font-family: 'DM Sans', sans-serif; box-sizing: border-box; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+`

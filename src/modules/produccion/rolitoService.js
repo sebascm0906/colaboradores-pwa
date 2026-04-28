@@ -59,12 +59,18 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
     packedBagsLeft = Math.max(0, packedBagsLeft - issued)
     return {
       id: it.id || it.issue_id || it.material_id,
+      issueId: it.id || it.issue_id || null,
+      settlementId: it.settlement_id || null,
+      shiftId: it.shift_id || null,
+      lineId: it.line_id || null,
+      productId: it.product_id || null,
       name: it.product_name || it.material_name || 'Material',
       issued,
       consumed,
       remaining,
       state: it.settlement_state || it.state || '',
       materialId: it.material_id || null,
+      uom: it.uom || '',
     }
   })
 }
