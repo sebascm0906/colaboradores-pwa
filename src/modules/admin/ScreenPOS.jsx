@@ -13,6 +13,7 @@ import AdminPosForm from './forms/AdminPosForm'
 import { logScreenError } from '../shared/logScreenError'
 import SessionErrorState from '../../components/SessionErrorState'
 import { computePosSummary } from './posPricing'
+import { addProductToCart, changeCartItemQty, getDisplayStock, stockLabel } from './posCart'
 
 export default function ScreenPOS() {
   const { session } = useSession()
@@ -105,27 +106,11 @@ function MobilePOS({ warehouseId }) {
 
   // Cart operations
   function addToCart(product) {
-    if ((product.stock || 0) <= 0) return
-    setCart(prev => {
-      const existing = prev.find(c => c.product_id === product.id)
-      if (existing) {
-        if (existing.qty >= (product.stock || 0)) return prev
-        return prev.map(c => c.product_id === product.id ? { ...c, qty: c.qty + 1 } : c)
-      }
-      return [...prev, { product_id: product.id, name: product.name, qty: 1, price_unit: product.price || 0, stock: product.stock || 0 }]
-    })
+    setCart((prev) => addProductToCart(prev, product))
   }
 
   function updateQty(productId, delta) {
-    setCart(prev => {
-      return prev.map(c => {
-        if (c.product_id !== productId) return c
-        const newQty = c.qty + delta
-        if (newQty <= 0) return null
-        if (newQty > c.stock) return c
-        return { ...c, qty: newQty }
-      }).filter(Boolean)
-    })
+    setCart((prev) => changeCartItemQty(prev, productId, delta))
   }
 
   function removeItem(productId) {
@@ -236,21 +221,21 @@ function MobilePOS({ warehouseId }) {
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>PRODUCTOS</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
               {filtered.map(p => {
-                const outOfStock = (p.stock || 0) <= 0
+                const stock = getDisplayStock(p)
                 const inCart = cart.find(c => c.product_id === p.id)
                 return (
-                  <button key={p.id} onClick={() => !outOfStock && addToCart(p)}
+                  <button key={p.id} onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 10px', borderRadius: TOKENS.radius.md,
                       background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-                      textAlign: 'left', opacity: outOfStock ? 0.4 : 1,
-                      cursor: outOfStock ? 'not-allowed' : 'pointer',
+                      textAlign: 'left',
+                      cursor: 'pointer',
                       position: 'relative',
                     }}>
                     <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, marginBottom: 4, lineHeight: '1.3' }}>{p.name}</p>
                     <p style={{ ...typo.title, color: TOKENS.colors.blue3, margin: 0 }}>{fmt(p.price || 0)}</p>
-                    <p style={{ ...typo.caption, color: outOfStock ? TOKENS.colors.error : TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                      {outOfStock ? 'Sin stock' : `${p.stock} disp.`}
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                      {stockLabel(stock)}
                     </p>
                     {inCart && (
                       <div style={{

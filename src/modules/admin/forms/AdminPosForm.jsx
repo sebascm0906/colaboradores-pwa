@@ -19,6 +19,7 @@ import {
   getDefaultCustomer,
   createSaleOrder,
 } from '../api'
+import { addProductToCart, changeCartItemQty, getDisplayStock, stockLabel } from '../posCart'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
 
@@ -28,10 +29,6 @@ const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))
 export const POS_THRESHOLDS = {
   MANAGER_AUTH: 5000,   // > $5000: requiere autorización gerente
   DIRECTOR_AUTH: 50000, // > $50000: requiere autorización dirección
-}
-
-function stockOf(p) {
-  return Number(p?.stock ?? p?.qty_available ?? 0)
 }
 
 export default function AdminPosForm() {
@@ -113,32 +110,11 @@ export default function AdminPosForm() {
 
   // ── Carrito ───────────────────────────────────────────────────────────────
   function addToCart(product) {
-    const stock = stockOf(product)
-    if (stock <= 0) return
-    setCart(prev => {
-      const existing = prev.find(c => c.product_id === product.id)
-      if (existing) {
-        if (existing.qty >= stock) return prev
-        return prev.map(c => c.product_id === product.id ? { ...c, qty: c.qty + 1 } : c)
-      }
-      return [...prev, {
-        product_id: product.id,
-        name: product.name,
-        qty: 1,
-        price_unit: Number(product.price || product.list_price || 0),
-        stock,
-      }]
-    })
+    setCart((prev) => addProductToCart(prev, product))
   }
 
   function updateQty(productId, delta) {
-    setCart(prev => prev.map(c => {
-      if (c.product_id !== productId) return c
-      const newQty = c.qty + delta
-      if (newQty <= 0) return null
-      if (newQty > c.stock) return c
-      return { ...c, qty: newQty }
-    }).filter(Boolean))
+    setCart((prev) => changeCartItemQty(prev, productId, delta))
   }
 
   function removeItem(productId) {
@@ -307,22 +283,19 @@ export default function AdminPosForm() {
               paddingRight: 4,
             }}>
               {filtered.map(p => {
-                const stock = stockOf(p)
-                const outOfStock = stock <= 0
+                const stock = getDisplayStock(p)
                 const inCart = cart.find(c => c.product_id === p.id)
                 return (
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => !outOfStock && addToCart(p)}
-                    disabled={outOfStock}
+                    onClick={() => addToCart(p)}
                     style={{
                       padding: '12px 12px 10px', borderRadius: TOKENS.radius.md,
                       background: inCart ? `${TOKENS.colors.blue2}14` : TOKENS.colors.surface,
                       border: `1px solid ${inCart ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
                       textAlign: 'left',
-                      cursor: outOfStock ? 'not-allowed' : 'pointer',
-                      opacity: outOfStock ? 0.4 : 1,
+                      cursor: 'pointer',
                       position: 'relative',
                       minHeight: 92,
                       display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -343,9 +316,9 @@ export default function AdminPosForm() {
                       </span>
                       <span style={{
                         fontSize: 10, fontWeight: 600,
-                        color: outOfStock ? TOKENS.colors.error : TOKENS.colors.textMuted,
+                        color: TOKENS.colors.textMuted,
                       }}>
-                        {outOfStock ? 'Sin stock' : `Stock ${stock}`}
+                        {stockLabel(stock)}
                       </span>
                     </div>
                     {inCart && (
