@@ -23,6 +23,15 @@ export class SessionIncompleteError extends Error {
   }
 }
 
+function resolveWarehouseId(session) {
+  return Number(
+    session?.warehouse_id
+    || session?.plant_warehouse_id
+    || session?.default_source_warehouse_id
+    || 0,
+  ) || 0
+}
+
 function fireSessionExpired(reason) {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     try {
@@ -36,7 +45,7 @@ function fireSessionExpired(reason) {
  * Si no existe, lanza error (NO fallback silencioso a 89).
  */
 export function requireWarehouse(session) {
-  const id = Number(session?.warehouse_id || 0)
+  const id = resolveWarehouseId(session)
   if (!Number.isFinite(id) || id <= 0) {
     fireSessionExpired('no_warehouse')
     throw new SessionIncompleteError('warehouse_id')
@@ -66,7 +75,7 @@ export function requireEmployee(session) {
 
 /** Soft variants — devuelven null si falta (para pantallas opcionales) sin disparar evento. */
 export function softWarehouse(session) {
-  const id = Number(session?.warehouse_id || 0)
+  const id = resolveWarehouseId(session)
   return Number.isFinite(id) && id > 0 ? id : null
 }
 export function softCompany(session) {

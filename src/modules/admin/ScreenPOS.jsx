@@ -5,14 +5,18 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
+import { softWarehouse } from '../../lib/sessionGuards'
 import { getPosProducts, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminPosForm from './forms/AdminPosForm'
 import { logScreenError } from '../shared/logScreenError'
+import SessionErrorState from '../../components/SessionErrorState'
 
 export default function ScreenPOS() {
+  const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1280)
+  const warehouseId = softWarehouse(session)
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)
@@ -20,7 +24,16 @@ export default function ScreenPOS() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  if (sw < 1024) return <MobilePOS />
+  if (!warehouseId) {
+    return (
+      <SessionErrorState
+        error={{ missing: 'warehouse_id' }}
+        backTo="/admin"
+      />
+    )
+  }
+
+  if (sw < 1024) return <MobilePOS warehouseId={warehouseId} />
 
   return (
     <AdminProvider>
@@ -31,7 +44,7 @@ export default function ScreenPOS() {
   )
 }
 
-function MobilePOS() {
+function MobilePOS({ warehouseId }) {
   const { session } = useSession()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
@@ -53,8 +66,6 @@ function MobilePOS() {
 
   // Payment confirmation
   const [payConfirm, setPayConfirm] = useState(null) // 'cash' | 'card' | null
-
-  const warehouseId = session?.warehouse_id || 89
 
   useEffect(() => {
     const handler = () => setSw(window.innerWidth)

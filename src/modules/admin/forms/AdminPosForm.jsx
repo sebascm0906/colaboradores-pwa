@@ -57,7 +57,14 @@ export default function AdminPosForm() {
   useEffect(() => {
     let alive = true
     async function load() {
-      if (!warehouseId) return
+      if (!warehouseId) {
+        if (alive) {
+          setProducts([])
+          setError('Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.')
+          setLoading(false)
+        }
+        return
+      }
       setLoading(true)
       setError('')
       try {
