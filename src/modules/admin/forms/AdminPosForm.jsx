@@ -20,6 +20,7 @@ import {
   createSaleOrder,
 } from '../api'
 import { logScreenError } from '../../shared/logScreenError'
+import { computePosSummary } from '../posPricing'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -144,9 +145,7 @@ export default function AdminPosForm() {
     setCart(prev => prev.filter(c => c.product_id !== productId))
   }
 
-  const subtotal = cart.reduce((s, c) => s + c.qty * c.price_unit, 0)
-  const iva = subtotal * 0.16
-  const total = subtotal + iva
+  const { subtotal, total } = computePosSummary(cart)
 
   // ── Cliente ───────────────────────────────────────────────────────────────
   const doCustomerSearch = useCallback(async (q) => {
@@ -553,10 +552,6 @@ export default function AdminPosForm() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>Subtotal</span>
               <span style={{ fontSize: 12, color: TOKENS.colors.textSoft }}>{fmt(subtotal)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>IVA 16%</span>
-              <span style={{ fontSize: 12, color: TOKENS.colors.textSoft }}>{fmt(iva)}</span>
             </div>
             <div style={{
               display: 'flex', justifyContent: 'space-between',

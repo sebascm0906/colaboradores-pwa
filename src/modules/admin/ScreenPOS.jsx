@@ -12,6 +12,7 @@ import AdminShell from './components/AdminShell'
 import AdminPosForm from './forms/AdminPosForm'
 import { logScreenError } from '../shared/logScreenError'
 import SessionErrorState from '../../components/SessionErrorState'
+import { computePosSummary } from './posPricing'
 
 export default function ScreenPOS() {
   const { session } = useSession()
@@ -131,9 +132,7 @@ function MobilePOS({ warehouseId }) {
     setCart(prev => prev.filter(c => c.product_id !== productId))
   }
 
-  const subtotal = cart.reduce((s, c) => s + c.qty * c.price_unit, 0)
-  const iva = subtotal * 0.16
-  const total = subtotal + iva
+  const { subtotal, total } = computePosSummary(cart)
 
   // Customer search
   const doCustomerSearch = useCallback(async (q) => {
@@ -386,10 +385,6 @@ function MobilePOS({ warehouseId }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Subtotal</span>
               <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>{fmt(subtotal)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>IVA 16%</span>
-              <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>{fmt(iva)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
               <span style={{ ...typo.title, color: TOKENS.colors.text }}>Total</span>

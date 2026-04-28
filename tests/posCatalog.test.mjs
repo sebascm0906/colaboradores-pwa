@@ -24,6 +24,7 @@ test('mergeProductsWithWarehouseStock preserves catalog and injects warehouse st
     [
       { id: 10, name: 'Hielo', list_price: 85, sale_ok: true, available_in_pos: true },
       { id: 11, name: 'Combo', list_price: 120, sale_ok: true, available_in_pos: true },
+      { id: 12, name: 'Oculto POS', list_price: 50, sale_ok: true, available_in_pos: false },
     ],
     { 10: 6.5 },
   )

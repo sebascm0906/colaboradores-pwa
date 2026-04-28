@@ -11,14 +11,16 @@ export function buildWarehouseStockByProduct(quants = []) {
 }
 
 export function mergeProductsWithWarehouseStock(products = [], stockByProduct = {}) {
-  return products.map((row) => ({
-    id: row.id,
-    name: row.name,
-    price: Number(row.list_price ?? row.lst_price ?? 0),
-    stock: Number(stockByProduct[row.id] || 0),
-    barcode: row.barcode || '',
-    weight: Number(row.weight ?? 0),
-    sale_ok: row.sale_ok !== false,
-    available_in_pos: row.available_in_pos !== false,
-  }))
+  return products
+    .filter((row) => row.available_in_pos !== false)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      price: Number(row.list_price ?? row.lst_price ?? 0),
+      stock: Number(stockByProduct[row.id] || 0),
+      barcode: row.barcode || '',
+      weight: Number(row.weight ?? 0),
+      sale_ok: row.sale_ok !== false,
+      available_in_pos: row.available_in_pos !== false,
+    }))
 }

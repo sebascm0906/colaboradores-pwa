@@ -767,7 +767,7 @@ async function directAdmin(method, path, body) {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'list_price', 'lst_price', 'qty_available', 'barcode', 'sale_ok', 'available_in_pos', 'weight'],
-      domain: [['sale_ok', '=', true]],
+      domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
       sort_column: 'name',
       sort_desc: false,
       limit: 400,

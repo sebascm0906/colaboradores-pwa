@@ -4,6 +4,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getSaleOrder, cancelSaleOrder } from './api'
 import { BACKEND_CAPS } from './adminService'
+import { computePosSummary } from './posPricing'
 
 export default function ScreenTicket() {
   const { session } = useSession()
@@ -71,9 +72,7 @@ export default function ScreenTicket() {
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
   const lines = order?.lines || order?.order_lines || []
-  const subtotal = lines.reduce((s, l) => s + (l.qty || l.product_uom_qty || 0) * (l.price_unit || 0), 0)
-  const iva = subtotal * 0.16
-  const total = subtotal + iva
+  const { subtotal, total } = computePosSummary(lines)
 
   const now = order?.date_order ? new Date(order.date_order) : new Date()
   const dateStr = now.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -223,10 +222,6 @@ export default function ScreenTicket() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: '#666' }}>Subtotal</span>
                 <span style={{ fontSize: 12, color: '#333' }}>{fmt(subtotal)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 12, color: '#666' }}>IVA 16%</span>
-                <span style={{ fontSize: 12, color: '#333' }}>{fmt(iva)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 6, borderTop: '1px solid #ddd' }}>
                 <span style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a' }}>TOTAL</span>
