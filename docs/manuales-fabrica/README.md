@@ -22,6 +22,11 @@ Esta carpeta tiene **manuales cortos** para el personal operativo de fábrica.
 | Operador Barra | [`operador-barra.md`](operador-barra.md) |
 | Jefe de Producción | [`jefe-produccion.md`](jefe-produccion.md) |
 | Almacenista PT | [`almacenista-pt.md`](almacenista-pt.md) |
+| Almacenista Entregas | [`almacenista-entregas.md`](almacenista-entregas.md) |
+| Jefe de Ruta / Vendedor | [`jefe-ruta-vendedor.md`](jefe-ruta-vendedor.md) |
+| Supervisor de Ventas | [`supervisor-ventas.md`](supervisor-ventas.md) |
+
+> El manual de **Jefe de Ruta / Vendedor** corresponde sólo a la PWA de Colaboradores. La **app de ventas** se documenta por separado.
 
 ## Reglas básicas para todos
 
