@@ -13,10 +13,6 @@ import {
   normalizeChecklistNumericCheck,
   normalizeChecklistNumericRange,
 } from '../modules/produccion/checklistNumericRange.js'
-import {
-  buildWarehouseStockByProduct,
-  mergeProductsWithWarehouseStock,
-} from '../modules/admin/posCatalog.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -763,47 +759,11 @@ async function directAdmin(method, path, body) {
   const [todayStart, todayEnd] = todayRange()
 
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    const result = await readModelSorted('product.product', {
-      fields: ['id', 'name', 'list_price', 'lst_price', 'qty_available', 'barcode', 'sale_ok', 'available_in_pos', 'weight'],
-      domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 400,
-      sudo: 1,
+    return odooHttp('GET', '/pwa-admin/pos-products', {
+      warehouse_id: reqWarehouseId || undefined,
+      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
     })
-    const products = pickListResponse(result)
-    if (!reqWarehouseId || products.length === 0) {
-      return mergeProductsWithWarehouseStock(products, {})
-    }
-
-    const whRaw = await readModelSorted('stock.warehouse', {
-      fields: ['id', 'name', 'lot_stock_id'],
-      domain: [['id', '=', reqWarehouseId]],
-      limit: 1,
-      sudo: 1,
-    })
-    const warehouseRow = pickListResponse(whRaw)[0]
-    const lotStockId = warehouseRow?.lot_stock_id?.[0] || 0
-    if (!lotStockId) {
-      return mergeProductsWithWarehouseStock(products, {})
-    }
-
-    const productIds = products.map((row) => row.id).filter(Boolean)
-    const quantRaw = await readModelSorted('stock.quant', {
-      fields: ['product_id', 'quantity', 'reserved_quantity', 'location_id'],
-      domain: [
-        ['location_id', 'child_of', lotStockId],
-        ['product_id', 'in', productIds],
-      ],
-      sort_column: 'product_id',
-      sort_desc: false,
-      limit: 1000,
-      sudo: 1,
-    })
-    const stockByProduct = buildWarehouseStockByProduct(pickListResponse(quantRaw))
-    return mergeProductsWithWarehouseStock(products, stockByProduct)
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
