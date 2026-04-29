@@ -1,6 +1,7 @@
 // ─── API Admin Sucursal — POS, Gastos, Requisiciones ─────────────────────────
 // Endpoints del módulo Odoo `gf_pwa_admin` (Sebastián, rollout 2026-04-10).
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
+import { normalizePosProductsResponse } from './posProducts.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,8 +18,9 @@ function toQuery(filters = {}) {
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
 /** Productos disponibles con stock en el CEDIS del empleado */
-export function getPosProducts(warehouseId) {
-  return api('GET', `/pwa-admin/pos-products?warehouse_id=${warehouseId}`)
+export async function getPosProducts(warehouseId) {
+  const response = await api('GET', `/pwa-admin/pos-products?warehouse_id=${warehouseId}`)
+  return normalizePosProductsResponse(response)
 }
 
 /** Buscar clientes (para factura) */

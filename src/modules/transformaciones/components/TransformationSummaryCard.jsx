@@ -1,4 +1,5 @@
 import { TOKENS, getTypo } from '../../../tokens'
+import TransformationStateBadges from './TransformationStateBadges'
 
 export default function TransformationSummaryCard({ summary, sw }) {
   if (!summary) return null
@@ -12,6 +13,9 @@ export default function TransformationSummaryCard({ summary, sw }) {
     }}>
       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>ULTIMA TRANSFORMACION</p>
       <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: '6px 0 0' }}>{summary.recipe_code || 'Transformacion confirmada'}</p>
+      <div style={{ marginTop: 8 }}>
+        <TransformationStateBadges item={summary} />
+      </div>
       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>
         Esperado: {Number(summary.expected_output_qty_units || 0).toFixed(2)} · Real: {Number(summary.actual_output_qty_units || 0).toFixed(2)} · Variacion: {Number(summary.variance_units || 0).toFixed(2)}
       </p>
