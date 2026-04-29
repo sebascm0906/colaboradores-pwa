@@ -5,6 +5,11 @@ import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getChecklist, submitCheck, completeChecklist } from './api'
 import { resolveChecklistRoleContext } from './checklistContext'
 import { logScreenError } from '../shared/logScreenError'
+import {
+  normalizeChecklistPhotoValue,
+  readFileAsDataURL,
+  validateChecklistPhotoFile,
+} from '../shared/checklistPhoto'
 
 const CHECK_ICONS = {
   yes_no:  '✓',
@@ -102,19 +107,27 @@ export default function ScreenChecklist() {
   async function handlePhotoCapture(e) {
     const file = e.target.files?.[0]
     if (!file || !photoCheckId) return
-    const reader = new FileReader()
-    reader.onload = async () => {
-      try {
-        await submitCheck(photoCheckId, { result_photo: reader.result })
-        await loadChecklist()
-      } catch (err) {
-        logScreenError('ScreenChecklist', 'submitCheck(photo)', err)
-        setError('Error subiendo foto — intenta de nuevo')
-      }
+
+    const fileError = validateChecklistPhotoFile(file)
+    if (fileError) {
+      setError(fileError)
+      e.target.value = ''
+      setPhotoCheckId(null)
+      return
     }
-    reader.readAsDataURL(file)
-    e.target.value = ''
-    setPhotoCheckId(null)
+
+    try {
+      const dataUrl = await readFileAsDataURL(file)
+      await submitCheck(photoCheckId, { result_photo: normalizeChecklistPhotoValue(dataUrl) })
+      setError('')
+      await loadChecklist()
+    } catch (err) {
+      logScreenError('ScreenChecklist', 'submitCheck(photo)', err)
+      setError('Error subiendo foto — intenta de nuevo')
+    } finally {
+      e.target.value = ''
+      setPhotoCheckId(null)
+    }
   }
 
   async function handleComplete() {

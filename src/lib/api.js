@@ -13,6 +13,7 @@ import {
   normalizeChecklistNumericCheck,
   normalizeChecklistNumericRange,
 } from '../modules/produccion/checklistNumericRange.js'
+import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -2272,7 +2273,7 @@ async function directProduction(method, path, body) {
       ...(body?.result_bool !== undefined ? { result_bool: !!body.result_bool } : {}),
       ...(body?.result_numeric !== undefined ? { result_numeric: Number(body.result_numeric || 0) } : {}),
       ...(body?.result_text !== undefined ? { result_text: body.result_text || '' } : {}),
-      ...(body?.result_photo !== undefined ? { result_photo: body.result_photo } : {}),
+      ...(body?.result_photo !== undefined ? { result_photo: normalizeChecklistPhotoValue(body.result_photo) } : {}),
     })
   }
 

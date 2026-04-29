@@ -4,6 +4,11 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getVehicleChecklist, submitVehicleCheck, completeVehicleChecklist, createVehicleChecklistShift, initVehicleChecklist, getVehicleChecks } from './api'
 import { logScreenError } from '../shared/logScreenError'
+import {
+  normalizeChecklistPhotoValue,
+  readFileAsDataURL,
+  validateChecklistPhotoFile,
+} from '../shared/checklistPhoto'
 
 const CHECK_ICONS = {
   yes_no:  '\u2713',
@@ -52,6 +57,7 @@ export default function ScreenChecklistUnidad() {
           ...c,
           localValue: c.passed ? c.result_bool : undefined,
           localNumeric: c.result_numeric || '',
+          hasPhoto: !!c.result_photo,
           saved: c.passed === true,
         })))
       }
@@ -94,15 +100,27 @@ export default function ScreenChecklistUnidad() {
   async function handlePhotoCapture(e) {
     const file = e.target.files?.[0]
     if (!file || !photoCheckId) return
-    const reader = new FileReader()
-    reader.onload = async () => {
-      try {
-        await submitVehicleCheck(photoCheckId, { result_photo: reader.result })
-        setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
-      } catch (err) { logScreenError('ScreenChecklistUnidad', 'submitVehicleCheck(photo)', err) }
+
+    const fileError = validateChecklistPhotoFile(file)
+    if (fileError) {
+      setError(fileError)
+      e.target.value = ''
+      setPhotoCheckId(null)
+      return
     }
-    reader.readAsDataURL(file)
-    e.target.value = ''
+
+    try {
+      const dataUrl = await readFileAsDataURL(file)
+      await submitVehicleCheck(photoCheckId, { result_photo: normalizeChecklistPhotoValue(dataUrl) })
+      setChecks(prev => prev.map(c => c.id === photoCheckId ? { ...c, saved: true, hasPhoto: true } : c))
+      setError('')
+    } catch (err) {
+      logScreenError('ScreenChecklistUnidad', 'submitVehicleCheck(photo)', err)
+      setError('Error subiendo foto — intenta de nuevo')
+    } finally {
+      e.target.value = ''
+      setPhotoCheckId(null)
+    }
   }
 
   async function handleComplete() {
