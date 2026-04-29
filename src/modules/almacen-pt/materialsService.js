@@ -54,6 +54,18 @@ export async function getMaterialIssues({ shiftId, lineId, states } = {}) {
 }
 
 // ── Crear issue (bodeguero entrega material al turno) ─────────────────────────
+export async function getRolitoBagStock() {
+  const res = await api('GET', '/api/production/materials/rolito-bags-stock')
+  if (res?.error) throw new Error(res.error)
+  const payload = res?.data ?? res ?? {}
+  return {
+    locationId: Number(payload.location_id || 0) || null,
+    locationName: String(payload.location_name || ''),
+    products: Array.isArray(payload.products) ? payload.products : [],
+    raw: payload,
+  }
+}
+
 export async function createMaterialIssue({
   shiftId, lineId, materialId, qtyIssued, issuedBy, opTagIds, notes,
 } = {}) {

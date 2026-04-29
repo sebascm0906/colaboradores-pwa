@@ -13,11 +13,10 @@ import {
   getShiftOverview,
   getProducts,
   registerPacking,
-  computeAvailableBagMaterials,
 } from './rolitoService'
 import { getPackingEntries } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
-import { getMaterialIssues } from '../almacen-pt/materialsService'
+import { getRolitoBagStock } from '../almacen-pt/materialsService'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 import { matchByFuzzyName, matchByNumericId } from '../shared/voice/voiceMatchers'
@@ -44,7 +43,7 @@ export default function ScreenEmpaqueRolito() {
   const [products, setProducts] = useState([])
   const [entries, setEntries] = useState([])
   const [cycles, setCycles] = useState([])
-  const [bagIssues, setBagIssues] = useState([])
+  const [bagStock, setBagStock] = useState({ locationId: null, locationName: '', products: [] })
   const [selectedCycleId, setSelectedCycleId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -73,16 +72,16 @@ export default function ScreenEmpaqueRolito() {
       setCycles(overview.cycles || [])
 
       if (overview.shift?.id) {
-        const [prods, ents, issues] = await Promise.all([
+        const [prods, ents, stock] = await Promise.all([
           getProducts({ shift_id: overview.shift.id, line_type: 'rolito' }).catch(() => []),
           getPackingEntries(overview.shift.id).catch(() => []),
-          getMaterialIssues({ shiftId: overview.shift.id, lineId: 2 }).catch(() => ({ items: [] })),
+          getRolitoBagStock().catch(() => ({ locationId: null, locationName: '', products: [] })),
         ])
         setEntries(ents || [])
-        setBagIssues(issues?.items || [])
+        setBagStock(stock || { locationId: null, locationName: '', products: [] })
         setProducts(prods || [])
       } else {
-        setBagIssues([])
+        setBagStock({ locationId: null, locationName: '', products: [] })
         setProducts([])
       }
 
@@ -100,8 +99,8 @@ export default function ScreenEmpaqueRolito() {
 
   const unpackedCycles = useMemo(() => getUnpackedCycles(cycles, entries), [cycles, entries])
   const availableBagMaterials = useMemo(
-    () => computeAvailableBagMaterials(bagIssues, entries),
-    [bagIssues, entries]
+    () => Array.isArray(bagStock?.products) ? bagStock.products : [],
+    [bagStock]
   )
   const selectedCycle = useMemo(
     () => cycles.find(c => c.id === selectedCycleId) || null,
@@ -316,7 +315,7 @@ export default function ScreenEmpaqueRolito() {
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>BOLSAS DISPONIBLES</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {availableBagMaterials.map(item => (
-                    <div key={item.id} style={{
+                    <div key={item.key || item.id || item.product_id} style={{
                       padding: '12px 14px', borderRadius: TOKENS.radius.md,
                       background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
                     }}>
@@ -324,12 +323,12 @@ export default function ScreenEmpaqueRolito() {
                         <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>
                           {item.name}
                         </span>
-                        <span style={{ ...typo.body, color: item.remaining > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted, fontWeight: 700 }}>
-                          {item.remaining} disp.
+                        <span style={{ ...typo.body, color: Number(item.available || 0) > 0 ? TOKENS.colors.success : TOKENS.colors.textMuted, fontWeight: 700 }}>
+                          {Number(item.available || 0)} disp.
                         </span>
                       </div>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
-                        Recibidas {item.issued} · Usadas {item.consumed}
+                        Stock consolidado en {bagStock.locationName || 'PIGU/MP-IGUALA/PROCESO-ROLITO'}
                       </p>
                     </div>
                   ))}

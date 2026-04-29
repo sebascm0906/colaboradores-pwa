@@ -2549,19 +2549,98 @@ async function directProduction(method, path, body) {
     return result?.data || result
   }
 
-  if (cleanPath === '/pwa-prod/packing-entries' && method === 'GET') {
-    const shiftId = Number(query.get('shift_id') || 0)
-    if (!shiftId) return []
-    const result = await readModelSorted('gf.packing.entry', {
-      fields: ['id', 'shift_id', 'cycle_id', 'product_id', 'qty_bags', 'kg_per_bag', 'total_kg', 'operator_id', 'timestamp', 'production_order_id', 'posted', 'posted_at'],
-      domain: [['shift_id', '=', shiftId]],
-      sort_column: 'id',
-      sort_desc: true,
-      limit: 200,
-      sudo: 1,
-    })
-    return pickListResponse(result)
-  }
+    if (cleanPath === '/pwa-prod/packing-entries' && method === 'GET') {
+      const shiftId = Number(query.get('shift_id') || 0)
+      if (!shiftId) return []
+      const result = await readModelSorted('gf.packing.entry', {
+        fields: ['id', 'shift_id', 'cycle_id', 'product_id', 'qty_bags', 'kg_per_bag', 'total_kg', 'operator_id', 'timestamp', 'production_order_id', 'posted', 'posted_at', 'line_id', 'material_id', 'material_product_id', 'material_qty_total', 'material_qty_per_bag'],
+        domain: [['shift_id', '=', shiftId]],
+        sort_column: 'id',
+        sort_desc: true,
+        limit: 200,
+        sudo: 1,
+      })
+      return pickListResponse(result)
+    }
+
+    if (cleanPath === '/api/production/materials/rolito-bags-stock' && method === 'GET') {
+      const locationName = 'PIGU/MP-IGUALA/PROCESO-ROLITO'
+      const validMaterialNames = [
+        'MP BOLSA LAURITA ROLITO (15KG)',
+        'MP BOLSA LAURITA ROLITO (3KG)',
+        'MP BOLSA LAURITA ROLITO (5.5KG)',
+      ]
+
+      const locationRows = pickListResponse(await readModelSorted('stock.location', {
+        fields: ['id', 'name', 'complete_name'],
+        domain: [['complete_name', '=', locationName]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 2,
+        sudo: 1,
+      }))
+      const location = locationRows[0]
+      if (!location?.id) return { error: `No se encontro la location ${locationName}` }
+
+      const materials = pickListResponse(await readModelSorted('gf.production.material', {
+        fields: ['id', 'name', 'product_id'],
+        domain: [['name', 'in', validMaterialNames]],
+        sort_column: 'name',
+        sort_desc: false,
+        limit: 20,
+        sudo: 1,
+      }))
+      const materialByProduct = new Map()
+      for (const material of materials) {
+        const productId = Number(material?.product_id?.[0] || material?.product_id || 0) || 0
+        if (!productId) continue
+        materialByProduct.set(productId, {
+          material_id: Number(material.id),
+          product_id: productId,
+          name: String(material.name || ''),
+        })
+      }
+
+      const productIds = Array.from(materialByProduct.keys())
+      const quantRows = productIds.length
+        ? pickListResponse(await readModelSorted('stock.quant', {
+            fields: ['id', 'product_id', 'quantity', 'reserved_quantity', 'available_quantity'],
+            domain: [['location_id', '=', Number(location.id)], ['product_id', 'in', productIds]],
+            sort_column: 'product_id',
+            sort_desc: false,
+            limit: 100,
+            sudo: 1,
+          }))
+        : []
+
+      const availableByProduct = new Map()
+      for (const quant of quantRows) {
+        const productId = Number(quant?.product_id?.[0] || quant?.product_id || 0) || 0
+        if (!productId) continue
+        const explicitAvailable = Number(quant?.available_quantity)
+        const fallbackAvailable = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
+        const available = Number.isFinite(explicitAvailable) ? explicitAvailable : fallbackAvailable
+        availableByProduct.set(productId, (availableByProduct.get(productId) || 0) + Math.max(0, available))
+      }
+
+      const products = validMaterialNames.map((materialName, index) => {
+        const material = materials.find((row) => String(row?.name || '') === materialName)
+        const productId = Number(material?.product_id?.[0] || material?.product_id || 0) || 0
+        return {
+          key: material?.id ? `material:${material.id}` : `rolito-bag:${index}`,
+          material_id: Number(material?.id || 0) || null,
+          product_id: productId || null,
+          name: materialName,
+          available: Math.round((availableByProduct.get(productId) || 0) * 1000) / 1000,
+        }
+      })
+
+      return {
+        location_id: Number(location.id),
+        location_name: location.complete_name || location.name || locationName,
+        products,
+      }
+    }
 
   if (cleanPath === '/pwa-prod/transformation-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {

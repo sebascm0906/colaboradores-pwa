@@ -45,34 +45,94 @@ export const CYCLE_STATES = {
 
 export const FALLBACK_PRODUCTS = []
 
+const ROLITO_BAG_DISPLAY_ORDER = [
+  'MP BOLSA LAURITA ROLITO (15KG)',
+  'MP BOLSA LAURITA ROLITO (5.5KG)',
+  'MP BOLSA LAURITA ROLITO (3KG)',
+]
+
+function normalizeBagGroupKey(item, index = 0) {
+  const materialId = Number(item?.materialId || item?.material_id || 0) || 0
+  const productId = Number(item?.productId || item?.product_id || 0) || 0
+  if (materialId) return `material:${materialId}`
+  if (productId) return `product:${productId}`
+  return `item:${index}`
+}
+
+function sortRolitoBagRows(rows = []) {
+  return [...rows].sort((a, b) => {
+    const nameA = String(a?.name || '')
+    const nameB = String(b?.name || '')
+    const indexA = ROLITO_BAG_DISPLAY_ORDER.indexOf(nameA)
+    const indexB = ROLITO_BAG_DISPLAY_ORDER.indexOf(nameB)
+    if (indexA !== -1 || indexB !== -1) {
+      return (indexA === -1 ? Number.MAX_SAFE_INTEGER : indexA) - (indexB === -1 ? Number.MAX_SAFE_INTEGER : indexB)
+    }
+    return nameA.localeCompare(nameB, 'es-MX')
+  })
+}
+
 export function computeAvailableBagMaterials(issues, packingEntries) {
   const validIssues = (issues || []).filter(it => {
     const state = String(it?.settlement_state || it?.state || '').toLowerCase()
     return ['validated', 'reported', 'disputed', 'draft', 'issued'].includes(state)
   })
-  let packedBagsLeft = (packingEntries || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+  const packedByMaterial = new Map()
+  for (const entry of Array.isArray(packingEntries) ? packingEntries : []) {
+    const materialId = Number(entry?.material_id || entry?.materialId || 0) || 0
+    if (!materialId) continue
+    const qty = Number(entry?.material_qty_total || entry?.materialQtyTotal || 0) || 0
+    packedByMaterial.set(materialId, (packedByMaterial.get(materialId) || 0) + qty)
+  }
 
-  return validIssues.map(it => {
-    const issued = Number(it.qty_issued || 0)
-    const consumed = Math.min(issued, packedBagsLeft)
-    const remaining = Math.max(0, issued - consumed)
-    packedBagsLeft = Math.max(0, packedBagsLeft - issued)
+  const grouped = new Map()
+  validIssues.forEach((it, index) => {
+    const groupKey = normalizeBagGroupKey(it, index)
+    const issued = Number(it?.qty_issued || 0) || 0
+    const settlementId = Number(it?.settlement_id || it?.settlementId || 0) || 0
+    const current = grouped.get(groupKey) || {
+      id: Number(it?.material_id || it?.product_id || it?.settlement_id || it?.id || index) || index,
+      key: groupKey,
+      issueId: it?.id || it?.issue_id || null,
+      settlementId: settlementId || null,
+      shiftId: it?.shift_id || null,
+      lineId: it?.line_id || null,
+      productId: it?.product_id || null,
+      materialId: it?.material_id || null,
+      name: it?.material_name || it?.product_name || 'Material',
+      state: it?.settlement_state || it?.state || '',
+      uom: it?.uom || '',
+      issued: 0,
+    }
+    current.issued += issued
+    current.issueId = current.issueId || it?.id || it?.issue_id || null
+    if (current.settlementId && settlementId && current.settlementId !== settlementId) {
+      current.settlementId = null
+    } else {
+      current.settlementId = current.settlementId || settlementId || null
+    }
+    current.shiftId = current.shiftId || it?.shift_id || null
+    current.lineId = current.lineId || it?.line_id || null
+    current.productId = current.productId || it?.product_id || null
+    current.materialId = current.materialId || it?.material_id || null
+    current.uom = current.uom || it?.uom || ''
+    if (!current.name || current.name === 'Material') current.name = it?.material_name || it?.product_name || 'Material'
+    grouped.set(groupKey, current)
+  })
+
+  return sortRolitoBagRows(Array.from(grouped.values()).map((item) => {
+    const materialId = Number(item.materialId || 0) || 0
+    const consumed = Math.min(
+      Number(item.issued || 0) || 0,
+      Math.max(0, Number(packedByMaterial.get(materialId) || 0) || 0)
+    )
+    const remaining = Math.max(0, (Number(item.issued || 0) || 0) - consumed)
     return {
-      id: it.id || it.issue_id || it.material_id,
-      issueId: it.id || it.issue_id || null,
-      settlementId: it.settlement_id || null,
-      shiftId: it.shift_id || null,
-      lineId: it.line_id || null,
-      productId: it.product_id || null,
-      name: it.product_name || it.material_name || 'Material',
-      issued,
+      ...item,
       consumed,
       remaining,
-      state: it.settlement_state || it.state || '',
-      materialId: it.material_id || null,
-      uom: it.uom || '',
     }
-  })
+  }))
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

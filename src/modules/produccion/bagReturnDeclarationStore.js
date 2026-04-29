@@ -108,35 +108,54 @@ export function matchesBagReturnDeclaration(summary, {
 }
 
 export function buildRolitoBagDeclarationItems(items = []) {
-  return (Array.isArray(items) ? items : [])
+  const grouped = new Map()
+  ;(Array.isArray(items) ? items : [])
     .filter((item) => normalizeBagCount(item?.issued) > 0)
-    .map((item, index) => {
-      const issued = normalizeBagCount(item?.issued)
-      const consumed = normalizeBagCount(item?.consumed)
-      const remaining = normalizeBagCount(item?.remaining)
-      return {
-        key: String(
-          item?.settlementId
-          || item?.settlement_id
-          || item?.issueId
-          || item?.issue_id
-          || item?.materialId
-          || item?.material_id
-          || index
-        ),
+    .forEach((item, index) => {
+      const settlementId = Number(item?.settlementId || item?.settlement_id || 0) || 0
+      const materialId = Number(item?.materialId || item?.material_id || 0) || 0
+      const productId = Number(item?.productId || item?.product_id || 0) || 0
+      const key = String(
+        materialId
+          ? `material:${materialId}`
+          : productId
+            ? `product:${productId}`
+            : settlementId
+              ? `settlement:${settlementId}`
+              : `item:${index}`
+      )
+      const current = grouped.get(key) || {
+        key,
         issue_id: Number(item?.issueId || item?.issue_id || item?.id || 0) || null,
-        settlement_id: Number(item?.settlementId || item?.settlement_id || 0) || null,
-        material_id: Number(item?.materialId || item?.material_id || 0) || null,
-        product_id: Number(item?.productId || item?.product_id || 0) || null,
+        settlement_id: settlementId || null,
+        material_id: materialId || null,
+        product_id: productId || null,
         line_id: Number(item?.lineId || item?.line_id || 0) || null,
         shift_id: Number(item?.shiftId || item?.shift_id || 0) || null,
         name: String(item?.name || item?.material_name || item?.product_name || 'Material'),
         state: String(item?.state || item?.settlement_state || ''),
-        issued,
-        consumed,
-        remaining,
+        issued: 0,
+        consumed: 0,
+        remaining: 0,
       }
+      current.issued += normalizeBagCount(item?.issued)
+      current.consumed += normalizeBagCount(item?.consumed)
+      current.remaining += normalizeBagCount(item?.remaining)
+      current.issue_id = current.issue_id || Number(item?.issueId || item?.issue_id || item?.id || 0) || null
+      if (current.settlement_id && settlementId && current.settlement_id !== settlementId) {
+        current.settlement_id = null
+      } else {
+        current.settlement_id = current.settlement_id || settlementId || null
+      }
+      current.material_id = current.material_id || materialId || null
+      current.product_id = current.product_id || productId || null
+      current.line_id = current.line_id || Number(item?.lineId || item?.line_id || 0) || null
+      current.shift_id = current.shift_id || Number(item?.shiftId || item?.shift_id || 0) || null
+      current.name = current.name || String(item?.name || item?.material_name || item?.product_name || 'Material')
+      grouped.set(key, current)
     })
+
+  return Array.from(grouped.values())
 }
 
 export function computeRolitoBagDeclarationTotals(items = [], damagedByKey = {}) {

@@ -114,3 +114,48 @@ test('saved bag return declaration only matches the exact closing counts', () =>
   assert.equal(clearBagReturnDeclaration(27), true)
   assert.equal(getBagReturnDeclaration(27), null)
 })
+
+test('buildRolitoBagDeclarationItems consolidates duplicate rows for the same material even across settlements', () => {
+  const items = buildRolitoBagDeclarationItems([
+    {
+      settlementId: 26,
+      issueId: 67,
+      materialId: 12,
+      productId: 776,
+      lineId: 2,
+      shiftId: 32,
+      name: 'MP BOLSA LAURITA ROLITO (5.5KG)',
+      issued: 300,
+      consumed: 120,
+      remaining: 180,
+    },
+    {
+      settlementId: 29,
+      issueId: 68,
+      materialId: 12,
+      productId: 776,
+      lineId: 2,
+      shiftId: 32,
+      name: 'MP BOLSA LAURITA ROLITO (5.5KG)',
+      issued: 200,
+      consumed: 80,
+      remaining: 120,
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  assert.deepEqual(items[0], {
+    key: 'material:12',
+    issue_id: 67,
+    settlement_id: null,
+    material_id: 12,
+    product_id: 776,
+    line_id: 2,
+    shift_id: 32,
+    name: 'MP BOLSA LAURITA ROLITO (5.5KG)',
+    state: '',
+    issued: 500,
+    consumed: 200,
+    remaining: 300,
+  })
+})
