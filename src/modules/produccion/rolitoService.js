@@ -23,6 +23,7 @@ import {
 import { getSession } from '../../lib/api'
 import { computePackingCoherence } from '../shared/packingCoherence'
 import { getMaterialIssues } from '../almacen-pt/materialsService'
+import { buildRolitoPackedByMaterial, getRolitoRelationId } from './rolitoBagMath'
 import {
   DEFAULT_EXPECTED_DEFROST_MIN,
   DEFAULT_EXPECTED_FREEZE_MIN,
@@ -52,8 +53,8 @@ const ROLITO_BAG_DISPLAY_ORDER = [
 ]
 
 function normalizeBagGroupKey(item, index = 0) {
-  const materialId = Number(item?.materialId || item?.material_id || 0) || 0
-  const productId = Number(item?.productId || item?.product_id || 0) || 0
+  const materialId = getRolitoRelationId(item?.materialId ?? item?.material_id)
+  const productId = getRolitoRelationId(item?.productId ?? item?.product_id)
   if (materialId) return `material:${materialId}`
   if (productId) return `product:${productId}`
   return `item:${index}`
@@ -77,28 +78,24 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
     const state = String(it?.settlement_state || it?.state || '').toLowerCase()
     return ['validated', 'reported', 'disputed', 'draft', 'issued'].includes(state)
   })
-  const packedByMaterial = new Map()
-  for (const entry of Array.isArray(packingEntries) ? packingEntries : []) {
-    const materialId = Number(entry?.material_id || entry?.materialId || 0) || 0
-    if (!materialId) continue
-    const qty = Number(entry?.material_qty_total || entry?.materialQtyTotal || 0) || 0
-    packedByMaterial.set(materialId, (packedByMaterial.get(materialId) || 0) + qty)
-  }
+  const packedByMaterial = buildRolitoPackedByMaterial(packingEntries)
 
   const grouped = new Map()
   validIssues.forEach((it, index) => {
     const groupKey = normalizeBagGroupKey(it, index)
     const issued = Number(it?.qty_issued || 0) || 0
     const settlementId = Number(it?.settlement_id || it?.settlementId || 0) || 0
+    const materialId = getRolitoRelationId(it?.material_id ?? it?.materialId)
+    const productId = getRolitoRelationId(it?.product_id ?? it?.productId)
     const current = grouped.get(groupKey) || {
-      id: Number(it?.material_id || it?.product_id || it?.settlement_id || it?.id || index) || index,
+      id: materialId || productId || Number(it?.settlement_id || it?.id || index) || index,
       key: groupKey,
       issueId: it?.id || it?.issue_id || null,
       settlementId: settlementId || null,
       shiftId: it?.shift_id || null,
       lineId: it?.line_id || null,
-      productId: it?.product_id || null,
-      materialId: it?.material_id || null,
+      productId: productId || null,
+      materialId: materialId || null,
       name: it?.material_name || it?.product_name || 'Material',
       state: it?.settlement_state || it?.state || '',
       uom: it?.uom || '',
@@ -113,18 +110,18 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
     }
     current.shiftId = current.shiftId || it?.shift_id || null
     current.lineId = current.lineId || it?.line_id || null
-    current.productId = current.productId || it?.product_id || null
-    current.materialId = current.materialId || it?.material_id || null
+    current.productId = current.productId || productId || null
+    current.materialId = current.materialId || materialId || null
     current.uom = current.uom || it?.uom || ''
     if (!current.name || current.name === 'Material') current.name = it?.material_name || it?.product_name || 'Material'
     grouped.set(groupKey, current)
   })
 
   return sortRolitoBagRows(Array.from(grouped.values()).map((item) => {
-    const materialId = Number(item.materialId || 0) || 0
+    const materialId = getRolitoRelationId(item.materialId)
     const consumed = Math.min(
       Number(item.issued || 0) || 0,
-      Math.max(0, Number(packedByMaterial.get(materialId) || 0) || 0)
+      Math.max(0, Number(packedByMaterial[materialId] || 0) || 0)
     )
     const remaining = Math.max(0, (Number(item.issued || 0) || 0) - consumed)
     return {

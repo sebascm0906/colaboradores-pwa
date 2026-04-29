@@ -62,18 +62,13 @@ export default function ScreenDeclaracionBolsas() {
         setItems(declarationItems)
 
         const totalReceived = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.issued), 0)
-        const totalUsed = normalizeBagCount(
-          manualSummary.bagsUsed
-          || sumRolitoUsedBags(overview.packing || [])
-        )
+        const totalUsed = normalizeBagCount(sumRolitoUsedBags(overview.packing || []))
         const systemRemaining = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.remaining), 0)
-        const nextReceived = normalizeBagCount(manualSummary.bagsReceived || totalReceived)
-        const nextRemaining = normalizeBagCount(manualSummary.bagsRemaining || systemRemaining)
 
         setManualSummary({
-          bagsReceived: nextReceived,
+          bagsReceived: totalReceived,
           bagsUsed: totalUsed,
-          bagsRemaining: nextRemaining,
+          bagsRemaining: systemRemaining,
         })
       } catch (e) {
         logScreenError('ScreenDeclaracionBolsas', 'load', e)

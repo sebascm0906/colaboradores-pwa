@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildRolitoPackedByMaterial,
   computeRolitoBagDifference,
+  getRolitoRelationId,
   sumRolitoLocationStock,
   sumRolitoUsedBags,
 } from '../src/modules/produccion/rolitoBagMath.js'
@@ -34,4 +36,24 @@ test('sumRolitoLocationStock uses on-hand quantity instead of available quantity
   ])
 
   assert.equal(total, 395)
+})
+
+test('getRolitoRelationId extracts ids from Odoo many2one values', () => {
+  assert.equal(getRolitoRelationId([12, 'MP BOLSA LAURITA ROLITO (5.5KG)']), 12)
+  assert.equal(getRolitoRelationId({ id: 7 }), 7)
+  assert.equal(getRolitoRelationId('9'), 9)
+  assert.equal(getRolitoRelationId(null), 0)
+})
+
+test('buildRolitoPackedByMaterial groups packing rows even when material_id comes as many2one arrays', () => {
+  const packed = buildRolitoPackedByMaterial([
+    { id: 1, material_id: [12, 'MP BOLSA LAURITA ROLITO (5.5KG)'], material_qty_total: 500 },
+    { id: 2, material_id: [12, 'MP BOLSA LAURITA ROLITO (5.5KG)'], material_qty_total: 200 },
+    { id: 3, material_id: [11, 'MP BOLSA LAURITA ROLITO (3KG)'], material_qty_total: 30 },
+  ])
+
+  assert.deepEqual(packed, {
+    11: 30,
+    12: 700,
+  })
 })
