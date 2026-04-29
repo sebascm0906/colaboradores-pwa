@@ -107,9 +107,11 @@ export async function cancelMaterialIssue({ issueId, employeeId, notes } = {}) {
 // Contrato definitivo (2026-04-16): el operador SOLO confirma que usó el material.
 // NO captura sobrante (qty_remaining), merma ni consumo — esos datos los registra
 // el auxiliar admin. Payload: lookup + employee_id + notes.
+// ActualizaciÃ³n rolito (2026-04-29): la declaraciÃ³n de bolsas envÃ­a solamente
+// qty_damaged + damage_reason + damage_notes; no manda qty_remaining ni qty_used.
 export async function reportMaterial({
   settlementId, shiftId, lineId, materialId,
-  notes, employeeId,
+  notes, employeeId, qtyDamaged, damageReason, damageNotes,
 } = {}) {
   if (!settlementId && !(shiftId && lineId && materialId)) {
     throw new Error('Debe enviar settlement_id o (shift_id, line_id, material_id)')
@@ -120,6 +122,9 @@ export async function reportMaterial({
     line_id: lineId,
     material_id: materialId,
     employee_id: employeeId,
+    qty_damaged: qtyDamaged != null ? Number(qtyDamaged) : undefined,
+    damage_reason: damageReason || undefined,
+    damage_notes: damageNotes || undefined,
     notes: notes || '',
   })
   if (res?.error) throw new Error(res.error)

@@ -72,9 +72,13 @@ export default function ScreenCierreRolito() {
     bagsRemaining: totalBagsSystemRemaining,
   })
   const totalBagsReturned = bagDeclarationRequired
-    ? Number(bagDeclaration?.total_returned ?? totalBagsSystemRemaining) || 0
+    ? (bagDeclarationReady
+        ? Number(bagDeclaration?.total_returned ?? totalBagsSystemRemaining) || 0
+        : totalBagsSystemRemaining)
     : 0
-  const totalBagsDamaged = Number(bagDeclaration?.total_damaged || 0) || 0
+  const totalBagsDamaged = bagDeclarationReady
+    ? Number(bagDeclaration?.total_damaged || 0) || 0
+    : 0
   const bagsDiff = totalBagsReceived > 0
     ? totalBagsReceived - totalBagsUsed - totalBagsReturned - totalBagsDamaged
     : null
@@ -97,7 +101,7 @@ export default function ScreenCierreRolito() {
   async function handleClose() {
     if (!shift?.id) return
     if (bagDeclarationRequired && !bagDeclarationReady) {
-      setError('Declara la devolucion de bolsas antes de entregar el cierre')
+      setError('Declara la merma de bolsas antes de entregar el cierre')
       return
     }
 
@@ -231,16 +235,16 @@ export default function ScreenCierreRolito() {
                     backTo: '/produccion/cierre',
                   },
                 })}
-                style={declarationBtn}
-              >
-                <div>
-                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Declarar devolucion de bolsas</p>
+              style={declarationBtn}
+            >
+              <div>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Declarar merma de bolsas</p>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '3px 0 0' }}>
                     {bagDeclarationReady
-                      ? `Declaracion lista: regresan ${totalBagsReturned} y ${totalBagsDamaged} quedan como merma`
-                      : 'Confirma cuantas bolsas regresan a la gerente y cuantas fueron merma'}
+                      ? `Merma lista: ${totalBagsDamaged} bolsas quedaran como merma y ${totalBagsReturned} regresaran al cierre`
+                      : 'Registra cuantas bolsas fueron merma. La devolucion util regresara automaticamente al cierre.'}
                   </p>
-                </div>
+              </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -250,10 +254,10 @@ export default function ScreenCierreRolito() {
             {!isBarraOperator && bagDeclarationRequired && !bagDeclarationReady && (
               <div style={warningCard}>
                 <p style={{ ...typo.body, color: TOKENS.colors.warning, margin: '0 0 4px', fontWeight: 700 }}>
-                  Falta declarar la devolucion de bolsas
+                  Falta declarar la merma de bolsas
                 </p>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
-                  Antes de entregar el cierre al supervisor registra cuantas bolsas vuelven al gerente y cuantas fueron merma.
+                  Antes de entregar el cierre al supervisor registra cuantas bolsas fueron merma. La devolucion util se preparara automaticamente con el saldo restante.
                 </p>
               </div>
             )}
@@ -331,7 +335,7 @@ export default function ScreenCierreRolito() {
                   : hasBlockers
                     ? 'Corrige los pendientes para cerrar'
                     : bagDeclarationRequired && !bagDeclarationReady
-                      ? 'Declara la devolucion de bolsas para cerrar'
+                      ? 'Declara la merma de bolsas para cerrar'
                       : alreadyClosed
                         ? 'TURNO YA ENTREGADO'
                         : 'Completa el checklist para cerrar'}

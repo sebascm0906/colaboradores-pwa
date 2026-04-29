@@ -61,6 +61,8 @@ export function buildBagReturnDeclarationSummary({
           settlement_id: Number(line?.settlement_id || 0) || null,
           issue_id: Number(line?.issue_id || 0) || null,
           product_id: Number(line?.product_id || 0) || null,
+          line_id: Number(line?.line_id || 0) || null,
+          shift_id: Number(line?.shift_id || 0) || null,
         }))
       : [],
   }

@@ -3342,8 +3342,10 @@ async function directProduction(method, path, body) {
   // ── Materials: report del operador (gf.production.material.settlement) ────
   //   POST /api/production/materials/settlement/report
   //   Request: { settlement_id }  ó  { shift_id, line_id, material_id }
-  //            + { qty_remaining?, qty_used?, notes? }
+  //            + { qty_damaged?, damage_reason?, damage_notes?, notes? }
   //   Backend aplica transición issue → settlement.reported.
+  //   Flujo rolito bolsas MP: enviar qty_damaged + damage_reason + damage_notes;
+  //   no mandar qty_remaining ni qty_used desde la declaraciÃ³n intermedia.
   if (cleanPath === '/api/production/materials/report' && method === 'POST') {
     const settlementId = Number(body?.settlement_id || 0) || undefined
     const shiftId      = Number(body?.shift_id || 0) || undefined
@@ -3358,8 +3360,9 @@ async function directProduction(method, path, body) {
       line_id: lineId,
       material_id: materialId,
       employee_id: body?.employee_id || getEmployeeId() || undefined,
-      qty_remaining: body?.qty_remaining != null ? Number(body.qty_remaining) : undefined,
-      qty_used: body?.qty_used != null ? Number(body.qty_used) : undefined,
+      qty_damaged: body?.qty_damaged != null ? Number(body.qty_damaged) : undefined,
+      damage_reason: body?.damage_reason || undefined,
+      damage_notes: body?.damage_notes || undefined,
       notes: body?.notes || '',
     })
     const envelope = raw?.result ?? raw
@@ -3979,6 +3982,86 @@ async function directRuta(method, path, body) {
     return odooJson('/pwa-ruta/team-incidents', {
       date:      query.get('date') || undefined,
       route_ids: query.get('route_ids') || undefined,
+    })
+  }
+
+  // ── Vehicle Checklist (Sebastián 2026-04-25, backend QA 32/32 PASS) ───────
+  // 6 endpoints para inspección de unidad previa a salida de ruta.
+  // Todos JSON-RPC POST. Backend puede responder HTTP 200 con result.ok=false
+  // (mismo patrón que accept-load / validate-corte / liquidacion-confirm).
+  // Ownership server-side: el plan debe tener driver_employee_id o
+  // salesperson_employee_id == empleado autenticado.
+  // Soft launch: templates seed con is_required_for_departure=false; el flag
+  // se activará desde Odoo backend cuando la operación esté lista.
+  // Fix backend ba9de46: vehicle_checklist_required viene en data.code (no
+  // en code top-level). El consumidor (ScreenAceptarCarga) lee data.code.
+
+  if (cleanPath === '/pwa-ruta/vehicle-checklist' && method === 'GET') {
+    // Lee header del checklist asociado al plan. NO crea.
+    // Response existe: data:{id, route_plan_id, state, vehicle_id, vehicle_name,
+    //   checks_total, checks_answered, checks_passed, checks_required_pending,
+    //   created_at, initialized_at, completed_at, notes}
+    // Response no existe: data:null
+    return odooJson('/pwa-ruta/vehicle-checklist', {
+      route_plan_id: Number(query.get('route_plan_id') || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-ruta/vehicle-checklist-create' && method === 'POST') {
+    // Idempotente. Si ya existe checklist activo para el plan, devuelve el
+    // mismo (data.is_new=false). Si no, crea nuevo en estado draft.
+    return odooJson('/pwa-ruta/vehicle-checklist-create', {
+      route_plan_id: Number(body?.route_plan_id || body?.plan_id || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-ruta/vehicle-checklist-init' && method === 'POST') {
+    // Instancia los checks desde templates aplicables (filtrados por
+    // company_id del plan). Transiciona draft → in_progress.
+    // Idempotente si ya está in_progress (no recrea).
+    return odooJson('/pwa-ruta/vehicle-checklist-init', {
+      checklist_id: Number(body?.checklist_id || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-ruta/vehicle-checks' && method === 'GET') {
+    // Lista todos los checks del checklist con su estado actual.
+    // Cada check trae: id, sequence, name, check_type, required,
+    // blocking_on_fail, passed, answered, not_passed_reason, answered_at,
+    // result_bool/result_numeric/result_text/result_photo_url + campos
+    // específicos por tipo (expected_bool / min_value / max_value).
+    return odooJson('/pwa-ruta/vehicle-checks', {
+      checklist_id: Number(query.get('checklist_id') || 0),
+    })
+  }
+
+  if (cleanPath === '/pwa-ruta/vehicle-check' && method === 'POST') {
+    // Submit individual de una respuesta. Backend computa `passed` según
+    // tipo y reglas. Idempotente: re-submit sobreescribe.
+    // Foto: result_photo es base64 sin prefijo data:image/...
+    // (cliente debe comprimir antes — ver vehiclePhotoCompressor).
+    const payload = { check_id: Number(body?.check_id || 0) }
+    if (body?.result_bool !== undefined) payload.result_bool = Boolean(body.result_bool)
+    if (body?.result_numeric !== undefined && body.result_numeric !== null) {
+      payload.result_numeric = Number(body.result_numeric)
+    }
+    if (body?.result_text !== undefined) payload.result_text = String(body.result_text || '')
+    if (body?.result_photo) payload.result_photo = String(body.result_photo)
+    if (body?.result_photo_filename) payload.result_photo_filename = String(body.result_photo_filename)
+    if (body?.not_passed_reason) payload.not_passed_reason = String(body.not_passed_reason)
+    return odooJson('/pwa-ruta/vehicle-check', payload)
+  }
+
+  if (cleanPath === '/pwa-ruta/vehicle-checklist-complete' && method === 'POST') {
+    // Cierra el checklist si todos los required están respondidos y ningún
+    // blocking_on_fail con passed=false.
+    // Errores funcionales conocidos:
+    //   code:"checks_pending"          → faltan respuestas
+    //   code:"checks_failed_blocking"  → punto crítico en falla
+    //   code:"already_completed"       → idempotente, tratar como terminal
+    return odooJson('/pwa-ruta/vehicle-checklist-complete', {
+      checklist_id: Number(body?.checklist_id || 0),
+      notes:        String(body?.notes || '').trim(),
     })
   }
 

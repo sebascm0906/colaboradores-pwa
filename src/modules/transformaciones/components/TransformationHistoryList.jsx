@@ -1,4 +1,5 @@
 import { TOKENS, getTypo } from '../../../tokens'
+import TransformationStateBadges from './TransformationStateBadges'
 
 export default function TransformationHistoryList({ items, sw, onCancel, cancellingId }) {
   const typo = getTypo(sw)
@@ -22,6 +23,9 @@ export default function TransformationHistoryList({ items, sw, onCancel, cancell
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
             <div>
               <p style={{ ...typo.title, color: TOKENS.colors.textSoft, margin: 0 }}>{item.recipe_code || item.name}</p>
+              <div style={{ marginTop: 6 }}>
+                <TransformationStateBadges item={item} />
+              </div>
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
                 Barras: {Number(item.input_qty_units || item.input_qty || 0).toFixed(0)} · Salida: {Number(item.actual_output_qty_units || item.output_qty_units || 0).toFixed(2)}
               </p>
