@@ -8,21 +8,146 @@ export function getMyRoutePlan(employeeId) {
   return api('GET', `/pwa-ruta/my-plan?employee_id=${employeeId}`)
 }
 
-// ── Checklist de unidad ──────────────────────────────────────────────────────
+// ── Checklist de unidad (Sebastián 2026-04-25, backend QA 32/32 PASS) ────────
 
-/** Obtener checklist de revisión de unidad del día */
+/** Obtener checklist (header) de inspección de unidad para un plan.
+ *
+ *  Endpoint: GET /pwa-ruta/vehicle-checklist?route_plan_id=N
+ *  Backend devuelve HTTP 200 SIEMPRE (incluso en errores funcionales).
+ *
+ *  Response existe:
+ *    { ok:true, message:"OK", data:{
+ *        id, route_plan_id, state ('draft'|'in_progress'|'completed'|'cancelled'),
+ *        vehicle_id, vehicle_name,
+ *        checks_total, checks_answered, checks_passed, checks_required_pending,
+ *        created_at, initialized_at, completed_at, notes
+ *    } }
+ *
+ *  Response no existe:
+ *    { ok:true, data:null }
+ *
+ *  Errores: { ok:false, message:"Plan no existe." } | { ok:false, message:"No tienes acceso..." } | sesión.
+ */
 export function getVehicleChecklist(routePlanId) {
   return api('GET', `/pwa-ruta/vehicle-checklist?route_plan_id=${routePlanId}`)
 }
 
-/** Enviar respuesta de un punto del checklist */
-export function submitVehicleCheck(checkId, data) {
-  return api('POST', '/pwa-ruta/vehicle-check', { check_id: checkId, ...data })
+/** Crear checklist (idempotente) en estado draft.
+ *
+ *  Endpoint: POST /pwa-ruta/vehicle-checklist-create
+ *  Body: { route_plan_id }
+ *
+ *  Response:
+ *    { ok:true, message:"Inspección creada", data:{
+ *        checklist_id, state:"draft", created_at, is_new:true|false
+ *    } }
+ *  is_new=false cuando ya existía un checklist activo (idempotente).
+ */
+export function createVehicleChecklist(routePlanId) {
+  return api('POST', '/pwa-ruta/vehicle-checklist-create', {
+    route_plan_id: Number(routePlanId),
+  })
 }
 
-/** Completar checklist de unidad */
-export function completeVehicleChecklist(checklistId) {
-  return api('POST', '/pwa-ruta/vehicle-checklist-complete', { checklist_id: checklistId })
+/** Inicializar checklist: instancia checks desde templates. draft → in_progress.
+ *
+ *  Endpoint: POST /pwa-ruta/vehicle-checklist-init
+ *  Body: { checklist_id }
+ *
+ *  Response:
+ *    { ok:true, message:"Checklist inicializado", data:{
+ *        checklist_id, state:"in_progress", checks_total, initialized_at
+ *    } }
+ *  Idempotente si ya está in_progress (no recrea checks).
+ */
+export function initVehicleChecklist(checklistId) {
+  return api('POST', '/pwa-ruta/vehicle-checklist-init', {
+    checklist_id: Number(checklistId),
+  })
+}
+
+/** Lista todos los checks del checklist.
+ *
+ *  Endpoint: GET /pwa-ruta/vehicle-checks?checklist_id=N
+ *
+ *  Response:
+ *    { ok:true, data:{
+ *        checklist_id, state,
+ *        checks: [{
+ *          id, sequence, name, check_type ('yes_no'|'numeric'|'text'|'photo'),
+ *          required, blocking_on_fail, passed, answered, not_passed_reason, answered_at,
+ *          result_bool, result_numeric, result_text, result_photo_url,
+ *          // específicos por tipo:
+ *          expected_bool (yes_no), min_value/max_value (numeric)
+ *        }, ...]
+ *    } }
+ *
+ *  IMPORTANTE: el campo `answered` es la fuente de verdad para "respondido vs no",
+ *  NO usar `passed` (que indica si la respuesta cumple, distinto de respondida).
+ */
+export function getVehicleChecks(checklistId) {
+  return api('GET', `/pwa-ruta/vehicle-checks?checklist_id=${checklistId}`)
+}
+
+/** Submit individual de una respuesta. Backend computa `passed` server-side.
+ *
+ *  Endpoint: POST /pwa-ruta/vehicle-check
+ *  Idempotente: re-submit sobreescribe.
+ *
+ *  Body por tipo:
+ *    yes_no:  { check_id, result_bool, not_passed_reason? }
+ *    numeric: { check_id, result_numeric }
+ *    text:    { check_id, result_text }
+ *    photo:   { check_id, result_photo (base64 sin prefijo data:image/), result_photo_filename? }
+ *
+ *  Response éxito:
+ *    { ok:true, message:"Respuesta guardada", data:{
+ *        check_id, passed, answered_at, answered_by_id,
+ *        checklist_progress:{ answered, total, passed, required_pending }
+ *    } }
+ *
+ *  Errores funcionales:
+ *    code:"passed_false_requires_reason" — fail sin not_passed_reason
+ *    code:"numeric_out_of_range"
+ *    code:"photo_too_large"
+ *    code:"invalid_photo_format"
+ *    code:"check_not_found"
+ *
+ *  IMPORTANTE: para fotos, comprimir client-side antes de enviar (ver
+ *  vehiclePhotoCompressor.compressPhotoToBase64) — JPEG q0.7 max 1920px.
+ */
+export function submitVehicleCheck(checkId, payload) {
+  return api('POST', '/pwa-ruta/vehicle-check', {
+    check_id: Number(checkId),
+    ...payload,
+  })
+}
+
+/** Completar checklist. Backend valida que required estén answered y ningún
+ *  blocking_on_fail con passed=false.
+ *
+ *  Endpoint: POST /pwa-ruta/vehicle-checklist-complete
+ *  Body: { checklist_id, notes? }
+ *
+ *  Response éxito:
+ *    { ok:true, message:"Inspección completada", data:{
+ *        checklist_id, state:"completed", completed_at, completed_by_id, completed_by,
+ *        checks_total, checks_passed, checks_failed_non_blocking
+ *    } }
+ *
+ *  Errores funcionales (HTTP 200):
+ *    code:"checks_pending"          + data.missing_check_ids/missing_names
+ *    code:"checks_failed_blocking"  + data.failed_check_ids/failed_names
+ *    code:"already_completed"       — idempotente, tratar como terminal amigable
+ *    code:"not_initialized"
+ *
+ *  La UI debe distinguir cada code para mostrar el mensaje específico.
+ */
+export function completeVehicleChecklist(checklistId, notes = '') {
+  return api('POST', '/pwa-ruta/vehicle-checklist-complete', {
+    checklist_id: Number(checklistId),
+    notes: String(notes || '').trim(),
+  })
 }
 
 // ── Aceptar carga ────────────────────────────────────────────────────────────
@@ -83,23 +208,6 @@ export function getReconciliation(routePlanId) {
 /** Líneas de producto del picking de carga */
 export function getLoadLines(pickingId) {
   return api('GET', `/pwa-ruta/load-lines?picking_id=${pickingId}`)
-}
-
-// ── Checklist de vehículo (auto-creación) ────────────────────────────────────
-
-/** Crear contenedor dummy shift para checklist */
-export function createVehicleChecklistShift(employeeId) {
-  return api('POST', '/pwa-ruta/vehicle-checklist-create', { employee_id: employeeId })
-}
-
-/** Inicializar checklist + checks desde template */
-export function initVehicleChecklist(shiftId, employeeId) {
-  return api('POST', '/pwa-ruta/vehicle-checklist-init', { shift_id: shiftId, employee_id: employeeId })
-}
-
-/** Leer checks de un checklist */
-export function getVehicleChecks(checklistId) {
-  return api('GET', `/pwa-ruta/vehicle-checks?checklist_id=${checklistId}`)
 }
 
 // ── KM persistente (gf_logistics_ops) ───────────────────────────────────────
