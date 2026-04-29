@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
+import { reportMaterial } from '../almacen-pt/materialsService'
 import { getShiftOverview } from './rolitoService'
 import {
   buildBagReturnDeclarationSummary,
@@ -38,7 +39,7 @@ export default function ScreenDeclaracionBolsas() {
 
   useEffect(() => {
     if (!employeeId) {
-      setError('Sin empleado en sesión')
+      setError('Sin empleado en sesion')
       setLoading(false)
       return
     }
@@ -50,7 +51,7 @@ export default function ScreenDeclaracionBolsas() {
         const overview = await getShiftOverview()
         if (!alive) return
         if (!overview?.shift?.id) {
-          setError('Sin turno activo para declarar bolsas')
+          setError('Sin turno activo para declarar merma')
           setLoading(false)
           return
         }
@@ -75,7 +76,7 @@ export default function ScreenDeclaracionBolsas() {
         })
       } catch (e) {
         logScreenError('ScreenDeclaracionBolsas', 'load', e)
-        if (alive) setError(e?.message || 'Error cargando devolución de bolsas')
+        if (alive) setError(e?.message || 'Error cargando declaracion de merma')
       } finally {
         if (alive) setLoading(false)
       }
@@ -118,6 +119,25 @@ export default function ScreenDeclaracionBolsas() {
     setError('')
 
     try {
+      const linePayloads = totals.lines
+        .filter((line) => line.settlement_id || ((line.shift_id || shift?.id) && line.line_id && line.material_id))
+        .map((line) => ({
+          settlementId: line.settlement_id || undefined,
+          shiftId: line.shift_id || shift?.id || undefined,
+          lineId: line.line_id || undefined,
+          materialId: line.material_id || undefined,
+          employeeId,
+          qtyRemaining: line.returned,
+          qtyUsed: line.qty_consumed + line.damaged,
+          notes: notes || `Declaracion de merma rolito - ${line.name}`,
+        }))
+
+      if (!linePayloads.length) {
+        throw new Error('No encontramos materiales MP validos para registrar la merma')
+      }
+
+      await Promise.all(linePayloads.map((payload) => reportMaterial(payload)))
+
       const summary = buildBagReturnDeclarationSummary({
         shiftId: shift.id,
         bagsReceived: manualSummary.bagsReceived,
@@ -138,13 +158,15 @@ export default function ScreenDeclaracionBolsas() {
           settlement_id: line.settlement_id,
           issue_id: line.issue_id,
           product_id: line.product_id,
+          line_id: line.line_id,
+          shift_id: line.shift_id || shift.id,
         })),
       })
       saveBagReturnDeclaration(shift, summary)
       setSuccessSummary(summary)
     } catch (e) {
       logScreenError('ScreenDeclaracionBolsas', 'handleSubmit', e)
-      setError(e?.message || 'Error al declarar devolución de bolsas')
+      setError(e?.message || 'Error al declarar merma de bolsas')
     } finally {
       setSubmitting(false)
     }
@@ -152,11 +174,11 @@ export default function ScreenDeclaracionBolsas() {
 
   if (successSummary) {
     return (
-      <PageShell typo={typo} title="Declaración de Bolsas" navigate={navigate}>
+      <PageShell typo={typo} title="Declaracion de Bolsas" navigate={navigate}>
         <SuccessState
           typo={typo}
-          label="Devolución declarada"
-          sub={`Regresan ${successSummary.total_returned} bolsas útiles y ${successSummary.total_damaged} quedan como merma`}
+          label="Merma declarada"
+          sub={`Se asentaron ${successSummary.total_damaged} bolsas como merma y ${successSummary.total_returned} quedan listas para regreso automatico al cierre`}
           onBack={() => navigate(backTo, {
             replace: true,
             state: { bagDeclarationUpdatedAt: Date.now() },
@@ -167,7 +189,7 @@ export default function ScreenDeclaracionBolsas() {
   }
 
   return (
-    <PageShell typo={typo} title="Declaración de Bolsas" navigate={navigate}>
+    <PageShell typo={typo} title="Declaracion de Bolsas" navigate={navigate}>
       {loading && <Spinner />}
 
       {!loading && error && (
@@ -178,7 +200,7 @@ export default function ScreenDeclaracionBolsas() {
         <EmptyState
           typo={typo}
           title="Sin materiales de bolsas pendientes"
-          body="No encontramos bolsas MP activas para este turno. Si ya se consumieron o devolvieron, puedes volver al cierre."
+          body="No encontramos bolsas MP activas para este turno. Si ya se consumieron o quedaron devueltas, puedes volver al cierre."
         />
       )}
 
@@ -197,12 +219,12 @@ export default function ScreenDeclaracionBolsas() {
             <WarningBanner
               typo={typo}
               title="El conteo del cierre no coincide con el saldo del sistema"
-              body={`En cierre capturaste ${declaredSobrantes} sobrantes, pero los materiales activos del turno suman ${systemRemaining}. La devolución real se calculará con el saldo del sistema para no romper inventario.`}
+              body={`En cierre capturaste ${declaredSobrantes} sobrantes, pero los materiales activos del turno suman ${systemRemaining}. La devolucion util se preparara con el saldo del sistema para no romper inventario.`}
             />
           )}
 
           <div>
-            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>DECLARACIÓN POR PRODUCTO MP</p>
+            <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>DECLARACION POR PRODUCTO MP</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {totals.lines.map((item) => (
                 <div
@@ -236,7 +258,7 @@ export default function ScreenDeclaracionBolsas() {
                   />
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
-                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Regresa al gerente</span>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Regresa automaticamente al cierre</span>
                     <span style={{ ...typo.caption, color: TOKENS.colors.success, fontWeight: 700 }}>
                       {item.returned} bolsas
                     </span>
@@ -251,7 +273,7 @@ export default function ScreenDeclaracionBolsas() {
               Notas (opcional)
             </label>
             <textarea
-              placeholder="Observaciones sobre bolsas dañadas o devolución..."
+              placeholder="Observaciones sobre bolsas danadas o merma..."
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={3}
@@ -273,7 +295,7 @@ export default function ScreenDeclaracionBolsas() {
               opacity: submitting ? 0.6 : 1,
             }}
           >
-            {submitting ? 'Declarando...' : 'CONFIRMAR DEVOLUCIÓN Y MERMA'}
+            {submitting ? 'Declarando...' : 'CONFIRMAR MERMA'}
           </button>
         </form>
       )}
@@ -313,7 +335,7 @@ function SummaryCard({ typo, bagsReceived, bagsUsed, bagsRemaining, totalDamaged
       <Row label="Bolsas usadas" value={bagsUsed} typo={typo} />
       <Row label="Bolsas sobrantes" value={bagsRemaining} typo={typo} />
       <Row label="Merma declarada" value={totalDamaged} typo={typo} accent={TOKENS.colors.warning} />
-      <Row label="Devolución real" value={totalReturned} typo={typo} accent={TOKENS.colors.success} />
+      <Row label="Devolucion util" value={totalReturned} typo={typo} accent={TOKENS.colors.success} />
     </div>
   )
 }
@@ -338,8 +360,10 @@ function Spinner() {
 function ErrorBanner({ message, typo }) {
   return (
     <div style={{
-      padding: '16px', borderRadius: TOKENS.radius.lg,
-      background: `${TOKENS.colors.error}14`, border: `1px solid ${TOKENS.colors.error}30`,
+      padding: '16px',
+      borderRadius: TOKENS.radius.lg,
+      background: `${TOKENS.colors.error}14`,
+      border: `1px solid ${TOKENS.colors.error}30`,
     }}>
       <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0 }}>{message}</p>
     </div>
@@ -373,9 +397,15 @@ function SuccessState({ typo, label, sub, onBack }) {
   return (
     <div style={{ textAlign: 'center', paddingTop: 48 }}>
       <div style={{
-        width: 56, height: 56, borderRadius: '50%',
-        background: `${TOKENS.colors.success}20`, border: `1px solid ${TOKENS.colors.success}40`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        background: `${TOKENS.colors.success}20`,
+        border: `1px solid ${TOKENS.colors.success}40`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 16px',
       }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.success} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12"/>
@@ -386,9 +416,14 @@ function SuccessState({ typo, label, sub, onBack }) {
       <button
         onClick={onBack}
         style={{
-          width: '100%', padding: '14px', borderRadius: TOKENS.radius.lg,
-          background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-          ...typo.title, color: TOKENS.colors.text, cursor: 'pointer',
+          width: '100%',
+          padding: '14px',
+          borderRadius: TOKENS.radius.lg,
+          background: TOKENS.colors.surface,
+          border: `1px solid ${TOKENS.colors.border}`,
+          ...typo.title,
+          color: TOKENS.colors.text,
+          cursor: 'pointer',
         }}
       >
         Volver al cierre

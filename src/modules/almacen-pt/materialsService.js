@@ -109,7 +109,7 @@ export async function cancelMaterialIssue({ issueId, employeeId, notes } = {}) {
 // el auxiliar admin. Payload: lookup + employee_id + notes.
 export async function reportMaterial({
   settlementId, shiftId, lineId, materialId,
-  notes, employeeId,
+  notes, employeeId, qtyRemaining, qtyUsed,
 } = {}) {
   if (!settlementId && !(shiftId && lineId && materialId)) {
     throw new Error('Debe enviar settlement_id o (shift_id, line_id, material_id)')
@@ -120,6 +120,8 @@ export async function reportMaterial({
     line_id: lineId,
     material_id: materialId,
     employee_id: employeeId,
+    qty_remaining: qtyRemaining != null ? Number(qtyRemaining) : undefined,
+    qty_used: qtyUsed != null ? Number(qtyUsed) : undefined,
     notes: notes || '',
   })
   if (res?.error) throw new Error(res.error)
