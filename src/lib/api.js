@@ -13,6 +13,7 @@ import {
   normalizeChecklistNumericCheck,
   normalizeChecklistNumericRange,
 } from '../modules/produccion/checklistNumericRange.js'
+import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
@@ -2613,14 +2614,14 @@ async function directProduction(method, path, body) {
           }))
         : []
 
-      const availableByProduct = new Map()
+      const quantityByProduct = new Map()
       for (const quant of quantRows) {
         const productId = Number(quant?.product_id?.[0] || quant?.product_id || 0) || 0
         if (!productId) continue
-        const explicitAvailable = Number(quant?.available_quantity)
-        const fallbackAvailable = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
-        const available = Number.isFinite(explicitAvailable) ? explicitAvailable : fallbackAvailable
-        availableByProduct.set(productId, (availableByProduct.get(productId) || 0) + Math.max(0, available))
+        quantityByProduct.set(
+          productId,
+          (quantityByProduct.get(productId) || 0) + sumRolitoLocationStock([quant])
+        )
       }
 
       const products = validMaterialNames.map((materialName, index) => {
@@ -2631,7 +2632,7 @@ async function directProduction(method, path, body) {
           material_id: Number(material?.id || 0) || null,
           product_id: productId || null,
           name: materialName,
-          available: Math.round((availableByProduct.get(productId) || 0) * 1000) / 1000,
+          available: Math.round((quantityByProduct.get(productId) || 0) * 1000) / 1000,
         }
       })
 

@@ -12,6 +12,7 @@ import {
   normalizeBagCount,
   saveBagReturnDeclaration,
 } from './bagReturnDeclarationStore'
+import { sumRolitoUsedBags } from './rolitoBagMath'
 
 export default function ScreenDeclaracionBolsas() {
   const navigate = useNavigate()
@@ -63,7 +64,7 @@ export default function ScreenDeclaracionBolsas() {
         const totalReceived = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.issued), 0)
         const totalUsed = normalizeBagCount(
           manualSummary.bagsUsed
-          || (overview.packing || []).reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+          || sumRolitoUsedBags(overview.packing || [])
         )
         const systemRemaining = declarationItems.reduce((sum, item) => sum + normalizeBagCount(item.remaining), 0)
         const nextReceived = normalizeBagCount(manualSummary.bagsReceived || totalReceived)

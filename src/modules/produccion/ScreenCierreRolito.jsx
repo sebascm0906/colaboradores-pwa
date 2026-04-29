@@ -13,6 +13,7 @@ import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getShiftOverview, saveBagReconciliation } from './rolitoService'
 import { getBagReturnDeclaration, matchesBagReturnDeclaration } from './bagReturnDeclarationStore'
 import { notifyOperatorClose } from './api'
+import { computeRolitoBagDifference, sumRolitoUsedBags } from './rolitoBagMath'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
 import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
 
@@ -61,7 +62,7 @@ export default function ScreenCierreRolito() {
   useEffect(() => { loadData() }, [loadData])
 
   const { shift, kpis } = data
-  const totalBagsUsed = data.packing.reduce((sum, entry) => sum + (Number(entry.qty_bags) || 0), 0)
+  const totalBagsUsed = sumRolitoUsedBags(data.packing)
   const totalBagsReceived = data.bagMaterials.reduce((sum, item) => sum + (Number(item.issued) || 0), 0)
   const totalBagsSystemRemaining = data.bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
   const bagDeclaration = shift?.id ? getBagReturnDeclaration(shift) : null
@@ -80,7 +81,12 @@ export default function ScreenCierreRolito() {
     ? Number(bagDeclaration?.total_damaged || 0) || 0
     : 0
   const bagsDiff = totalBagsReceived > 0
-    ? totalBagsReceived - totalBagsUsed - totalBagsReturned - totalBagsDamaged
+    ? computeRolitoBagDifference({
+        bagsReceived: totalBagsReceived,
+        bagsUsed: totalBagsUsed,
+        bagsRemaining: totalBagsReturned,
+        bagsDamaged: totalBagsDamaged,
+      })
     : null
   const allChecked = checks.every((check) => check.done)
   const hasBlockers = false
