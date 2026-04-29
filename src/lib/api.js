@@ -3341,8 +3341,10 @@ async function directProduction(method, path, body) {
   // ── Materials: report del operador (gf.production.material.settlement) ────
   //   POST /api/production/materials/settlement/report
   //   Request: { settlement_id }  ó  { shift_id, line_id, material_id }
-  //            + { qty_remaining?, qty_used?, notes? }
+  //            + { qty_damaged?, damage_reason?, damage_notes?, notes? }
   //   Backend aplica transición issue → settlement.reported.
+  //   Flujo rolito bolsas MP: enviar qty_damaged + damage_reason + damage_notes;
+  //   no mandar qty_remaining ni qty_used desde la declaraciÃ³n intermedia.
   if (cleanPath === '/api/production/materials/report' && method === 'POST') {
     const settlementId = Number(body?.settlement_id || 0) || undefined
     const shiftId      = Number(body?.shift_id || 0) || undefined
@@ -3357,8 +3359,9 @@ async function directProduction(method, path, body) {
       line_id: lineId,
       material_id: materialId,
       employee_id: body?.employee_id || getEmployeeId() || undefined,
-      qty_remaining: body?.qty_remaining != null ? Number(body.qty_remaining) : undefined,
-      qty_used: body?.qty_used != null ? Number(body.qty_used) : undefined,
+      qty_damaged: body?.qty_damaged != null ? Number(body.qty_damaged) : undefined,
+      damage_reason: body?.damage_reason || undefined,
+      damage_notes: body?.damage_notes || undefined,
       notes: body?.notes || '',
     })
     const envelope = raw?.result ?? raw

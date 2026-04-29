@@ -101,6 +101,7 @@ export default function ScreenDeclaracionBolsas() {
     && employeeId
     && items.length > 0
     && !submitting
+    && totalDamaged > 0
     && totalDamaged <= systemRemaining
   )
 
@@ -121,19 +122,21 @@ export default function ScreenDeclaracionBolsas() {
     try {
       const linePayloads = totals.lines
         .filter((line) => line.settlement_id || ((line.shift_id || shift?.id) && line.line_id && line.material_id))
+        .filter((line) => line.damaged > 0)
         .map((line) => ({
           settlementId: line.settlement_id || undefined,
           shiftId: line.shift_id || shift?.id || undefined,
           lineId: line.line_id || undefined,
           materialId: line.material_id || undefined,
           employeeId,
-          qtyRemaining: line.returned,
-          qtyUsed: line.qty_consumed + line.damaged,
+          qtyDamaged: line.damaged,
+          damageReason: 'broken_bag',
+          damageNotes: notes || `Declaracion de merma rolito - ${line.name}`,
           notes: notes || `Declaracion de merma rolito - ${line.name}`,
         }))
 
       if (!linePayloads.length) {
-        throw new Error('No encontramos materiales MP validos para registrar la merma')
+        throw new Error('Captura al menos una bolsa dañada para registrar la merma')
       }
 
       await Promise.all(linePayloads.map((payload) => reportMaterial(payload)))
