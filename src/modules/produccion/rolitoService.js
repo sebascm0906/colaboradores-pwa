@@ -161,21 +161,32 @@ export function nowDatetime() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-export function fmtTime(dt) {
-  if (!dt) return '--:--'
+export function parseOdooDatetime(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
   try {
-    const d = new Date(dt.replace(' ', 'T'))
-    return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
-  } catch { return '--:--' }
+    if (/([zZ]|[+\-]\d{2}:\d{2})$/.test(raw)) {
+      const parsed = new Date(raw.replace(' ', 'T'))
+      return Number.isNaN(parsed.getTime()) ? null : parsed
+    }
+    const parsed = new Date(raw.replace(' ', 'T') + 'Z')
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  } catch {
+    return null
+  }
+}
+
+export function fmtTime(dt) {
+  const d = parseOdooDatetime(dt)
+  if (!d) return '--:--'
+  return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 export function minutesBetween(start, end) {
-  if (!start || !end) return 0
-  try {
-    const a = new Date(start.replace(' ', 'T'))
-    const b = new Date(end.replace(' ', 'T'))
-    return Math.round((b - a) / 60000)
-  } catch { return 0 }
+  const a = parseOdooDatetime(start)
+  const b = parseOdooDatetime(end)
+  if (!a || !b) return 0
+  return Math.round((b - a) / 60000)
 }
 
 // ── LIVE: Shift Overview ─────────────────────────────────────────────────────
@@ -243,7 +254,8 @@ export function getCycleProgress(cycle) {
   const now = new Date()
 
   if (cycle.state === 'freezing' && cycle.freeze_start) {
-    const start = new Date(cycle.freeze_start.replace(' ', 'T'))
+    const start = parseOdooDatetime(cycle.freeze_start)
+    if (!start) return null
     const elapsedMs = now - start
     const elapsedMin = elapsedMs / 60000
     const expectedMin = cycle.expected_freeze_min || EXPECTED_FREEZE_MIN
@@ -265,7 +277,8 @@ export function getCycleProgress(cycle) {
   }
 
   if (cycle.state === 'defrosting' && cycle.defrost_start) {
-    const start = new Date(cycle.defrost_start.replace(' ', 'T'))
+    const start = parseOdooDatetime(cycle.defrost_start)
+    if (!start) return null
     const elapsedMs = now - start
     const elapsedMin = elapsedMs / 60000
     const expectedMin = cycle.expected_defrost_min || EXPECTED_DEFROST_MIN

@@ -7,6 +7,7 @@ import { resolveModuleContextRole } from '../../lib/roleContext'
 import { getMyShift, getCycles, getPackingEntries } from './api'
 import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
 import { getMiTurnoActions } from './miTurnoActions'
+import { fmtTime } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
@@ -453,7 +454,7 @@ const CYCLE_STATES = {
 
 function CycleRow({ cycle, typo }) {
   const st = CYCLE_STATES[cycle.state] || CYCLE_STATES.freezing
-  const timeStr = cycle.freeze_start ? new Date(cycle.freeze_start).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '--:--'
+  const timeStr = fmtTime(cycle.freeze_start)
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,

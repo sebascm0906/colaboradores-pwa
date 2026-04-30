@@ -18,6 +18,7 @@ import {
   getCycleDiagnostics,
   CYCLE_STATES,
   EXPECTED_KG_PER_CYCLE,
+  fmtTime,
 } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
 import {
@@ -394,7 +395,7 @@ export default function ScreenTurnoRolito() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {cycles.slice(-5).reverse().map((c, i) => {
                     const st = CYCLE_STATES[c.state] || CYCLE_STATES.freezing
-                    const timeStr = c.freeze_start ? new Date(c.freeze_start.replace(' ', 'T')).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '--:--'
+                    const timeStr = fmtTime(c.freeze_start)
                     const cycleDiag = getCycleDiagnostics(c)
                     return (
                       <div key={c.id || i} style={{
