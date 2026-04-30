@@ -74,7 +74,11 @@ export default function ScreenCargaUnidades() {
     setError('')
     try {
       const r = await getTodayRoutes(warehouseId)
-      setRoutes(Array.isArray(r) ? r : [])
+      // Ocultar borradores sin picking asignado — no tienen carga que gestionar todavía.
+      const visible = (Array.isArray(r) ? r : []).filter(
+        (route) => route.state !== 'draft' || Boolean(extractPickingId(route.load_picking_id))
+      )
+      setRoutes(visible)
     } catch (e) {
       if (e.message !== 'no_session') setError('Error al cargar rutas')
       setRoutes([])
