@@ -192,3 +192,38 @@ test('computeAvailableBagMaterials ignores zeroed settlement balances until a us
   assert.equal(rows[0].remaining, 50)
   assert.equal(rows[0].damaged, 0)
 })
+
+test('computeAvailableBagMaterials derives useful return from packing when old settlement damage left remaining at zero', () => {
+  const issues = [
+    {
+      id: 73,
+      settlement_id: 27,
+      shift_id: 33,
+      line_id: 2,
+      material_id: 10,
+      product_id: 777,
+      material_name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      qty_issued: 100,
+      state: 'confirmed',
+      settlement_state: 'reported',
+      settlement_qty_remaining: 0,
+      settlement_qty_damaged: 2,
+      settlement_qty_consumed: 98,
+    },
+  ]
+
+  const packingEntries = [
+    {
+      id: 952,
+      material_id: 10,
+      material_qty_total: 50,
+    },
+  ]
+
+  const rows = computeAvailableBagMaterials(issues, packingEntries)
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].consumed, 50)
+  assert.equal(rows[0].remaining, 48)
+  assert.equal(rows[0].damaged, 2)
+})

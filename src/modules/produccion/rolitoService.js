@@ -131,19 +131,17 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
 
   return sortRolitoBagRows(Array.from(grouped.values()).map((item) => {
     const materialId = getRolitoRelationId(item.materialId)
-    const settlementConsumed = item.settlementConsumed == null ? null : Math.max(0, Number(item.settlementConsumed) || 0)
     const settlementRemaining = item.settlementRemaining == null ? null : Math.max(0, Number(item.settlementRemaining) || 0)
     const settlementDamaged = item.settlementDamaged == null ? 0 : Math.max(0, Number(item.settlementDamaged) || 0)
-    const hasPreparedSettlementBalance = settlementRemaining > 0 || settlementDamaged > 0
-    const consumed = hasPreparedSettlementBalance && settlementConsumed != null
-      ? Math.min(Number(item.issued || 0) || 0, settlementConsumed)
-      : Math.min(
-          Number(item.issued || 0) || 0,
-          Math.max(0, Number(packedByMaterial[materialId] || 0) || 0)
-        )
-    const remaining = hasPreparedSettlementBalance && settlementRemaining != null
-      ? settlementRemaining
-      : Math.max(0, (Number(item.issued || 0) || 0) - consumed)
+    const consumed = Math.min(
+      Number(item.issued || 0) || 0,
+      Math.max(0, Number(packedByMaterial[materialId] || 0) || 0)
+    )
+    const derivedRemaining = Math.max(0, (Number(item.issued || 0) || 0) - consumed - settlementDamaged)
+    const hasPreparedSettlementBalance =
+      settlementRemaining != null &&
+      Math.abs(settlementRemaining - derivedRemaining) <= 0.0001
+    const remaining = hasPreparedSettlementBalance ? settlementRemaining : derivedRemaining
     return {
       ...item,
       consumed,
