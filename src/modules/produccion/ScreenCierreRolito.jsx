@@ -66,23 +66,26 @@ export default function ScreenCierreRolito() {
   const systemBagsUsed = sumRolitoUsedBags(data.packing)
   const totalBagsReceived = data.bagMaterials.reduce((sum, item) => sum + (Number(item.issued) || 0), 0)
   const totalBagsSystemRemaining = data.bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
+  const totalBagsSystemDamaged = data.bagMaterials.reduce((sum, item) => sum + (Number(item.damaged) || 0), 0)
   const bagDeclaration = shift?.id ? getBagReturnDeclaration(shift) : null
   const bagDeclarationRequired = !isBarraOperator && totalBagsReceived > 0
-  const bagDeclarationReady = !bagDeclarationRequired || matchesBagReturnDeclaration(bagDeclaration, {
+  const bagDeclarationFromStore = matchesBagReturnDeclaration(bagDeclaration, {
     bagsReceived: totalBagsReceived,
     bagsUsed: systemBagsUsed,
     bagsRemaining: totalBagsSystemRemaining,
   })
+  const bagDeclarationFromBackend = totalBagsSystemDamaged > 0
+  const bagDeclarationReady = !bagDeclarationRequired || bagDeclarationFromStore || bagDeclarationFromBackend
   const totalBagsUsed = bagDeclarationReady
-    ? Number(bagDeclaration?.bags_used ?? systemBagsUsed) || 0
+    ? Number((bagDeclarationFromStore ? bagDeclaration?.bags_used : null) ?? systemBagsUsed) || 0
     : systemBagsUsed
   const totalBagsReturned = bagDeclarationRequired
     ? (bagDeclarationReady
-        ? Number(bagDeclaration?.total_returned ?? totalBagsSystemRemaining) || 0
+        ? Number((bagDeclarationFromStore ? bagDeclaration?.total_returned : null) ?? totalBagsSystemRemaining) || 0
         : totalBagsSystemRemaining)
     : 0
   const totalBagsDamaged = bagDeclarationReady
-    ? Number(bagDeclaration?.total_damaged || 0) || 0
+    ? Number((bagDeclarationFromStore ? bagDeclaration?.total_damaged : null) ?? totalBagsSystemDamaged) || 0
     : 0
   const bagsDiff = totalBagsReceived > 0
     ? computeRolitoBagDifference({
