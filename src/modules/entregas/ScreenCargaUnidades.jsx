@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+﻿import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getTodayRoutes, getLoadDetail, confirmLoad, rejectLoad, updateLoadLines, getLoadProducts } from './entregasService'
@@ -329,7 +329,7 @@ export default function ScreenCargaUnidades() {
           }} />
         </div>
       ) : routes.length === 0 ? (
-        <EmptyState icon="\u{1F6E3}\uFE0F" message="Sin rutas programadas para hoy" />
+        <EmptyState icon="🚛" title="Sin rutas con carga pendiente" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {routes.map((route) => {
