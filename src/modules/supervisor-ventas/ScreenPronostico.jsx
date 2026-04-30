@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getForecastProducts, createForecast, getForecasts, getTeam, confirmForecast, cancelForecast } from './api'
+import { getForecastProducts, createForecast, getForecasts, getTeam, confirmForecast, cancelForecast, deleteForecast } from './api'
 import { logScreenError } from '../shared/logScreenError'
 
 const CHANNELS = ['Van', 'Mostrador']
@@ -121,6 +121,18 @@ export default function ScreenPronostico() {
       flashMsg('Pronostico regresado a borrador')
     } catch (e) {
       flashMsg(e.message || 'Error al cancelar', 5000)
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleDelete(forecastId) {
+    setActionLoading(forecastId)
+    try {
+      await deleteForecast(forecastId)
+      const f = await getForecasts().catch(() => [])
+      setForecasts(f || [])
+      flashMsg('Pronostico eliminado')
+    } catch (e) {
+      flashMsg(e.message || 'Error al eliminar', 5000)
     } finally { setActionLoading(null) }
   }
 
@@ -323,14 +335,27 @@ export default function ScreenPronostico() {
                       {(st === 'draft' || st === 'confirmed') && (
                         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                           {st === 'draft' && (
-                            <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
-                              flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
-                              background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
-                              border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
-                              fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
-                            }}>
-                              {isActing ? '...' : 'Confirmar'}
-                            </button>
+                            <>
+                              <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
+                                flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
+                                background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
+                                border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
+                                fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
+                              }}>
+                                {isActing ? '...' : 'Confirmar'}
+                              </button>
+                              <button onClick={() => handleDelete(f.id)} disabled={isActing} style={{
+                                width: 36, height: 34, borderRadius: TOKENS.radius.md, flexShrink: 0,
+                                background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
+                                border: '1px solid rgba(239,68,68,0.25)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                opacity: isActing ? 0.5 : 1,
+                              }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                </svg>
+                              </button>
+                            </>
                           )}
                           {st === 'confirmed' && (
                             <button onClick={() => handleCancel(f.id)} disabled={isActing} style={{

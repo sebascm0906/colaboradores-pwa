@@ -71,6 +71,11 @@ export function cancelForecast(forecastId) {
   return api('POST', '/pwa-supv/forecast-cancel', { forecast_id: forecastId })
 }
 
+/** Eliminar un forecast en borrador (solo draft) */
+export function deleteForecast(forecastId) {
+  return api('POST', '/pwa-supv/forecast-delete', { forecast_id: forecastId })
+}
+
 // ── Metas mensuales ──────────────────────────────────────────────────────────
 
 /** Metas de todos los vendedores del equipo (mes actual) */

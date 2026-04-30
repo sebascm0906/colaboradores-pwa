@@ -203,6 +203,39 @@ export async function getLoadDetail(pickingId) {
   return api('GET', `/pwa-ruta/load-lines?picking_id=${pickingId}`)
 }
 
+/**
+ * Rechazar la carga de un plan de ruta.
+ * Cancela el picking y desvincula del plan.
+ * @param {number} planId - gf.route.plan ID
+ * @returns {Promise<{ok:boolean, message:string, data?:Object}>}
+ */
+export async function rejectLoad(planId) {
+  return api('POST', '/pwa-entregas/load-reject', { plan_id: planId })
+}
+
+/**
+ * Actualizar líneas de carga de un plan (reemplaza los movimientos del picking).
+ * @param {number} planId - gf.route.plan ID
+ * @param {Array<{product_id:number, qty:number}>} lines
+ * @returns {Promise<{ok:boolean, message:string, data?:Object}>}
+ */
+export async function updateLoadLines(planId, lines) {
+  return api('POST', '/pwa-entregas/load-lines-update', { plan_id: planId, lines })
+}
+
+/**
+ * Catálogo de productos disponibles para carga.
+ * @returns {Promise<Array<{id:number, name:string}>>}
+ */
+export async function getLoadProducts() {
+  try {
+    const result = await api('GET', '/pwa-entregas/load-products')
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  LIVE — Tickets
 // ═════════════════════════════════════════════════════════════════════════════

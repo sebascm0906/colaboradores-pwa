@@ -5813,6 +5813,64 @@ async function directEntregas(method, path, body) {
     }
   }
 
+  if (cleanPath === '/pwa-entregas/load-reject' && method === 'POST') {
+    const session = getSession()
+    const planId = Number(body?.plan_id || 0)
+    if (!planId) return { ok: false, error: 'plan_id requerido', message: 'plan_id requerido' }
+
+    const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
+    const sessionWarehouseId = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+    const meta = { warehouse_id: sessionWarehouseId || undefined }
+    if (employeeId) meta.employee_id = employeeId
+
+    const envelope = await odooJson('/gf/salesops/warehouse/load/reject', {
+      meta,
+      data: { plan_id: planId },
+    })
+    const status = String(envelope?.status || '').toLowerCase()
+    const userMessage = envelope?.user_message || envelope?.message || ''
+    if (status === 'ok') {
+      return { ok: true, message: userMessage || 'Carga rechazada', data: envelope?.data || {} }
+    }
+    return { ok: false, error: userMessage || 'Error al rechazar carga', message: userMessage || 'Error al rechazar carga', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
+  }
+
+  if (cleanPath === '/pwa-entregas/load-lines-update' && method === 'POST') {
+    const session = getSession()
+    const planId = Number(body?.plan_id || 0)
+    const lines = Array.isArray(body?.lines) ? body.lines : []
+    if (!planId) return { ok: false, error: 'plan_id requerido', message: 'plan_id requerido' }
+    if (!lines.length) return { ok: false, error: 'lines requeridas', message: 'lines requeridas' }
+
+    const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
+    const sessionWarehouseId = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+    const meta = { warehouse_id: sessionWarehouseId || undefined }
+    if (employeeId) meta.employee_id = employeeId
+
+    const envelope = await odooJson('/gf/salesops/warehouse/load/update_lines', {
+      meta,
+      data: { plan_id: planId, lines },
+    })
+    const status = String(envelope?.status || '').toLowerCase()
+    const userMessage = envelope?.user_message || envelope?.message || ''
+    if (status === 'ok') {
+      return { ok: true, message: userMessage || 'Líneas actualizadas', data: envelope?.data || {} }
+    }
+    return { ok: false, error: userMessage || 'Error al actualizar líneas', message: userMessage || 'Error al actualizar líneas', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
+  }
+
+  if (cleanPath === '/pwa-entregas/load-products' && method === 'GET') {
+    const result = await readModelSorted('product.product', {
+      fields: ['id', 'name', 'sale_ok'],
+      domain: [['sale_ok', '=', true], ['list_price', '>', 0]],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    })
+    return pickListResponse(result).map((row) => ({ id: row.id, name: row.name }))
+  }
+
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
     // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
     // por Sebastián + introspección live (2026-04-26):
@@ -6290,6 +6348,22 @@ async function directSupervisorVentas(method, path, body) {
       meta,
       data: { forecast_id: forecastId },
     })
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-delete' && method === 'POST') {
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    const empId = getEmployeeId()
+    const meta = {}
+    if (empId) meta.employee_id = empId
+    const result = await odooJson('/gf/salesops/supervisor/v2/forecast/delete', {
+      meta,
+      data: { forecast_id: forecastId },
+    })
+    if (result?.status === 'error') {
+      throw new ApiError(result?.user_message || 'Error al eliminar pronóstico', { status: 400, code: result?.code || 'forecast_delete_failed' })
+    }
+    return { success: true, deleted: true, forecast_id: forecastId }
   }
 
   if (cleanPath === '/pwa-supv/team-targets' && method === 'GET') {

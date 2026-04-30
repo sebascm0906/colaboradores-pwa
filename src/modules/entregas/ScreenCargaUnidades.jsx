@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getTodayRoutes, getLoadDetail, confirmLoad } from './entregasService'
+import { getTodayRoutes, getLoadDetail, confirmLoad, rejectLoad, updateLoadLines, getLoadProducts } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState, StatusBadge } from './components'
 
 /** Extract numeric ID from a Many2one field (could be false, number, or [id, name] tuple). */
@@ -44,6 +44,19 @@ export default function ScreenCargaUnidades() {
   // Confirm dialog
   const [confirmRoute, setConfirmRoute] = useState(null)
   const [confirming, setConfirming] = useState(null) // routePlanId being confirmed
+
+  // Reject dialog
+  const [rejectRoute, setRejectRoute] = useState(null)
+  const [rejecting, setRejecting] = useState(null)
+
+  // Edit mode per route
+  const [editMode, setEditMode] = useState({}) // { [routeId]: bool }
+  const [editLines, setEditLines] = useState({}) // { [routeId]: [{product_id, qty, product_name}] }
+  const [savingLines, setSavingLines] = useState(null) // routeId being saved
+
+  // Product catalog (loaded on demand)
+  const [products, setProducts] = useState([])
+  const [productsLoaded, setProductsLoaded] = useState(false)
 
   // Toast
   const [toast, setToast] = useState(null)
@@ -133,6 +146,116 @@ export default function ScreenCargaUnidades() {
     }
   }
 
+  async function loadProductsIfNeeded() {
+    if (productsLoaded) return
+    const ps = await getLoadProducts()
+    setProducts(ps)
+    setProductsLoaded(true)
+  }
+
+  function enterEditMode(route) {
+    const routeId = route.id
+    const detail = loadLines[routeId]
+    const currentLines = (detail?.lines || []).map((l) => ({
+      product_id: Array.isArray(l.product_id) ? l.product_id[0] : (l.product_id || ''),
+      product_name: l.product_name || (Array.isArray(l.product_id) ? l.product_id[1] : ''),
+      qty: String(l.product_uom_qty ?? l.qty ?? l.quantity ?? 1),
+    }))
+    setEditLines((prev) => ({ ...prev, [routeId]: currentLines.length ? currentLines : [{ product_id: '', qty: '', product_name: '' }] }))
+    setEditMode((prev) => ({ ...prev, [routeId]: true }))
+    loadProductsIfNeeded()
+  }
+
+  function exitEditMode(routeId) {
+    setEditMode((prev) => ({ ...prev, [routeId]: false }))
+  }
+
+  function updateEditLine(routeId, idx, field, value) {
+    setEditLines((prev) => {
+      const lines = [...(prev[routeId] || [])]
+      lines[idx] = { ...lines[idx], [field]: value }
+      // If product changed, auto-fill name
+      if (field === 'product_id' && value) {
+        const product = products.find((p) => String(p.id) === String(value))
+        if (product) lines[idx].product_name = product.name
+      }
+      return { ...prev, [routeId]: lines }
+    })
+  }
+
+  function addEditLine(routeId) {
+    setEditLines((prev) => ({
+      ...prev,
+      [routeId]: [...(prev[routeId] || []), { product_id: '', qty: '', product_name: '' }],
+    }))
+  }
+
+  function removeEditLine(routeId, idx) {
+    setEditLines((prev) => {
+      const lines = (prev[routeId] || []).filter((_, i) => i !== idx)
+      return { ...prev, [routeId]: lines.length ? lines : [{ product_id: '', qty: '', product_name: '' }] }
+    })
+  }
+
+  async function handleSaveLines(route) {
+    const routeId = route.id
+    const lines = (editLines[routeId] || [])
+      .filter((l) => l.product_id && Number(l.qty) > 0)
+      .map((l) => ({ product_id: Number(l.product_id), qty: Number(l.qty) }))
+
+    if (!lines.length) { showToast('Agrega al menos un producto con cantidad', 'error'); return }
+
+    setSavingLines(routeId)
+    try {
+      const res = await updateLoadLines(routeId, lines)
+      if (res?.ok === false) {
+        showToast(res.error || 'Error al guardar', 'error')
+        return
+      }
+      showToast('Líneas actualizadas')
+      exitEditMode(routeId)
+      // Reload detail
+      setLoadLines((prev) => { const n = { ...prev }; delete n[routeId]; return n })
+      const pickingId = extractPickingId(route.load_picking_id)
+      if (pickingId) {
+        setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: true, error: '' } }))
+        getLoadDetail(pickingId).then((ls) => {
+          setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(ls) ? ls : [], loading: false, error: '' } }))
+        }).catch(() => {
+          setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al recargar' } }))
+        })
+      }
+    } catch (e) {
+      showToast(e.message || 'Error al guardar', 'error')
+    } finally {
+      setSavingLines(null)
+    }
+  }
+
+  async function handleRejectLoad() {
+    if (!rejectRoute) return
+    const routeId = rejectRoute.id
+    setRejectRoute(null)
+    setRejecting(routeId)
+    try {
+      const res = await rejectLoad(routeId)
+      if (res?.ok === false) {
+        showToast(res.error || 'Error al rechazar', 'error')
+        return
+      }
+      showToast('Carga rechazada')
+      setLoadLines((prev) => { const n = { ...prev }; delete n[routeId]; return n })
+      setEditMode((prev) => ({ ...prev, [routeId]: false }))
+      setExpandedId(null)
+      await loadRoutes()
+    } catch (e) {
+      if (e.message === 'no_session') return
+      showToast(e.message || 'Error al rechazar', 'error')
+    } finally {
+      setRejecting(null)
+    }
+  }
+
   function stateBadge(state) {
     const color = stateColors[state] || TOKENS.colors.textMuted
     const label = stateLabels[state] || state || '\u2014'
@@ -214,6 +337,7 @@ export default function ScreenCargaUnidades() {
             const isExpanded = expandedId === route.id
             const detail = loadLines[route.id]
             const isConfirming = confirming === route.id
+            const isEditMode = Boolean(editMode[route.id])
 
             return (
               <div key={route.id} style={{
@@ -286,62 +410,184 @@ export default function ScreenCargaUnidades() {
                     animation: 'slide-down 0.25s ease',
                     overflow: 'hidden',
                   }}>
-                    <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '12px 0 8px' }}>
-                      DETALLE DE CARGA
-                    </p>
+                    {/* Header: DETALLE DE CARGA + Editar toggle */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 8px' }}>
+                      <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>DETALLE DE CARGA</p>
+                      {!route.load_sealed && hasLoadPicking && !isEditMode && (
+                        <button onClick={() => enterEditMode(route)} style={{
+                          padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                          background: 'rgba(43,143,224,0.12)', border: `1px solid rgba(43,143,224,0.3)`,
+                          color: TOKENS.colors.blue2, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        }}>Editar</button>
+                      )}
+                      {isEditMode && (
+                        <button onClick={() => exitEditMode(route.id)} style={{
+                          padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                          background: 'transparent', border: `1px solid ${TOKENS.colors.border}`,
+                          color: TOKENS.colors.textMuted, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        }}>Cancelar</button>
+                      )}
+                    </div>
 
-                    {detail?.loading ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
-                        <div style={{
-                          width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)',
-                          borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
-                          animation: 'spin 0.8s linear infinite',
-                        }} />
-                      </div>
-                    ) : detail?.error ? (
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
-                        {detail.error}
-                      </p>
-                    ) : detail?.lines?.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {detail.lines.map((line, idx) => (
-                          <div key={line.id || idx} style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
-                          }}>
-                            <span style={{ ...typo.body, color: TOKENS.colors.textSoft, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {line.product_name || (Array.isArray(line.product_id) ? line.product_id[1] : `Producto ${line.product_id || idx + 1}`)}
-                            </span>
-                            <span style={{ ...typo.title, color: TOKENS.colors.text, marginLeft: 12, flexShrink: 0 }}>
-                              {line.product_uom_qty ?? line.qty ?? line.quantity ?? '\u2014'} {line.uom || ''}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
-                        Sin lineas de carga
-                      </p>
+                    {/* Read-only view */}
+                    {!isEditMode && (
+                      detail?.loading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
+                          <div style={{
+                            width: 22, height: 22, border: '2px solid rgba(255,255,255,0.12)',
+                            borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+                            animation: 'spin 0.8s linear infinite',
+                          }} />
+                        </div>
+                      ) : detail?.error ? (
+                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
+                          {detail.error}
+                        </p>
+                      ) : detail?.lines?.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {detail.lines.map((line, idx) => (
+                            <div key={line.id || idx} style={{
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                            }}>
+                              <span style={{ ...typo.body, color: TOKENS.colors.textSoft, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {line.product_name || (Array.isArray(line.product_id) ? line.product_id[1] : `Producto ${line.product_id || idx + 1}`)}
+                              </span>
+                              <span style={{ ...typo.title, color: TOKENS.colors.text, marginLeft: 12, flexShrink: 0 }}>
+                                {line.product_uom_qty ?? line.qty ?? line.quantity ?? '\u2014'} {line.uom || ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0', textAlign: 'center' }}>
+                          Sin lineas de carga
+                        </p>
+                      )
                     )}
 
-                    {/* Confirm button */}
-                    {canConfirm && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setConfirmRoute(route) }}
-                        disabled={isConfirming}
-                        style={{
-                          width: '100%', padding: 12, marginTop: 14, borderRadius: TOKENS.radius.lg,
-                          background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
-                          fontSize: 14, fontWeight: 600,
-                          opacity: isConfirming ? 0.5 : 1,
-                          cursor: isConfirming ? 'default' : 'pointer',
-                          boxShadow: '0 8px 20px rgba(43,143,224,0.25)',
-                          transition: `opacity ${TOKENS.motion.fast}`,
-                        }}
-                      >
-                        {isConfirming ? 'Confirmando...' : 'Confirmar Carga'}
-                      </button>
+                    {/* Edit mode */}
+                    {isEditMode && (
+                      <div style={{ marginBottom: 10 }}>
+                        {(editLines[route.id] || []).map((line, idx) => (
+                          <div key={idx} style={{
+                            padding: 10, borderRadius: TOKENS.radius.sm, marginBottom: 8,
+                            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                          }}>
+                            {/* Product selector */}
+                            <select
+                              value={String(line.product_id || '')}
+                              onChange={(e) => updateEditLine(route.id, idx, 'product_id', e.target.value)}
+                              style={{
+                                width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                color: TOKENS.colors.text, fontSize: 13, marginBottom: 8, outline: 'none',
+                              }}
+                            >
+                              <option value="">Seleccionar producto...</option>
+                              {/* Show current product as first option if not in catalog */}
+                              {line.product_id && !products.find((p) => String(p.id) === String(line.product_id)) && (
+                                <option value={String(line.product_id)}>{line.product_name || `Producto ${line.product_id}`}</option>
+                              )}
+                              {products.map((p) => (
+                                <option key={p.id} value={String(p.id)}>{p.name}</option>
+                              ))}
+                            </select>
+
+                            {/* Qty + delete */}
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                placeholder="Cantidad"
+                                value={line.qty}
+                                onChange={(e) => updateEditLine(route.id, idx, 'qty', e.target.value)}
+                                style={{
+                                  flex: 1, padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                  color: TOKENS.colors.text, fontSize: 13, outline: 'none',
+                                }}
+                              />
+                              <button
+                                onClick={() => removeEditLine(route.id, idx)}
+                                style={{
+                                  width: 34, height: 34, borderRadius: TOKENS.radius.sm, flexShrink: 0,
+                                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                                }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Add product */}
+                        <button onClick={() => addEditLine(route.id)} style={{
+                          width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.sm, marginBottom: 10,
+                          background: TOKENS.colors.surface, border: `1px dashed ${TOKENS.colors.border}`,
+                          color: TOKENS.colors.textMuted, fontSize: 12, fontWeight: 600,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer',
+                        }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          Agregar producto
+                        </button>
+
+                        {/* Save lines */}
+                        <button
+                          onClick={() => handleSaveLines(route)}
+                          disabled={savingLines === route.id}
+                          style={{
+                            width: '100%', padding: '10px 0', borderRadius: TOKENS.radius.md,
+                            background: savingLines === route.id ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                            color: '#fff', fontSize: 13, fontWeight: 700,
+                            opacity: savingLines === route.id ? 0.6 : 1, cursor: savingLines === route.id ? 'default' : 'pointer',
+                          }}
+                        >
+                          {savingLines === route.id ? 'Guardando...' : 'Guardar cambios'}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Action buttons row */}
+                    {!isEditMode && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                        {/* Reject load */}
+                        {!route.load_sealed && hasLoadPicking && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRejectRoute(route) }}
+                            disabled={rejecting === route.id}
+                            style={{
+                              flex: '0 0 auto', padding: '12px 14px', borderRadius: TOKENS.radius.lg,
+                              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                              color: '#ef4444', fontSize: 13, fontWeight: 600,
+                              opacity: rejecting === route.id ? 0.5 : 1,
+                              cursor: rejecting === route.id ? 'default' : 'pointer',
+                            }}
+                          >
+                            {rejecting === route.id ? '...' : 'Rechazar'}
+                          </button>
+                        )}
+
+                        {/* Confirm load */}
+                        {canConfirm && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmRoute(route) }}
+                            disabled={isConfirming}
+                            style={{
+                              flex: 1, padding: 12, borderRadius: TOKENS.radius.lg,
+                              background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
+                              fontSize: 14, fontWeight: 600,
+                              opacity: isConfirming ? 0.5 : 1,
+                              cursor: isConfirming ? 'default' : 'pointer',
+                              boxShadow: '0 8px 20px rgba(43,143,224,0.25)',
+                              transition: `opacity ${TOKENS.motion.fast}`,
+                            }}
+                          >
+                            {isConfirming ? 'Confirmando...' : 'Confirmar Carga'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -363,6 +609,19 @@ export default function ScreenCargaUnidades() {
           confirmColor={TOKENS.colors.blue2}
           onConfirm={handleConfirmLoad}
           onCancel={() => setConfirmRoute(null)}
+        />
+      )}
+
+      {/* Reject dialog */}
+      {rejectRoute && (
+        <ConfirmDialog
+          open
+          title="Rechazar carga"
+          message={`¿Rechazar la carga de la ruta "${rejectRoute.name || rejectRoute.id}"? Esto cancelará el picking y deberá re-generarse.`}
+          confirmLabel="Rechazar"
+          confirmColor="#ef4444"
+          onConfirm={handleRejectLoad}
+          onCancel={() => setRejectRoute(null)}
         />
       )}
 
