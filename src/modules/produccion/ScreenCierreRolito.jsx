@@ -48,6 +48,7 @@ export default function ScreenCierreRolito() {
 
   const loadData = useCallback(async () => {
     try {
+      setLoading(true)
       setError('')
       const result = await getShiftOverview()
       setData(result)
@@ -59,19 +60,22 @@ export default function ScreenCierreRolito() {
     }
   }, [activeOperatorRole])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData() }, [loadData, location.state?.bagDeclarationUpdatedAt])
 
   const { shift, kpis } = data
-  const totalBagsUsed = sumRolitoUsedBags(data.packing)
+  const systemBagsUsed = sumRolitoUsedBags(data.packing)
   const totalBagsReceived = data.bagMaterials.reduce((sum, item) => sum + (Number(item.issued) || 0), 0)
   const totalBagsSystemRemaining = data.bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
   const bagDeclaration = shift?.id ? getBagReturnDeclaration(shift) : null
   const bagDeclarationRequired = !isBarraOperator && totalBagsReceived > 0
   const bagDeclarationReady = !bagDeclarationRequired || matchesBagReturnDeclaration(bagDeclaration, {
     bagsReceived: totalBagsReceived,
-    bagsUsed: totalBagsUsed,
+    bagsUsed: systemBagsUsed,
     bagsRemaining: totalBagsSystemRemaining,
   })
+  const totalBagsUsed = bagDeclarationReady
+    ? Number(bagDeclaration?.bags_used ?? systemBagsUsed) || 0
+    : systemBagsUsed
   const totalBagsReturned = bagDeclarationRequired
     ? (bagDeclarationReady
         ? Number(bagDeclaration?.total_returned ?? totalBagsSystemRemaining) || 0

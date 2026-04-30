@@ -100,10 +100,26 @@ export function matchesBagReturnDeclaration(summary, {
   bagsRemaining = 0,
 } = {}) {
   if (!summary) return false
+  const normalizedReceived = normalizeBagCount(bagsReceived)
+  const normalizedUsed = normalizeBagCount(bagsUsed)
+  const normalizedRemaining = normalizeBagCount(bagsRemaining)
+  const summaryReceived = normalizeBagCount(summary.bags_received)
+  const summaryUsed = normalizeBagCount(summary.bags_used)
+  const summaryRemaining = normalizeBagCount(summary.bags_remaining)
+  const summaryReturned = normalizeBagCount(summary.total_returned)
+  const summaryDamaged = normalizeBagCount(summary.total_damaged)
+  const summaryIsBalanced =
+    summaryReceived === (summaryUsed + summaryReturned + summaryDamaged)
+
+  const remainingMatchesCurrentBalance =
+    summaryReturned === normalizedRemaining ||
+    summaryRemaining === normalizedRemaining ||
+    Math.max(0, summaryRemaining - summaryDamaged) === normalizedRemaining
+
   return (
-    normalizeBagCount(summary.bags_received) === normalizeBagCount(bagsReceived) &&
-    normalizeBagCount(summary.bags_used) === normalizeBagCount(bagsUsed) &&
-    normalizeBagCount(summary.bags_remaining) === normalizeBagCount(bagsRemaining)
+    summaryReceived === normalizedReceived &&
+    (summaryUsed === normalizedUsed || summaryIsBalanced) &&
+    remainingMatchesCurrentBalance
   )
 }
 

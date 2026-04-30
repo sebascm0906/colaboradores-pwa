@@ -85,14 +85,14 @@ test('rolito bag declaration computes damaged vs returned from MP bag settlement
   })
 })
 
-test('saved bag return declaration only matches the exact closing counts', () => {
+test('saved bag return declaration stays valid after process stock drops to returned bags', () => {
   const summary = buildBagReturnDeclarationSummary({
     shiftId: 27,
-    bagsReceived: 100,
-    bagsUsed: 45,
-    bagsRemaining: 55,
-    totalDamaged: 5,
-    totalReturned: 50,
+    bagsReceived: 1230,
+    bagsUsed: 1154,
+    bagsRemaining: 76,
+    totalDamaged: 2,
+    totalReturned: 74,
     lines: [],
   })
 
@@ -100,14 +100,14 @@ test('saved bag return declaration only matches the exact closing counts', () =>
   const stored = getBagReturnDeclaration(27)
 
   assert.equal(matchesBagReturnDeclaration(stored, {
-    bagsReceived: 100,
-    bagsUsed: 45,
-    bagsRemaining: 55,
+    bagsReceived: 1230,
+    bagsUsed: 1242,
+    bagsRemaining: 74,
   }), true)
 
   assert.equal(matchesBagReturnDeclaration(stored, {
-    bagsReceived: 100,
-    bagsUsed: 45,
+    bagsReceived: 1229,
+    bagsUsed: 1242,
     bagsRemaining: 54,
   }), false)
 
