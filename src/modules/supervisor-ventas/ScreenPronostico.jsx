@@ -337,7 +337,7 @@ export default function ScreenPronostico() {
 
   function statusLabel(status) {
     if (status === 'confirmed') return 'Confirmado'
-    if (status === 'done') return 'Procesado'
+    if (status === 'done') return 'Realizado'
     if (status === 'draft') return 'Borrador'
     return status || 'draft'
   }

@@ -5769,7 +5769,27 @@ async function directEntregas(method, path, body) {
       limit: 100,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
+    const rows = pickListResponse(result)
+    const loadPickingIds = [...new Set(
+      rows
+        .map((row) => Number(row.load_picking_id?.[0] || row.load_picking_id || 0))
+        .filter((id) => id > 0)
+    )]
+    let pickingStateById = {}
+    if (loadPickingIds.length) {
+      const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
+        fields: ['id', 'state'],
+        domain: [['id', 'in', loadPickingIds]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: Math.max(loadPickingIds.length, 1),
+        sudo: 1,
+      }))
+      pickingStateById = Object.fromEntries(
+        pickingRows.map((row) => [Number(row.id || 0), row.state || null])
+      )
+    }
+    return rows.map((row) => ({
       id: row.id,
       name: row.name,
       date: row.date,
@@ -5780,6 +5800,7 @@ async function directEntregas(method, path, body) {
       stops_total: Number(row.stops_total || 0),
       stops_done: Number(row.stops_done || 0),
       load_picking_id: row.load_picking_id || null,
+      load_picking_state: pickingStateById[Number(row.load_picking_id?.[0] || row.load_picking_id || 0)] || null,
       load_sealed: row.load_sealed === true,
       departure_target: row.departure_time_target || null,
       departure_real: row.departure_time_real || null,

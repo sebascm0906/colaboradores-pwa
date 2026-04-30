@@ -18,6 +18,7 @@ const stateColors = {
   in_progress: TOKENS.colors.warning,
   closed: TOKENS.colors.success,
   reconciled: TOKENS.colors.textSoft,
+  done: TOKENS.colors.success,
 }
 
 const stateLabels = {
@@ -26,6 +27,7 @@ const stateLabels = {
   in_progress: 'En Progreso',
   closed: 'Cerrada',
   reconciled: 'Conciliada',
+  done: 'Realizado',
 }
 
 export default function ScreenCargaUnidades() {
@@ -360,10 +362,12 @@ export default function ScreenCargaUnidades() {
             // Permite confirmar si hay picking de carga (creado por pronóstico confirmado)
             // incluso cuando el plan está en borrador.
             const hasLoadPicking = Boolean(extractPickingId(route.load_picking_id))
+            const isLoadExecuted = route.load_picking_state === 'done'
+            const displayState = isLoadExecuted ? 'done' : route.state
             const stockInfo = stockData[route.id]
             const stockLoading = Boolean(stockInfo?.loading)
             const stockInsufficient = stockInfo && !stockInfo.loading && stockInfo.data && !stockInfo.data.all_sufficient
-            const canConfirm = !route.load_sealed && (route.state !== 'draft' || hasLoadPicking) && !stockInsufficient
+            const canConfirm = !route.load_sealed && !isLoadExecuted && (route.state !== 'draft' || hasLoadPicking) && !stockInsufficient
             const isExpanded = expandedId === route.id
             const detail = loadLines[route.id]
             const isConfirming = confirming === route.id
@@ -403,7 +407,7 @@ export default function ScreenCargaUnidades() {
                           fontSize: 11, fontWeight: 700, color: TOKENS.colors.success,
                         }}>Cargada</span>
                       )}
-                      {stateBadge(route.state)}
+                      {stateBadge(displayState)}
                       <svg
                         width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
@@ -443,7 +447,7 @@ export default function ScreenCargaUnidades() {
                     {/* Header: DETALLE DE CARGA + Editar toggle */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '12px 0 8px' }}>
                       <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>DETALLE DE CARGA</p>
-                      {!route.load_sealed && hasLoadPicking && !isEditMode && (
+                      {!route.load_sealed && !isLoadExecuted && hasLoadPicking && !isEditMode && (
                         <button onClick={() => enterEditMode(route)} style={{
                           padding: '4px 10px', borderRadius: TOKENS.radius.pill,
                           background: 'rgba(43,143,224,0.12)', border: `1px solid rgba(43,143,224,0.3)`,
@@ -677,7 +681,7 @@ export default function ScreenCargaUnidades() {
                     {!isEditMode && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
                         {/* Reject load */}
-                        {!route.load_sealed && hasLoadPicking && (
+                        {!route.load_sealed && !isLoadExecuted && hasLoadPicking && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setRejectRoute(route) }}
                             disabled={rejecting === route.id}
@@ -694,7 +698,7 @@ export default function ScreenCargaUnidades() {
                         )}
 
                         {/* Confirm load */}
-                        {(!route.load_sealed && (route.state !== 'draft' || hasLoadPicking)) && (
+                        {(!route.load_sealed && !isLoadExecuted && (route.state !== 'draft' || hasLoadPicking)) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); if (canConfirm && !isConfirming && !stockLoading) setConfirmRoute(route) }}
                             disabled={isConfirming || stockLoading || stockInsufficient}
