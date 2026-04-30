@@ -5997,32 +5997,45 @@ async function directEntregas(method, path, body) {
 
     const productIds = [...new Set(moveRows.map((m) => Number(m.product_id?.[0] || m.product_id)).filter(Boolean))]
 
-    // 3. Stock disponible (cantidad − reservada) en esa ubicación
+    // 3. Existencia física en esa ubicación.
+    // Usamos `quantity` (unidades físicas en anaquel) en lugar de
+    // `quantity - reserved_quantity` porque las reservas de otros pickings
+    // activos (rutas de otros días, otras sucursales) reducirían
+    // artificialmente el disponible aunque el producto esté físicamente aquí.
+    // El almacenista verifica con sus ojos; lo que importa es que haya
+    // unidades físicas suficientes.
     const quantRows = pickListResponse(await readModelSorted('stock.quant', {
       fields: ['product_id', 'quantity', 'reserved_quantity'],
       domain: [['location_id', '=', locationId], ['product_id', 'in', productIds]],
       sort_column: 'product_id', sort_desc: false, limit: productIds.length * 5, sudo: 1,
     }))
 
-    const availMap = new Map()
+    // onHandMap: existencia total en anaquel (sin descontar reservas de otros pickings)
+    const onHandMap = new Map()
+    const reservedMap = new Map()
     for (const q of quantRows) {
       const pid = Number(q.product_id?.[0] || q.product_id)
-      const avail = Number(q.quantity || 0) - Number(q.reserved_quantity || 0)
-      availMap.set(pid, (availMap.get(pid) || 0) + avail)
+      onHandMap.set(pid, (onHandMap.get(pid) || 0) + Number(q.quantity || 0))
+      reservedMap.set(pid, (reservedMap.get(pid) || 0) + Number(q.reserved_quantity || 0))
     }
 
     const lines = moveRows.map((m) => {
       const pid = Number(m.product_id?.[0] || m.product_id)
       const pname = Array.isArray(m.product_id) ? m.product_id[1] : `Producto ${pid}`
       const requested = Number(m.product_uom_qty || 0)
-      const available = Math.max(0, availMap.get(pid) || 0)
+      const onHand = Math.max(0, onHandMap.get(pid) || 0)
+      const reserved = Math.max(0, reservedMap.get(pid) || 0)
+      // Disponible = existencia física (lo que el almacenista puede contar)
+      const available = onHand
       return {
         product_id: pid,
         product_name: pname,
         requested_qty: requested,
         available_qty: available,
+        on_hand_qty: onHand,
+        reserved_qty: reserved,
         uom: Array.isArray(m.product_uom) ? m.product_uom[1] : '',
-        sufficient: available >= requested,
+        sufficient: onHand >= requested,
       }
     })
 

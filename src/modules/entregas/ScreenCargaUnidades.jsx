@@ -620,16 +620,23 @@ export default function ScreenCargaUnidades() {
                                 }}>
                                   {sl.product_name}
                                 </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 8 }}>
-                                  <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
-                                    Pedido: <strong style={{ color: TOKENS.colors.text }}>{sl.requested_qty}</strong>
-                                  </span>
-                                  <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
-                                    Disp: <strong style={{ color: sl.sufficient ? TOKENS.colors.success : '#ef4444' }}>
-                                      {sl.available_qty}
-                                    </strong>
-                                  </span>
-                                  <span style={{ fontSize: 14 }}>{sl.sufficient ? '✓' : '⚠'}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0, marginLeft: 8 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
+                                      Pedido: <strong style={{ color: TOKENS.colors.text }}>{sl.requested_qty}</strong>
+                                    </span>
+                                    <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
+                                      Existencia: <strong style={{ color: sl.sufficient ? TOKENS.colors.success : '#ef4444' }}>
+                                        {sl.available_qty}
+                                      </strong>
+                                    </span>
+                                    <span style={{ fontSize: 14 }}>{sl.sufficient ? '✓' : '⚠'}</span>
+                                  </div>
+                                  {sl.reserved_qty > 0 && (
+                                    <span style={{ fontSize: 10, color: TOKENS.colors.textMuted }}>
+                                      ({sl.reserved_qty} reservado por otros)
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             ))}
