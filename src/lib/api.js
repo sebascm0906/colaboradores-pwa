@@ -6259,55 +6259,62 @@ async function directSupervisorVentas(method, path, body) {
       }
     }
 
-    const dict = {
-      name: body?.name || `Pronóstico ${new Date().toISOString().slice(0, 10)}`,
+    // Usamos el endpoint forecast/upsert del supervisor controller en lugar de
+    // createUpdate genérico. createUpdate no maneja bien los comandos One2many
+    // [0,0,{...}] de line_ids — las líneas se perdían silenciosamente.
+    // upsert_draft (backend) hace upsert correcto de líneas por (product_id, channel).
+    const supervisorEmpId = Number(getEmployeeId() || 0) || 0
+    const supvMeta = {}
+    if (supervisorEmpId) supvMeta.employee_id = supervisorEmpId
+
+    const lines = Array.isArray(body?.lines)
+      ? body.lines
+          .filter((l) => l?.product_id && Number(l.qty) > 0)
+          .map((l) => ({
+            product_id: Number(l.product_id),
+            qty: Number(l.qty || 0),
+            channel: l.channel ? String(l.channel).trim().toLowerCase() : 'van',
+          }))
+      : []
+
+    const upsertData = {
       date_target: body?.date_target || new Date().toISOString().slice(0, 10),
-      created_by_employee_id: Number(employeeId || getEmployeeId() || 0) || undefined,
-      company_id: Number(body?.company_id || companyId || 0) || undefined,
-      analytic_account_id: analyticAccountId,
-      state: 'draft',
-      line_ids: Array.isArray(body?.lines)
-        ? body.lines
-            .filter((l) => l?.product_id && l?.qty)
-            .map((l) => [0, 0, {
-              product_id: Number(l.product_id),
-              qty: Number(l.qty || 0),
-              // BLD-20260427-P0-SUPV-FORECAST-CHANNEL: el modelo
-              // gf.saleops.forecast.line.channel es un Selection con keys
-              // lowercase ('van', 'mostrador', ...) pero la UI usa labels
-              // capitalizados ('Van', 'Mostrador') en los botones. El BFF
-              // normaliza el casing antes de mandar al modelo para no
-              // romper el contrato visual de la UI. .trim() defiende contra
-              // espacios accidentales del input.
-              channel: l.channel ? String(l.channel).trim().toLowerCase() : undefined,
-            }])
-        : [],
+      lines,
+      replace: true,
     }
-    // SCOPE: Si employee_id tiene campo propio en el modelo (spec § 3.1),
-    // asignarlo. Si no existe en Odoo, Odoo lo ignora silenciosamente.
-    if (employeeId) dict.employee_id = employeeId
-    const result = await createUpdate({
-      model: 'gf.saleops.forecast',
-      method: 'create',
-      dict,
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    if (employeeId) upsertData.employee_id = employeeId
+
+    const result = await odooJson('/gf/salesops/supervisor/v2/forecast/upsert', {
+      meta: supvMeta,
+      data: upsertData,
     })
-    return { success: true, data: result }
+    // Normalizar respuesta al mismo shape que antes ({ success, data })
+    if (result?.status === 'error' || result?.code === 'error') {
+      throw new ApiError(result?.user_message || 'Error al guardar pronóstico', { status: 400, code: result?.code || 'forecast_upsert_failed' })
+    }
+    return { success: true, data: result?.data || result }
   }
 
   if (cleanPath === '/pwa-supv/forecasts' && method === 'GET') {
     const domain = []
     if (companyId) domain.push(['company_id', '=', companyId])
     const result = await readModelSorted('gf.saleops.forecast', {
-      fields: ['id', 'name', 'date_target', 'state', 'company_id', 'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id', 'confirmed_at'],
+      fields: [
+        'id', 'name', 'date_target', 'state', 'company_id',
+        'analytic_account_id', 'created_by_employee_id', 'confirmed_by_employee_id',
+        'confirmed_at', 'employee_id', 'line_ids',
+      ],
       domain,
       sort_column: 'date_target',
       sort_desc: true,
       limit: 50,
       sudo: 1,
     })
-    return pickListResponse(result)
+    return pickListResponse(result).map((row) => ({
+      ...row,
+      // line_ids viene como array de IDs; line_count es lo que muestra la UI
+      line_count: Array.isArray(row.line_ids) ? row.line_ids.length : 0,
+    }))
   }
 
   if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {
