@@ -5864,7 +5864,9 @@ async function directEntregas(method, path, body) {
 
     const envelope = await odooJson('/gf/salesops/warehouse/load/execute', {
       meta,
-      data: { picking_ids: pickingIds },
+      // Pasar plan_id para que el backend pueda omitir el filtro mobile_location_ids
+      // cuando el picking viene validado por un route plan conocido.
+      data: { picking_ids: pickingIds, ...(planId ? { plan_id: planId } : {}) },
     })
 
     // Traducción envelope gf_saleops → contrato UI {ok, message, error?, code, data}
