@@ -207,7 +207,10 @@ export default function ScreenCargaUnidades() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {routes.map((route) => {
             const progress = route.stops_total > 0 ? Math.round((route.stops_done / route.stops_total) * 100) : 0
-            const canConfirm = !route.load_sealed && route.state !== 'draft'
+            // Permite confirmar si hay picking de carga (creado por pronóstico confirmado)
+            // incluso cuando el plan está en borrador.
+            const hasLoadPicking = Boolean(extractPickingId(route.load_picking_id))
+            const canConfirm = !route.load_sealed && (route.state !== 'draft' || hasLoadPicking)
             const isExpanded = expandedId === route.id
             const detail = loadLines[route.id]
             const isConfirming = confirming === route.id

@@ -5689,6 +5689,7 @@ async function directEntregas(method, path, body) {
       salesperson: row.salesperson_employee_id?.[1] || '',
       stops_total: Number(row.stops_total || 0),
       stops_done: Number(row.stops_done || 0),
+      load_picking_id: row.load_picking_id || null,
       load_sealed: row.load_sealed === true,
       departure_target: row.departure_time_target || null,
       departure_real: row.departure_time_real || null,
@@ -6312,16 +6313,25 @@ async function directSupervisorVentas(method, path, body) {
   if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {
     const forecastId = Number(body?.forecast_id || 0)
     if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    // El guard gf_saleops requiere meta.employee_id para identificar al supervisor.
+    const empId = getEmployeeId()
+    const meta = {}
+    if (empId) meta.employee_id = empId
     return odooJson('/gf/salesops/supervisor/v2/forecast/confirm', {
-      forecast_id: forecastId,
+      meta,
+      data: { forecast_id: forecastId },
     })
   }
 
   if (cleanPath === '/pwa-supv/forecast-cancel' && method === 'POST') {
     const forecastId = Number(body?.forecast_id || 0)
     if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    const empId = getEmployeeId()
+    const meta = {}
+    if (empId) meta.employee_id = empId
     return odooJson('/gf/salesops/supervisor/v2/forecast/cancel', {
-      forecast_id: forecastId,
+      meta,
+      data: { forecast_id: forecastId },
     })
   }
 
