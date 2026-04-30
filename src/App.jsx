@@ -4,7 +4,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
-import { getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
+import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
 
@@ -200,8 +200,9 @@ function ProductionOperatorRoute({ children, allowDelivered = false }) {
           return
         }
 
-        const closeState = getOperatorCloseState(shift.id, normalizedRole, shift)
-        if (closeState?.closed) {
+        clearStaleOperatorTurnClosed(shift, normalizedRole, shift)
+        const closeState = getOperatorCloseState(shift, normalizedRole, shift)
+        if (closeState?.effectively_closed) {
           setBlockedState({ shift, role: normalizedRole, closeState })
         } else {
           setBlockedState(null)
@@ -220,7 +221,7 @@ function ProductionOperatorRoute({ children, allowDelivered = false }) {
 
   if (!session) return <Navigate to="/login" replace />
   if (loading) return <PageLoader />
-  if (blockedState?.closeState?.closed && !allowDelivered) {
+  if (blockedState?.closeState?.effectively_closed && !allowDelivered) {
     return <Navigate to="/produccion/turno-entregado" replace state={blockedState} />
   }
   return children

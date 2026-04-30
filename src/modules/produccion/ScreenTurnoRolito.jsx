@@ -20,7 +20,11 @@ import {
   EXPECTED_KG_PER_CYCLE,
 } from './rolitoService'
 import OpeningStateBanner from './OpeningStateBanner'
-import { getOperatorCloseState, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
+import {
+  clearStaleOperatorTurnClosed,
+  getOperatorCloseState,
+  normalizeOperatorCloseRole,
+} from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 
 const SHIFT_STATES = {
@@ -63,6 +67,11 @@ export default function ScreenTurnoRolito() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  useEffect(() => {
+    if (!data.shift?.id) return
+    clearStaleOperatorTurnClosed(data.shift, activeOperatorRole, data.shift)
+  }, [data.shift, activeOperatorRole])
+
   // Countdown timer: tick every second when there's an active cycle
   useEffect(() => {
     const active = getActiveCycle(data.cycles)
@@ -88,9 +97,11 @@ export default function ScreenTurnoRolito() {
   const diagnostics = getCycleDiagnostics(lastDumped) || getCycleDiagnostics(activeCycle)
   const stateInfo = SHIFT_STATES[shift?.state] || SHIFT_STATES.draft
   const totalBagsAvailable = (bagMaterials || []).reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
-  const closeState = shift?.id ? getOperatorCloseState(shift.id, activeOperatorRole, shift) : null
+  const closeState = useMemo(() => (
+    shift?.id ? getOperatorCloseState(shift, activeOperatorRole, shift) : null
+  ), [shift, activeOperatorRole])
 
-  if (!loading && !error && closeState?.closed) {
+  if (!loading && !error && closeState?.effectively_closed) {
     return <ScreenTurnoEntregado shift={shift} role={activeOperatorRole} closeState={closeState} />
   }
 

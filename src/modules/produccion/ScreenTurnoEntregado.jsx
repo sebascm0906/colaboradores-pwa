@@ -4,6 +4,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { getMyShift } from './api'
 import {
+  clearStaleOperatorTurnClosed,
   getOperatorCloseState,
   normalizeOperatorCloseRole,
   reopenOperatorTurnClosed,
@@ -68,11 +69,18 @@ export default function ScreenTurnoEntregado({ shift: shiftProp = null, role: ro
     return () => { active = false }
   }, [initialShift])
 
+  useEffect(() => {
+    const effectiveShift = shift || shiftProp || location.state?.shift || null
+    const validationShift = currentShift || effectiveShift
+    if (!effectiveShift?.id || !validationShift?.id) return
+    clearStaleOperatorTurnClosed(effectiveShift, role, validationShift)
+  }, [shift, shiftProp, location.state, currentShift, role])
+
   const effectiveShift = shift || shiftProp || location.state?.shift || null
   const validationShift = currentShift || null
-  const fallbackCloseState = closeStateProp || (effectiveShift?.id ? getOperatorCloseState(effectiveShift.id, role, effectiveShift) : null)
+  const fallbackCloseState = closeStateProp || (effectiveShift?.id ? getOperatorCloseState(effectiveShift, role, effectiveShift) : null)
   const closeState = validationShift?.id && effectiveShift?.id
-    ? getOperatorCloseState(effectiveShift.id, role, validationShift)
+    ? getOperatorCloseState(effectiveShift, role, validationShift)
     : fallbackCloseState
   const deliveryTime = formatDeliveryTime(closeState?.closed_at)
   const title = effectiveShift?.name || (effectiveShift?.shift_code != null ? `Turno ${effectiveShift.shift_code}` : 'Turno entregado')

@@ -8,7 +8,7 @@ import { getMyShift, getCycles, getPackingEntries } from './api'
 import { getSaltLevel, listTanks, MACHINE_ID_BARRA } from './barraService'
 import { getMiTurnoActions } from './miTurnoActions'
 import OpeningStateBanner from './OpeningStateBanner'
-import { getOperatorCloseState } from '../shared/operatorTurnCloseStore'
+import { clearStaleOperatorTurnClosed, getOperatorCloseState } from '../shared/operatorTurnCloseStore'
 import ScreenTurnoEntregado from './ScreenTurnoEntregado'
 
 // V2: Rolito users get redirected to the new guided hub
@@ -52,6 +52,11 @@ export default function ScreenMiTurno() {
     loadData()
   }, [activeRole])
 
+  useEffect(() => {
+    if (!shift?.id) return
+    clearStaleOperatorTurnClosed(shift, activeRole, shift)
+  }, [shift, activeRole])
+
   const isBarras = activeRole === 'operador_barra'
 
   // V2: Rolito operators get the new guided hub
@@ -89,9 +94,9 @@ export default function ScreenMiTurno() {
 
   const totalKgPacked = packing.reduce((sum, p) => sum + (p.total_kg || 0), 0)
   const stateInfo = STATES[shift?.state] || STATES.draft
-  const closeState = shift?.id ? getOperatorCloseState(shift.id, activeRole, shift) : null
+  const closeState = shift?.id ? getOperatorCloseState(shift, activeRole, shift) : null
 
-  if (!loading && !error && closeState?.closed) {
+  if (!loading && !error && closeState?.effectively_closed) {
     return <ScreenTurnoEntregado shift={shift} role={activeRole} closeState={closeState} />
   }
 

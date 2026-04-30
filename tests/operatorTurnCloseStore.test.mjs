@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   areRequiredOperatorClosesDone,
+  clearStaleOperatorTurnClosed,
   clearOperatorTurnClosed,
   getOperatorCloseRecord,
   getOperatorCloseState,
@@ -118,6 +119,39 @@ test('getOperatorCloseState and reopenOperatorTurnClosed reject stale master shi
     currentShift: { id: 303, state: 'closed' },
   }), false)
   assert.equal(isOperatorTurnClosed(303, 'operador_barra'), true)
+})
+
+test('clearStaleOperatorTurnClosed resets a closed subturn when a new shift reuses the same scope', () => {
+  const previousShift = {
+    id: 501,
+    warehouse_id: 1172,
+    date: '2026-04-30',
+    shift_code: 1,
+    state: 'in_progress',
+  }
+  const currentShift = {
+    id: 502,
+    warehouse_id: 1172,
+    date: '2026-04-30',
+    shift_code: 1,
+    state: 'in_progress',
+  }
+
+  assert.equal(markOperatorTurnClosed(previousShift, 'operador_rolito', {
+    employee_name: 'Ana',
+  }), true)
+
+  const staleState = getOperatorCloseState(currentShift, 'operador_rolito', currentShift)
+  assert.equal(staleState.closed, true)
+  assert.equal(staleState.stale, true)
+  assert.equal(staleState.effectively_closed, false)
+
+  assert.equal(clearStaleOperatorTurnClosed(currentShift, 'operador_rolito', currentShift), true)
+
+  const nextState = getOperatorCloseState(currentShift, 'operador_rolito', currentShift)
+  assert.equal(nextState.closed, false)
+  assert.equal(nextState.stale, false)
+  assert.equal(nextState.effectively_closed, false)
 })
 
 test('clearOperatorTurnClosed removes the full shift entry', () => {

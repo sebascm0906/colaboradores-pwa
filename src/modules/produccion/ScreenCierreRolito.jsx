@@ -15,7 +15,12 @@ import { getBagReturnDeclaration, matchesBagReturnDeclaration } from './bagRetur
 import { notifyOperatorClose } from './api'
 import { computeRolitoBagDifference, sumRolitoUsedBags } from './rolitoBagMath'
 import { computePackingCoherence, getCoherenceHeadline } from '../shared/packingCoherence'
-import { isOperatorTurnClosed, markOperatorTurnClosed, normalizeOperatorCloseRole } from '../shared/operatorTurnCloseStore'
+import {
+  clearStaleOperatorTurnClosed,
+  getOperatorCloseState,
+  markOperatorTurnClosed,
+  normalizeOperatorCloseRole,
+} from '../shared/operatorTurnCloseStore'
 
 export default function ScreenCierreRolito() {
   const navigate = useNavigate()
@@ -52,7 +57,13 @@ export default function ScreenCierreRolito() {
       setError('')
       const result = await getShiftOverview()
       setData(result)
-      setAlreadyClosed(Boolean(result.shift && isOperatorTurnClosed(result.shift, activeOperatorRole)))
+      if (result.shift) {
+        clearStaleOperatorTurnClosed(result.shift, activeOperatorRole, result.shift)
+      }
+      const closeState = result.shift
+        ? getOperatorCloseState(result.shift, activeOperatorRole, result.shift)
+        : null
+      setAlreadyClosed(Boolean(closeState?.effectively_closed))
     } catch {
       setError('Error cargando datos')
     } finally {

@@ -139,6 +139,7 @@ export function getOperatorCloseState(shiftLike, role, currentShift = null) {
     matches_current_shift: matchesCurrentShift,
     current_shift_open: currentShiftOpen,
     stale,
+    effectively_closed: Boolean(record.closed && !stale),
     can_reopen: Boolean(record.closed && matchesCurrentShift && currentShiftOpen),
   }
 }
@@ -197,6 +198,42 @@ export function markOperatorTurnClosed(shiftLike, role, payload = {}) {
 
 export function isOperatorTurnClosed(shiftLike, role) {
   return getOperatorCloseRecord(shiftLike, role).closed
+}
+
+export function clearStaleOperatorTurnClosed(shiftLike, role, currentShift = null) {
+  const normalizedRole = normalizeOperatorCloseRole(role)
+  if (!REQUIRED_OPERATOR_ROLES.includes(normalizedRole)) return false
+
+  const referenceShift = currentShift || shiftLike
+  const currentShiftId =
+    typeof referenceShift === 'object' && referenceShift?.id != null
+      ? String(referenceShift.id)
+      : ''
+  if (!currentShiftId) return false
+
+  const keys = resolveLookupKeys(shiftLike)
+  if (keys.length === 0) return false
+
+  const store = readStore()
+  let removed = false
+
+  for (const key of keys) {
+    const nextEntry = { ...(store[key] || {}) }
+    const record = nextEntry[normalizedRole]
+    if (!record?.closed) continue
+    if (String(record.shift_id || '') === currentShiftId) continue
+
+    delete nextEntry[normalizedRole]
+    if (Object.keys(nextEntry).length > 0) {
+      store[key] = nextEntry
+    } else {
+      delete store[key]
+    }
+    removed = true
+  }
+
+  if (removed) writeStore(store)
+  return removed
 }
 
 export function reopenOperatorTurnClosed(shiftLike, role, options = {}) {
