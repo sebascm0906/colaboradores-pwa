@@ -5744,9 +5744,14 @@ async function directEntregas(method, path, body) {
 
   if (cleanPath === '/pwa-entregas/today-routes' && method === 'GET') {
     const today = new Date()
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
     const pad = (n) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-    const domain = [['date', '=', todayStr]]
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    const todayStr = fmt(today)
+    const tomorrowStr = fmt(tomorrow)
+    // Incluir hoy Y mañana: el almacenista carga las unidades para la ruta del día siguiente,
+    // pero también pueden quedar cargas pendientes del día actual.
+    const domain = [['date', 'in', [todayStr, tomorrowStr]]]
     if (companyId) domain.push(['company_id', '=', companyId])
     // gf.route.plan no tiene warehouse_id directo; el almacen vive en route_id.warehouse_dispatch_id
     if (warehouseId) domain.push(['route_id.warehouse_dispatch_id', '=', warehouseId])
