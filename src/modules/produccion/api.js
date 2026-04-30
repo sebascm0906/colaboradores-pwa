@@ -48,6 +48,21 @@ export function updateCycle(cycleId, data) {
   return api('POST', '/pwa-prod/cycle-update', { cycle_id: cycleId, ...data })
 }
 
+/** Iniciar ciclo usando hora canonica del backend */
+export function startCycleServer(data) {
+  return api('POST', '/api/production/cycle/start', data)
+}
+
+/** Iniciar deshielo usando hora canonica del backend */
+export function startCycleDefrostServer(data) {
+  return api('POST', '/api/production/cycle/defrost-start', data)
+}
+
+/** Registrar descarga usando hora canonica del backend */
+export function dumpCycleServer(data) {
+  return api('POST', '/api/production/cycle/dump', data)
+}
+
 // ── Empaque ──────────────────────────────────────────────────────────────────
 
 /** Obtener catalogo de PT empacable desde Odoo */

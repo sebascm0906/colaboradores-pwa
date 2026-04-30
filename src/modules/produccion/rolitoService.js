@@ -7,8 +7,9 @@ import {
   getCycles,
   getPackingEntries,
   getPackingProducts,
-  createCycle,
-  updateCycle,
+  dumpCycleServer,
+  startCycleDefrostServer,
+  startCycleServer,
   createPackingEntry,
   getChecklist,
   submitCheck,
@@ -440,10 +441,9 @@ function computeKPIs(shift, cycles, packing) {
  * Starts a new freeze cycle. Returns the created cycle.
  */
 export async function startFreeze(shiftId) {
-  return createCycle({
+  return startCycleServer({
     shift_id: shiftId,
     machine_id: MACHINE_ID_EVAPORADOR,
-    freeze_start: nowDatetime(),
   })
 }
 
@@ -451,10 +451,8 @@ export async function startFreeze(shiftId) {
  * Marks end of freezing and start of defrost on active cycle.
  */
 export async function markDefrost(cycleId) {
-  const ts = nowDatetime()
-  return updateCycle(cycleId, {
-    freeze_end: ts,
-    defrost_start: ts,
+  return startCycleDefrostServer({
+    cycle_id: cycleId,
   })
 }
 
@@ -467,13 +465,13 @@ export async function markDefrost(cycleId) {
  */
 export async function markDump(cycleId, kgDumped, extra) {
   const payload = {
-    defrost_end: nowDatetime(),
+    cycle_id: cycleId,
     kg_dumped: parseFloat(kgDumped),
   }
   if (extra && typeof extra === 'object') {
     Object.assign(payload, extra)
   }
-  return updateCycle(cycleId, payload)
+  return dumpCycleServer(payload)
 }
 
 /**

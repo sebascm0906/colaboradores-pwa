@@ -2415,6 +2415,35 @@ async function directProduction(method, path, body) {
     return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: newId, state: 'freezing', cycle_number: cycleNumber, machine_id: machineId }]))[0]
   }
 
+  if (cleanPath === '/api/production/cycle/start' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
+    const machineId = Number(body?.machine_id || 0) || 2
+    if (!shiftId) throw new Error('shift_id required')
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
+
+    const response = await odooJson('/api/production/cycle/start', {
+      shift_id: shiftId,
+      machine_id: machineId,
+    })
+    const cycleId = Number(response?.data?.cycle_id || response?.cycle_id || 0)
+    if (!cycleId) throw new Error('No se pudo iniciar el ciclo')
+
+    const rec = await readModelSorted('gf.evaporator.cycle', {
+      fields: withExpectedTimingFields(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+        supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
+      ),
+      domain: [['id', '=', cycleId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    })
+    return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: cycleId, state: 'freezing', machine_id: machineId }]))[0]
+  }
+
   if (cleanPath === '/pwa-prod/cycle-update' && method === 'POST') {
     const cycleId = Number(body?.cycle_id || 0)
     if (!cycleId) throw new Error('cycle_id required')
@@ -2495,6 +2524,62 @@ async function directProduction(method, path, body) {
     }
 
     // Read-back so caller has fresh state
+    const rec = await readModelSorted('gf.evaporator.cycle', {
+      fields: withExpectedTimingFields(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+        supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
+      ),
+      domain: [['id', '=', cycleId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    })
+    return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: cycleId }]))[0]
+  }
+
+  if (cleanPath === '/api/production/cycle/defrost-start' && method === 'POST') {
+    const cycleId = Number(body?.cycle_id || 0)
+    if (!cycleId) throw new Error('cycle_id required')
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
+
+    await odooJson('/api/production/cycle/defrost-start', {
+      cycle_id: cycleId,
+    })
+
+    const rec = await readModelSorted('gf.evaporator.cycle', {
+      fields: withExpectedTimingFields(
+        ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
+        supportsExpectedFreezeMin,
+        supportsExpectedDefrostMin,
+      ),
+      domain: [['id', '=', cycleId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    })
+    return (await enrichCyclesWithMachineTiming([pickFirstResponse(rec) || { id: cycleId }]))[0]
+  }
+
+  if (cleanPath === '/api/production/cycle/dump' && method === 'POST') {
+    const cycleId = Number(body?.cycle_id || 0)
+    const kgDumped = Number(body?.kg_dumped || 0)
+    if (!cycleId) throw new Error('cycle_id required')
+    if (kgDumped <= 0) throw new Error('kg_dumped debe ser mayor a 0')
+    const supportsExpectedFreezeMin = await modelHasField('gf.evaporator.cycle', 'expected_freeze_min')
+    const supportsExpectedDefrostMin = await modelHasField('gf.evaporator.cycle', 'expected_defrost_min')
+
+    await odooJson('/api/production/cycle/dump', {
+      cycle_id: cycleId,
+      kg_dumped: kgDumped,
+      human_override: Boolean(body?.human_override),
+      override_reason: body?.override_reason || '',
+      supervisor_employee_id: Number(body?.supervisor_employee_id || 0) || undefined,
+    })
+
     const rec = await readModelSorted('gf.evaporator.cycle', {
       fields: withExpectedTimingFields(
         ['id', 'shift_id', 'machine_id', 'state', 'freeze_start', 'freeze_end', 'defrost_start', 'defrost_end', 'kg_dumped', 'kg_expected', 'cycle_number'],
