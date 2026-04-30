@@ -100,6 +100,9 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
       state: it?.settlement_state || it?.state || '',
       uom: it?.uom || '',
       issued: 0,
+      settlementRemaining: null,
+      settlementDamaged: null,
+      settlementConsumed: null,
     }
     current.issued += issued
     current.issueId = current.issueId || it?.id || it?.issue_id || null
@@ -114,20 +117,36 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
     current.materialId = current.materialId || materialId || null
     current.uom = current.uom || it?.uom || ''
     if (!current.name || current.name === 'Material') current.name = it?.material_name || it?.product_name || 'Material'
+    if (it?.settlement_qty_remaining != null && current.settlementRemaining == null) {
+      current.settlementRemaining = Number(it.settlement_qty_remaining) || 0
+    }
+    if (it?.settlement_qty_damaged != null && current.settlementDamaged == null) {
+      current.settlementDamaged = Number(it.settlement_qty_damaged) || 0
+    }
+    if (it?.settlement_qty_consumed != null && current.settlementConsumed == null) {
+      current.settlementConsumed = Number(it.settlement_qty_consumed) || 0
+    }
     grouped.set(groupKey, current)
   })
 
   return sortRolitoBagRows(Array.from(grouped.values()).map((item) => {
     const materialId = getRolitoRelationId(item.materialId)
-    const consumed = Math.min(
-      Number(item.issued || 0) || 0,
-      Math.max(0, Number(packedByMaterial[materialId] || 0) || 0)
-    )
-    const remaining = Math.max(0, (Number(item.issued || 0) || 0) - consumed)
+    const settlementConsumed = item.settlementConsumed == null ? null : Math.max(0, Number(item.settlementConsumed) || 0)
+    const settlementRemaining = item.settlementRemaining == null ? null : Math.max(0, Number(item.settlementRemaining) || 0)
+    const consumed = settlementConsumed != null
+      ? Math.min(Number(item.issued || 0) || 0, settlementConsumed)
+      : Math.min(
+          Number(item.issued || 0) || 0,
+          Math.max(0, Number(packedByMaterial[materialId] || 0) || 0)
+        )
+    const remaining = settlementRemaining != null
+      ? settlementRemaining
+      : Math.max(0, (Number(item.issued || 0) || 0) - consumed)
     return {
       ...item,
       consumed,
       remaining,
+      damaged: item.settlementDamaged == null ? 0 : Math.max(0, Number(item.settlementDamaged) || 0),
     }
   }))
 }

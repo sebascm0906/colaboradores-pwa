@@ -77,8 +77,12 @@ test('computeAvailableBagMaterials consolidates duplicate issues by material eve
     state: 'draft',
     uom: '',
     issued: 500,
+    settlementRemaining: null,
+    settlementDamaged: null,
+    settlementConsumed: null,
     consumed: 200,
     remaining: 300,
+    damaged: 0,
   })
   assert.deepEqual(rows[1], {
     id: 11,
@@ -93,7 +97,63 @@ test('computeAvailableBagMaterials consolidates duplicate issues by material eve
     state: 'draft',
     uom: '',
     issued: 15,
+    settlementRemaining: null,
+    settlementDamaged: null,
+    settlementConsumed: null,
     consumed: 5,
     remaining: 10,
+    damaged: 0,
+  })
+})
+
+test('computeAvailableBagMaterials prefers settlement return and damage quantities after rolito bag declaration', () => {
+  const issues = [
+    {
+      id: 71,
+      settlement_id: 27,
+      shift_id: 33,
+      line_id: 2,
+      material_id: 10,
+      product_id: 777,
+      material_name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      qty_issued: 100,
+      state: 'confirmed',
+      settlement_state: 'reported',
+      settlement_qty_remaining: 48,
+      settlement_qty_damaged: 2,
+      settlement_qty_consumed: 50,
+    },
+  ]
+
+  const packingEntries = [
+    {
+      id: 950,
+      material_id: 10,
+      material_qty_total: 50,
+    },
+  ]
+
+  const rows = computeAvailableBagMaterials(issues, packingEntries)
+
+  assert.equal(rows.length, 1)
+  assert.deepEqual(rows[0], {
+    id: 10,
+    key: 'material:10',
+    issueId: 71,
+    settlementId: 27,
+    shiftId: 33,
+    lineId: 2,
+    productId: 777,
+    materialId: 10,
+    name: 'MP BOLSA LAURITA ROLITO (15KG)',
+    state: 'reported',
+    uom: '',
+    issued: 100,
+    settlementRemaining: 48,
+    settlementDamaged: 2,
+    settlementConsumed: 50,
+    consumed: 50,
+    remaining: 48,
+    damaged: 2,
   })
 })
