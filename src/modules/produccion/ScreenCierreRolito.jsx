@@ -66,7 +66,10 @@ export default function ScreenCierreRolito() {
   const systemBagsUsed = sumRolitoUsedBags(data.packing)
   const totalBagsReceived = data.bagMaterials.reduce((sum, item) => sum + (Number(item.issued) || 0), 0)
   const totalBagsSystemRemaining = data.bagMaterials.reduce((sum, item) => sum + (Number(item.remaining) || 0), 0)
-  const totalBagsSystemDamaged = data.bagMaterials.reduce((sum, item) => sum + (Number(item.damaged) || 0), 0)
+  const totalBagsSystemDamagedRaw = data.bagMaterials.reduce((sum, item) => sum + (Number(item.damaged) || 0), 0)
+  const totalBagsSystemDamaged = totalBagsSystemDamagedRaw > 0
+    ? totalBagsSystemDamagedRaw
+    : Math.max(0, totalBagsReceived - systemBagsUsed - totalBagsSystemRemaining)
   const bagDeclaration = shift?.id ? getBagReturnDeclaration(shift) : null
   const bagDeclarationRequired = !isBarraOperator && totalBagsReceived > 0
   const bagDeclarationFromStore = matchesBagReturnDeclaration(bagDeclaration, {
