@@ -7,6 +7,170 @@ import { logScreenError } from '../shared/logScreenError'
 
 const CHANNELS = ['Van', 'Mostrador']
 
+// Bottom-sheet oscuro con buscador. Reemplaza <select> nativo en móvil.
+// Recibe { id, label } y devuelve la opción completa al onSelect.
+function SearchableSheet({
+  open,
+  onClose,
+  title,
+  placeholder = 'Buscar…',
+  options,
+  selectedId,
+  onSelect,
+  emptyText = 'No se encontraron resultados',
+}) {
+  const [q, setQ] = useState('')
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) { setQ(''); return }
+    // Pequeño delay para que el sheet esté visible antes de pedir foco — evita
+    // que el teclado del móvil empuje la animación de entrada.
+    const t = setTimeout(() => inputRef.current?.focus(), 60)
+    return () => clearTimeout(t)
+  }, [open])
+
+  // Cierre con Escape (teclado físico / accesibilidad básica)
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (e.key === 'Escape') onClose?.() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return options
+    return options.filter(o => (o.label || '').toLowerCase().includes(needle))
+  }, [q, options])
+
+  if (!open) return null
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        backdropFilter: 'blur(2px)',
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{
+          width: '100%', maxWidth: 480,
+          maxHeight: '85dvh', display: 'flex', flexDirection: 'column',
+          background: TOKENS.colors.bg1,
+          borderTopLeftRadius: TOKENS.radius.xl,
+          borderTopRightRadius: TOKENS.radius.xl,
+          border: `1px solid ${TOKENS.colors.border}`,
+          boxShadow: TOKENS.shadow.lg,
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        {/* Grabber + header */}
+        <div style={{ padding: '10px 16px 6px' }}>
+          <div style={{
+            width: 40, height: 4, borderRadius: 999,
+            background: 'rgba(255,255,255,0.18)', margin: '0 auto 10px',
+          }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: TOKENS.colors.text }}>{title}</span>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar"
+              style={{
+                width: 32, height: 32, borderRadius: TOKENS.radius.sm,
+                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: '8px 16px 10px' }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder={placeholder}
+            style={{
+              width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+              color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          />
+        </div>
+
+        {/* List */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}>
+          {filtered.length === 0 ? (
+            <div style={{
+              padding: 24, textAlign: 'center', color: TOKENS.colors.textLow, fontSize: 13,
+            }}>
+              {emptyText}
+            </div>
+          ) : (
+            filtered.map(opt => {
+              const active = selectedId != null && String(opt.id) === String(selectedId)
+              return (
+                <button
+                  key={opt.id ?? '__null'}
+                  type="button"
+                  onClick={() => { onSelect?.(opt); onClose?.() }}
+                  style={{
+                    width: '100%', minHeight: 48, padding: '10px 14px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                    borderRadius: TOKENS.radius.sm,
+                    background: active ? TOKENS.colors.blueGlow : 'transparent',
+                    border: active ? `1px solid ${TOKENS.colors.blue2}` : '1px solid transparent',
+                    color: TOKENS.colors.text, fontSize: 14, textAlign: 'left',
+                    fontFamily: "'DM Sans', sans-serif", marginBottom: 2,
+                  }}
+                >
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {opt.label}
+                  </span>
+                  {active && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={TOKENS.colors.blue3} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        {/* Cancel footer */}
+        <div style={{ padding: '8px 16px 12px', borderTop: `1px solid ${TOKENS.colors.border}` }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: '100%', minHeight: 44, padding: '10px 0', borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+              color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 600,
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ScreenPronostico() {
   const { session } = useSession()
   const navigate = useNavigate()
@@ -20,6 +184,35 @@ export default function ScreenPronostico() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
+
+  // Sheet state — un solo sheet a la vez. `productLineIdx` indica qué línea
+  // se está editando; null cuando el sheet abierto es el de vendedor.
+  const [vendorSheetOpen, setVendorSheetOpen] = useState(false)
+  const [productLineIdx, setProductLineIdx] = useState(null)
+
+  // Opciones formateadas para el sheet ({ id, label }).
+  // El vendedor incluye una opción especial id=''  para "Sucursal completa".
+  const vendorOptions = useMemo(() => ([
+    { id: '', label: 'Sucursal completa (global)' },
+    ...team.map(v => ({ id: String(v.id), label: v.name })),
+  ]), [team])
+
+  const productOptions = useMemo(
+    () => products.map(p => ({ id: String(p.id), label: p.name || p.display_name || `#${p.id}` })),
+    [products],
+  )
+
+  const selectedVendorLabel = useMemo(() => {
+    if (!selectedVendor) return 'Sucursal completa (global)'
+    const v = team.find(x => String(x.id) === String(selectedVendor))
+    return v?.name || `Vendedor #${selectedVendor}`
+  }, [selectedVendor, team])
+
+  function productLabelForLine(line) {
+    if (!line.product_id) return null
+    const p = products.find(x => String(x.id) === String(line.product_id))
+    return p?.name || p?.display_name || `Producto #${line.product_id}`
+  }
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -192,23 +385,27 @@ export default function ScreenPronostico() {
               {/* Vendor selector — per-vendor or global */}
               <div style={{ marginBottom: 12 }}>
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>Alcance del pronostico</p>
-                <select
-                  value={selectedVendor}
-                  onChange={e => setSelectedVendor(e.target.value)}
+                <button
+                  type="button"
+                  onClick={() => setVendorSheetOpen(true)}
                   style={{
-                    width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
+                    width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
                     background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                     color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                    fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
-                  <option value="">Sucursal completa (global)</option>
-                  {team.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {selectedVendorLabel}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
                 {selectedVendor && (
                   <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '4px 0 0', fontSize: 10 }}>
-                    Pronostico individual para {team.find(v => v.id === Number(selectedVendor))?.name || 'vendedor'}
+                    Pronostico individual para {selectedVendorLabel}
                   </p>
                 )}
               </div>
@@ -219,20 +416,25 @@ export default function ScreenPronostico() {
                   background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
                 }}>
                   {/* Product selector */}
-                  <select
-                    value={line.product_id}
-                    onChange={e => updateLine(idx, 'product_id', e.target.value)}
+                  <button
+                    type="button"
+                    onClick={() => setProductLineIdx(idx)}
                     style={{
-                      width: '100%', padding: '10px 12px', borderRadius: TOKENS.radius.sm,
+                      width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
                       background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                      color: TOKENS.colors.text, fontSize: 14, marginBottom: 8, outline: 'none',
+                      color: line.product_id ? TOKENS.colors.text : TOKENS.colors.textLow,
+                      fontSize: 14, marginBottom: 8, outline: 'none',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      fontFamily: "'DM Sans', sans-serif",
                     }}
                   >
-                    <option value="">Seleccionar producto...</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name || p.display_name}</option>
-                    ))}
-                  </select>
+                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {productLabelForLine(line) || 'Seleccionar producto...'}
+                    </span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                  </button>
 
                   {/* Channel pills */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -378,6 +580,32 @@ export default function ScreenPronostico() {
           </>
         )}
       </div>
+
+      {/* Vendor sheet */}
+      <SearchableSheet
+        open={vendorSheetOpen}
+        onClose={() => setVendorSheetOpen(false)}
+        title="Alcance del pronostico"
+        placeholder="Buscar vendedor..."
+        options={vendorOptions}
+        selectedId={selectedVendor || ''}
+        onSelect={(opt) => setSelectedVendor(opt.id)}
+        emptyText="No se encontraron vendedores"
+      />
+
+      {/* Product sheet (per-line) */}
+      <SearchableSheet
+        open={productLineIdx !== null}
+        onClose={() => setProductLineIdx(null)}
+        title="Seleccionar producto"
+        placeholder="Buscar producto..."
+        options={productOptions}
+        selectedId={productLineIdx !== null ? lines[productLineIdx]?.product_id || '' : ''}
+        onSelect={(opt) => {
+          if (productLineIdx !== null) updateLine(productLineIdx, 'product_id', opt.id)
+        }}
+        emptyText="No se encontraron productos"
+      />
     </div>
   )
 }
