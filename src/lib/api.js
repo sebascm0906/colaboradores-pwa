@@ -5963,6 +5963,80 @@ async function directEntregas(method, path, body) {
     return pickListResponse(result).map((row) => ({ id: row.id, name: row.name }))
   }
 
+  // ── LOAD STOCK ──────────────────────────────────────────────────────────────
+  // Consulta stock disponible (stock.quant) en la ubicación de origen del
+  // picking de carga, para cada producto que se va a transferir.
+  // Retorna: { location_id, location_name, lines: [{product_id, product_name,
+  //   requested_qty, available_qty, uom, sufficient}], all_sufficient }
+  if (cleanPath === '/pwa-entregas/load-stock' && method === 'GET') {
+    const pickingId = Number(query.get('picking_id') || 0)
+    if (!pickingId) return { ok: false, error: 'picking_id requerido' }
+
+    // 1. Obtener ubicación de origen del picking
+    const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
+      fields: ['id', 'location_id'],
+      domain: [['id', '=', pickingId]],
+      sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
+    }))
+    if (!pickingRows.length) return { ok: false, error: 'Picking no encontrado' }
+    const locationId = Number(pickingRows[0]?.location_id?.[0] || pickingRows[0]?.location_id || 0)
+    const locationName = Array.isArray(pickingRows[0]?.location_id) ? pickingRows[0].location_id[1] : 'Almacén'
+    if (!locationId) return { ok: false, error: 'Picking sin ubicación de origen' }
+
+    // 2. Movimientos vigentes del picking (producto + cantidad pedida)
+    const moveRows = pickListResponse(await readModelSorted('stock.move', {
+      fields: ['id', 'product_id', 'product_uom_qty', 'product_uom'],
+      domain: [['picking_id', '=', pickingId], ['state', 'not in', ['cancel', 'done']]],
+      sort_column: 'id', sort_desc: false, limit: 100, sudo: 1,
+    }))
+
+    if (!moveRows.length) {
+      // Sin movimientos vigentes → no bloquear (ya ejecutado o cancelado)
+      return { ok: true, data: { location_id: locationId, location_name: locationName, lines: [], all_sufficient: true } }
+    }
+
+    const productIds = [...new Set(moveRows.map((m) => Number(m.product_id?.[0] || m.product_id)).filter(Boolean))]
+
+    // 3. Stock disponible (cantidad − reservada) en esa ubicación
+    const quantRows = pickListResponse(await readModelSorted('stock.quant', {
+      fields: ['product_id', 'quantity', 'reserved_quantity'],
+      domain: [['location_id', '=', locationId], ['product_id', 'in', productIds]],
+      sort_column: 'product_id', sort_desc: false, limit: productIds.length * 5, sudo: 1,
+    }))
+
+    const availMap = new Map()
+    for (const q of quantRows) {
+      const pid = Number(q.product_id?.[0] || q.product_id)
+      const avail = Number(q.quantity || 0) - Number(q.reserved_quantity || 0)
+      availMap.set(pid, (availMap.get(pid) || 0) + avail)
+    }
+
+    const lines = moveRows.map((m) => {
+      const pid = Number(m.product_id?.[0] || m.product_id)
+      const pname = Array.isArray(m.product_id) ? m.product_id[1] : `Producto ${pid}`
+      const requested = Number(m.product_uom_qty || 0)
+      const available = Math.max(0, availMap.get(pid) || 0)
+      return {
+        product_id: pid,
+        product_name: pname,
+        requested_qty: requested,
+        available_qty: available,
+        uom: Array.isArray(m.product_uom) ? m.product_uom[1] : '',
+        sufficient: available >= requested,
+      }
+    })
+
+    return {
+      ok: true,
+      data: {
+        location_id: locationId,
+        location_name: locationName,
+        lines,
+        all_sufficient: lines.every((l) => l.sufficient),
+      },
+    }
+  }
+
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
     // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
     // por Sebastián + introspección live (2026-04-26):

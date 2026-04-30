@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getTodayRoutes, getLoadDetail, confirmLoad, rejectLoad, updateLoadLines, getLoadProducts } from './entregasService'
+import { getTodayRoutes, getLoadDetail, confirmLoad, rejectLoad, updateLoadLines, getLoadProducts, getLoadStock } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState, StatusBadge } from './components'
 
 /** Extract numeric ID from a Many2one field (could be false, number, or [id, name] tuple). */
@@ -58,6 +58,9 @@ export default function ScreenCargaUnidades() {
   const [products, setProducts] = useState([])
   const [productsLoaded, setProductsLoaded] = useState(false)
 
+  // Stock disponible en CEDIS por ruta: { [routeId]: { data, loading, error } }
+  const [stockData, setStockData] = useState({})
+
   // Toast
   const [toast, setToast] = useState(null)
 
@@ -105,22 +108,35 @@ export default function ScreenCargaUnidades() {
     }
     setExpandedId(routeId)
 
-    // Load detail if not already fetched
-    if (loadLines[routeId]) return
-
     const pickingId = extractPickingId(route.load_picking_id)
     if (!pickingId) {
       setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Detalle no disponible' } }))
       return
     }
 
-    setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: true, error: '' } }))
-    try {
-      const lines = await getLoadDetail(pickingId)
-      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(lines) ? lines : [], loading: false, error: '' } }))
-    } catch (e) {
-      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al cargar detalle' } }))
+    // Cargar detalle y stock en paralelo (solo si aún no hay datos)
+    const needsDetail = !loadLines[routeId]
+    const needsStock = !stockData[routeId]
+
+    if (needsDetail) {
+      setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: true, error: '' } }))
     }
+    if (needsStock) {
+      setStockData((prev) => ({ ...prev, [routeId]: { data: null, loading: true, error: '' } }))
+    }
+
+    await Promise.all([
+      needsDetail
+        ? getLoadDetail(pickingId)
+            .then((lines) => setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(lines) ? lines : [], loading: false, error: '' } })))
+            .catch(() => setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al cargar detalle' } })))
+        : Promise.resolve(),
+      needsStock
+        ? getLoadStock(pickingId)
+            .then((data) => setStockData((prev) => ({ ...prev, [routeId]: { data, loading: false, error: '' } })))
+            .catch(() => setStockData((prev) => ({ ...prev, [routeId]: { data: null, loading: false, error: 'Error al consultar stock' } })))
+        : Promise.resolve(),
+    ])
   }
 
   async function handleConfirmLoad() {
@@ -137,8 +153,9 @@ export default function ScreenCargaUnidades() {
         return
       }
       showToast('Carga sellada y picking validado')
-      // Clear cached detail for this route
+      // Clear cached detail and stock for this route
       setLoadLines((prev) => { const n = { ...prev }; delete n[routePlanId]; return n })
+      setStockData((prev) => { const n = { ...prev }; delete n[routePlanId]; return n })
       setExpandedId(null)
       await loadRoutes()
     } catch (e) {
@@ -218,16 +235,21 @@ export default function ScreenCargaUnidades() {
       }
       showToast('Líneas actualizadas')
       exitEditMode(routeId)
-      // Reload detail
+      // Reload detail and stock
       setLoadLines((prev) => { const n = { ...prev }; delete n[routeId]; return n })
+      setStockData((prev) => { const n = { ...prev }; delete n[routeId]; return n })
       const pickingId = extractPickingId(route.load_picking_id)
       if (pickingId) {
         setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: true, error: '' } }))
-        getLoadDetail(pickingId).then((ls) => {
-          setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(ls) ? ls : [], loading: false, error: '' } }))
-        }).catch(() => {
-          setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al recargar' } }))
-        })
+        setStockData((prev) => ({ ...prev, [routeId]: { data: null, loading: true, error: '' } }))
+        Promise.all([
+          getLoadDetail(pickingId)
+            .then((ls) => setLoadLines((prev) => ({ ...prev, [routeId]: { lines: Array.isArray(ls) ? ls : [], loading: false, error: '' } })))
+            .catch(() => setLoadLines((prev) => ({ ...prev, [routeId]: { lines: [], loading: false, error: 'Error al recargar' } }))),
+          getLoadStock(pickingId)
+            .then((data) => setStockData((prev) => ({ ...prev, [routeId]: { data, loading: false, error: '' } })))
+            .catch(() => setStockData((prev) => ({ ...prev, [routeId]: { data: null, loading: false, error: '' } }))),
+        ])
       }
     } catch (e) {
       showToast(e.message || 'Error al guardar', 'error')
@@ -249,6 +271,7 @@ export default function ScreenCargaUnidades() {
       }
       showToast('Carga rechazada')
       setLoadLines((prev) => { const n = { ...prev }; delete n[routeId]; return n })
+      setStockData((prev) => { const n = { ...prev }; delete n[routeId]; return n })
       setEditMode((prev) => ({ ...prev, [routeId]: false }))
       setExpandedId(null)
       await loadRoutes()
@@ -337,7 +360,10 @@ export default function ScreenCargaUnidades() {
             // Permite confirmar si hay picking de carga (creado por pronóstico confirmado)
             // incluso cuando el plan está en borrador.
             const hasLoadPicking = Boolean(extractPickingId(route.load_picking_id))
-            const canConfirm = !route.load_sealed && (route.state !== 'draft' || hasLoadPicking)
+            const stockInfo = stockData[route.id]
+            const stockLoading = Boolean(stockInfo?.loading)
+            const stockInsufficient = stockInfo && !stockInfo.loading && stockInfo.data && !stockInfo.data.all_sufficient
+            const canConfirm = !route.load_sealed && (route.state !== 'draft' || hasLoadPicking) && !stockInsufficient
             const isExpanded = expandedId === route.id
             const detail = loadLines[route.id]
             const isConfirming = confirming === route.id
@@ -553,6 +579,93 @@ export default function ScreenCargaUnidades() {
                       </div>
                     )}
 
+                    {/* Stock en CEDIS */}
+                    {!isEditMode && hasLoadPicking && (
+                      <div style={{ marginTop: 14, marginBottom: 2 }}>
+                        {/* Header */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: 0 }}>STOCK EN CEDIS</p>
+                          {stockInfo?.data?.location_name && (
+                            <span style={{ fontSize: 10, color: TOKENS.colors.textMuted, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {stockInfo.data.location_name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Loading */}
+                        {stockLoading && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+                            <div style={{
+                              width: 16, height: 16, border: '2px solid rgba(255,255,255,0.12)',
+                              borderTop: `2px solid ${TOKENS.colors.blue2}`, borderRadius: '50%',
+                              animation: 'spin 0.8s linear infinite', flexShrink: 0,
+                            }} />
+                            <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Verificando disponibilidad...</span>
+                          </div>
+                        )}
+
+                        {/* Lines */}
+                        {!stockLoading && stockInfo?.data?.lines?.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {stockInfo.data.lines.map((sl, idx) => (
+                              <div key={sl.product_id || idx} style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                                background: sl.sufficient ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+                                border: `1px solid ${sl.sufficient ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.30)'}`,
+                              }}>
+                                <span style={{
+                                  ...typo.caption, color: TOKENS.colors.textSoft,
+                                  flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}>
+                                  {sl.product_name}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, marginLeft: 8 }}>
+                                  <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
+                                    Pedido: <strong style={{ color: TOKENS.colors.text }}>{sl.requested_qty}</strong>
+                                  </span>
+                                  <span style={{ fontSize: 11, color: TOKENS.colors.textMuted }}>
+                                    Disp: <strong style={{ color: sl.sufficient ? TOKENS.colors.success : '#ef4444' }}>
+                                      {sl.available_qty}
+                                    </strong>
+                                  </span>
+                                  <span style={{ fontSize: 14 }}>{sl.sufficient ? '✓' : '⚠'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Sin movimientos vigentes (ya ejecutado) */}
+                        {!stockLoading && stockInfo?.data?.lines?.length === 0 && stockInfo?.data && (
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+                            Sin movimientos pendientes
+                          </p>
+                        )}
+
+                        {/* Error al consultar */}
+                        {!stockLoading && stockInfo?.error && !stockInfo?.data && (
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
+                            No se pudo consultar stock
+                          </p>
+                        )}
+
+                        {/* Banner de stock insuficiente */}
+                        {stockInsufficient && (
+                          <div style={{
+                            marginTop: 8, padding: '9px 12px', borderRadius: TOKENS.radius.sm,
+                            background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.30)',
+                            display: 'flex', alignItems: 'center', gap: 8,
+                          }}>
+                            <span style={{ fontSize: 16 }}>⚠️</span>
+                            <p style={{ ...typo.caption, color: '#ef4444', margin: 0, fontWeight: 600 }}>
+                              Stock insuficiente — ajusta las cantidades antes de confirmar
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Action buttons row */}
                     {!isEditMode && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
@@ -574,21 +687,25 @@ export default function ScreenCargaUnidades() {
                         )}
 
                         {/* Confirm load */}
-                        {canConfirm && (
+                        {(!route.load_sealed && (route.state !== 'draft' || hasLoadPicking)) && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); setConfirmRoute(route) }}
-                            disabled={isConfirming}
+                            onClick={(e) => { e.stopPropagation(); if (canConfirm && !isConfirming && !stockLoading) setConfirmRoute(route) }}
+                            disabled={isConfirming || stockLoading || stockInsufficient}
                             style={{
                               flex: 1, padding: 12, borderRadius: TOKENS.radius.lg,
-                              background: 'linear-gradient(90deg, #15499B, #2B8FE0)', color: 'white',
+                              background: stockInsufficient
+                                ? 'rgba(239,68,68,0.15)'
+                                : 'linear-gradient(90deg, #15499B, #2B8FE0)',
+                              color: stockInsufficient ? '#ef4444' : 'white',
                               fontSize: 14, fontWeight: 600,
-                              opacity: isConfirming ? 0.5 : 1,
-                              cursor: isConfirming ? 'default' : 'pointer',
-                              boxShadow: '0 8px 20px rgba(43,143,224,0.25)',
+                              opacity: (isConfirming || stockLoading) ? 0.5 : 1,
+                              cursor: (isConfirming || stockLoading || stockInsufficient) ? 'default' : 'pointer',
+                              border: stockInsufficient ? '1px solid rgba(239,68,68,0.30)' : 'none',
+                              boxShadow: stockInsufficient ? 'none' : '0 8px 20px rgba(43,143,224,0.25)',
                               transition: `opacity ${TOKENS.motion.fast}`,
                             }}
                           >
-                            {isConfirming ? 'Confirmando...' : 'Confirmar Carga'}
+                            {isConfirming ? 'Confirmando...' : stockLoading ? 'Verificando stock...' : stockInsufficient ? 'Sin stock suficiente' : 'Confirmar Carga'}
                           </button>
                         )}
                       </div>

@@ -236,6 +236,26 @@ export async function getLoadProducts() {
   }
 }
 
+/**
+ * Stock disponible en la ubicación de origen del picking (CIGU/Existencias).
+ * Devuelve por cada producto cuánto hay disponible vs cuánto se pide,
+ * y si el stock es suficiente para completar la carga.
+ *
+ * @param {number} pickingId - stock.picking ID
+ * @returns {Promise<{location_id:number, location_name:string,
+ *   lines:Array<{product_id, product_name, requested_qty, available_qty, uom, sufficient}>,
+ *   all_sufficient:boolean}|null>}
+ */
+export async function getLoadStock(pickingId) {
+  if (!pickingId) return null
+  try {
+    const result = await api('GET', `/pwa-entregas/load-stock?picking_id=${pickingId}`)
+    return result?.data || (result?.ok ? result : null)
+  } catch {
+    return null
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  LIVE — Tickets
 // ═════════════════════════════════════════════════════════════════════════════
