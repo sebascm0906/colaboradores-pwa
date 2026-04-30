@@ -6196,76 +6196,23 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/forecast-create' && method === 'POST') {
-    // employee_id: si se pasa, el forecast es per-vendor.
-    // Si no, es global de sucursal (created_by queda como referencia).
+    // Usamos el endpoint forecast/upsert del supervisor controller.
+    // El guard del backend resuelve analytic_account_id desde el employee,
+    // y upsert_draft maneja las líneas correctamente via ORM (el createUpdate
+    // genérico perdía los line_ids silenciosamente).
     const employeeId = Number(body?.employee_id || 0)
-
-    // BLD-20260427-P0-SUPV-FORECAST-ANALYTIC: la sesión del supervisor NO
-    // contiene analytic_account_id ni sucursal_id (sólo plaza_id como string).
-    // Sin ese valor, gf.saleops.forecast.analytic_account_id (NOT NULL)
-    // rechaza el insert con el error críptico:
-    //   "null value in column \"analytic_account_id\" violates not-null"
-    // Sebas (2026-04-27) confirmó:
-    //   - hr.employee.x_analytic_account_id es la fuente oficial
-    //     supervisor → sucursal/analytic
-    //   - todos los supervisores activos deben tenerlo poblado
-    //   - hoy 1 supervisor = 1 sucursal (no requiere selector UI)
-    //   - si falta, bloquear con error claro (no permitir NULL)
-    // Resolución en cascada (mantiene compat con futuro override desde UI):
-    //   1) body.analytic_account_id (override directo)
-    //   2) body.sucursal (legacy)
-    //   3) JWT: getSession().employee.x_analytic_account_id (rápido, 0 RPC)
-    //      → coincide con el commit b968e43 de Sebas en main
-    //   4) RPC fallback: hr.employee.x_analytic_account_id (si el JWT no
-    //      lo trae todavía, garantiza que el flujo no se bloquea hasta
-    //      que login service propague el campo)
-    let analyticAccountId =
-      Number(
-        body?.analytic_account_id ||
-        body?.sucursal ||
-        getSession()?.employee?.x_analytic_account_id?.[0] ||
-        0
-      ) || 0
-    if (!analyticAccountId) {
-      const supervisorEmpId = Number(getEmployeeId() || 0) || 0
-      if (supervisorEmpId) {
-        try {
-          const empRes = pickListResponse(await readModelSorted('hr.employee', {
-            fields: ['id', 'x_analytic_account_id'],
-            domain: [['id', '=', supervisorEmpId]],
-            sort_column: 'id', sort_desc: true, limit: 1, sudo: 1,
-          }))
-          const xAaa = empRes[0]?.x_analytic_account_id
-          analyticAccountId = Number(xAaa?.[0] || xAaa || 0) || 0
-        } catch {
-          analyticAccountId = 0
-        }
-      }
-      if (!analyticAccountId) {
-        // Log estructurado sin tokens — para diagnosticar empleados mal
-        // configurados en RRHH sin esperar a que el usuario reporte.
-        try {
-          console.warn('[forecast-create] missing_x_analytic_account_id', {
-            employee_id: supervisorEmpId,
-            role: getSession()?.role || null,
-            body_keys: Object.keys(body || {}),
-            reason: 'missing_x_analytic_account_id',
-          })
-        } catch { /* noop */ }
-        throw new ApiError(
-          'Tu empleado no tiene sucursal asignada. Pide a administración que configure x_analytic_account_id en RRHH.',
-          { status: 400, code: 'missing_x_analytic_account_id' }
-        )
-      }
-    }
-
-    // Usamos el endpoint forecast/upsert del supervisor controller en lugar de
-    // createUpdate genérico. createUpdate no maneja bien los comandos One2many
-    // [0,0,{...}] de line_ids — las líneas se perdían silenciosamente.
-    // upsert_draft (backend) hace upsert correcto de líneas por (product_id, channel).
     const supervisorEmpId = Number(getEmployeeId() || 0) || 0
+
     const supvMeta = {}
     if (supervisorEmpId) supvMeta.employee_id = supervisorEmpId
+
+    // channel: el modelo usa keys 'van' / 'counter'.
+    // La UI envía los labels 'Van' / 'Mostrador' → normalizar antes de enviar.
+    const normalizeChannel = (ch) => {
+      const raw = String(ch || '').trim().toLowerCase()
+      if (raw === 'mostrador' || raw === 'counter') return 'counter'
+      return 'van' // default seguro
+    }
 
     const lines = Array.isArray(body?.lines)
       ? body.lines
@@ -6273,7 +6220,7 @@ async function directSupervisorVentas(method, path, body) {
           .map((l) => ({
             product_id: Number(l.product_id),
             qty: Number(l.qty || 0),
-            channel: l.channel ? String(l.channel).trim().toLowerCase() : 'van',
+            channel: normalizeChannel(l.channel),
           }))
       : []
 
@@ -6288,9 +6235,12 @@ async function directSupervisorVentas(method, path, body) {
       meta: supvMeta,
       data: upsertData,
     })
-    // Normalizar respuesta al mismo shape que antes ({ success, data })
-    if (result?.status === 'error' || result?.code === 'error') {
-      throw new ApiError(result?.user_message || 'Error al guardar pronóstico', { status: 400, code: result?.code || 'forecast_upsert_failed' })
+    // status:'error' viene del helper err() del backend
+    if (result?.status === 'error') {
+      throw new ApiError(
+        result?.user_message || 'Error al guardar pronóstico',
+        { status: 400, code: result?.code || 'forecast_upsert_failed' }
+      )
     }
     return { success: true, data: result?.data || result }
   }
