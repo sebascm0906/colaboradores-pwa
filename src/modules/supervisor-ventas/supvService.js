@@ -23,7 +23,7 @@
 // se podrá mostrar venta diaria real.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
 
 // Re-export all existing + new API functions for convenience
 export {
@@ -36,7 +36,7 @@ export {
   getKpiSnapshots,
   getRouteStops,
   getWeekRoutes,
-} from './api'
+} from './api.js'
 
 // ── Helpers (date formatting) ─────────────────────────────────────────────────
 
@@ -318,13 +318,14 @@ export function fmtMoney(n) {
  */
 export function fmtTime(t) {
   if (!t) return '--'
-  if (t.includes('T') || t.includes(' ')) {
+  const value = String(t)
+  if (value.includes('T') || value.includes(' ')) {
     try {
-      const d = new Date(t.replace(' ', 'T'))
+      const d = new Date(value.replace(' ', 'T'))
       return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
     } catch { return '--' }
   }
-  return String(t).slice(0, 5)
+  return value.slice(0, 5)
 }
 
 /**

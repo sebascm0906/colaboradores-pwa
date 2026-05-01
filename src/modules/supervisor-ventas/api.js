@@ -14,7 +14,7 @@
 // - employee_id se pasa explícitamente donde aplica (forecast, kpi)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
 
 // ── Dashboard / Equipo ───────────────────────────────────────────────────────
 
