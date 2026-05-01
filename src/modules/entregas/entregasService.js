@@ -236,6 +236,59 @@ export async function getLoadProducts() {
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  LIVE — Van Roster & Manual Load (rediseño 2026-05-01)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Lista de repartidores/vans del CEDIS con sugerido de pronóstico para mañana.
+ * Fuente: gf.route (warehouse_dispatch_id) deduplicados por empleado.
+ * @param {number} warehouseId
+ * @returns {Promise<Array<{employee_id, employee_name, mobile_location_id,
+ *   mobile_location_name, forecast_id, forecast_state,
+ *   suggestion: [{product_id, product_name, qty}]}>>}
+ */
+export async function getVanRoster(warehouseId) {
+  if (!warehouseId) return []
+  try {
+    const result = await api('GET', `/pwa-entregas/van-roster?warehouse_id=${warehouseId}`)
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Stock en anaquel de una ubicación para un conjunto de productos.
+ * @param {number} locationId - stock.location ID (ej. CIGU/Existencias = 1290)
+ * @param {number[]} productIds
+ * @returns {Promise<Array<{product_id:number, on_hand:number}>>}
+ */
+export async function getStockAtLocation(locationId, productIds) {
+  if (!locationId || !productIds.length) return []
+  try {
+    const ids = productIds.join(',')
+    const result = await api('GET', `/pwa-entregas/stock-at-location?location_id=${locationId}&product_ids=${ids}`)
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Carga manual de van: crea y ejecuta picking CIGU → van en un paso.
+ * No requiere pronóstico previo del supervisor.
+ * @param {number} mobileLocationId - stock.location de la van destino
+ * @param {Array<{product_id:number, qty:number}>} lines
+ * @returns {Promise<{ok:boolean, message:string, data?:{picking_id, picking_name, picking_state}}>}
+ */
+export async function executeVanLoad(mobileLocationId, lines) {
+  return api('POST', '/pwa-entregas/van-manual-load', {
+    mobile_location_id: mobileLocationId,
+    lines,
+  })
+}
+
 /**
  * Stock disponible en la ubicación de origen del picking (CIGU/Existencias).
  * Devuelve por cada producto cuánto hay disponible vs cuánto se pide,
