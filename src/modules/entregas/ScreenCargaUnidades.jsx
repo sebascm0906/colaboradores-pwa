@@ -3,6 +3,8 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getVanRoster, executeVanLoad, getStockAtLocation, getLoadProducts } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
+import { buildLoadPreviewSummary } from './loadPreviewSummary'
+import LoadConfirmPreview from './components/LoadConfirmPreview'
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -341,27 +343,10 @@ export default function ScreenCargaUnidades() {
   function getStockSummary(empId) {
     const sc = stockCheck[empId]
     if (!sc || sc.loading || !sc.items.length) return null
-    const lines = manualLines[empId] || []
-    const reqMap = new Map()
-    for (const l of lines) {
-      if (!l.product_id || !Number(l.qty)) continue
-      const pid = Number(l.product_id)
-      reqMap.set(pid, (reqMap.get(pid) || 0) + Number(l.qty))
-    }
-    const rows = []
-    for (const [pid, reqQty] of reqMap) {
-      const item = sc.items.find((i) => i.product_id === pid)
-      const onHand = item ? item.on_hand : 0
-      const line = (manualLines[empId] || []).find((l) => Number(l.product_id) === pid)
-      rows.push({
-        product_id: pid,
-        product_name: line?.product_name || '',
-        requested: reqQty,
-        onHand,
-        sufficient: onHand >= reqQty,
-      })
-    }
-    return rows
+    return buildLoadPreviewSummary({
+      lines: manualLines[empId] || [],
+      stockItems: sc.items,
+    })
   }
 
   function hasInsufficientStock(empId) {
@@ -746,10 +731,20 @@ export default function ScreenCargaUnidades() {
           title="Confirmar carga de van"
           message={`¿Ejecutar la carga de ${getValidLines(confirmVan.employee_id).length} producto(s) hacia ${confirmVan.mobile_location_name || 'la unidad'}?`}
           confirmLabel="Confirmar"
-          confirmColor={TOKENS.colors.blue2}
           onConfirm={handleConfirmLoad}
           onCancel={() => setConfirmVan(null)}
-        />
+        >
+          <LoadConfirmPreview
+            rows={getStockSummary(confirmVan.employee_id) || buildLoadPreviewSummary({
+              lines: getValidLines(confirmVan.employee_id),
+              stockItems: [],
+            })}
+            typo={typo}
+            unitName={confirmVan.mobile_location_name || 'Unidad'}
+            locationName={confirmVan.cedis_location_name || 'CEDIS'}
+            stockVerified={Boolean(getStockSummary(confirmVan.employee_id)?.length)}
+          />
+        </ConfirmDialog>
       )}
 
       {/* ── Toast ───────────────────────────────────────────────────────── */}

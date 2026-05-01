@@ -14,6 +14,7 @@ export default function ConfirmDialog({
   onCancel,
   variant = 'default',
   loading = false,
+  children,
 }) {
   if (!open) return null
 
@@ -44,7 +45,7 @@ export default function ConfirmDialog({
       <div
         style={{
           width: '100%',
-          maxWidth: 360,
+          maxWidth: 420,
           borderRadius: TOKENS.radius.xl,
           background: TOKENS.glass.panel,
           backgroundColor: TOKENS.colors.bg1,
@@ -71,7 +72,7 @@ export default function ConfirmDialog({
         {message && (
           <p
             style={{
-              margin: '0 0 24px 0',
+              margin: children ? '0 0 14px 0' : '0 0 24px 0',
               fontSize: 14,
               fontWeight: 500,
               color: TOKENS.colors.textSoft,
@@ -80,6 +81,12 @@ export default function ConfirmDialog({
           >
             {message}
           </p>
+        )}
+
+        {children && (
+          <div style={{ marginBottom: 20 }}>
+            {children}
+          </div>
         )}
 
         {/* Buttons */}
