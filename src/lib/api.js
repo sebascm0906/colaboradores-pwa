@@ -6115,9 +6115,7 @@ async function directEntregas(method, path, body) {
     // Buscar el forecast confirmado más reciente para cada empleado:
     // cubre hoy Y mañana (el supervisor puede publicar para hoy mismo),
     // ordenado por id desc para que el más nuevo gane en fcByScope.
-    const pad2 = n => String(n).padStart(2, '0')
-    const todayNow2 = new Date()
-    const todayStr = `${todayNow2.getFullYear()}-${pad2(todayNow2.getMonth() + 1)}-${pad2(todayNow2.getDate())}`
+    const todayStr = `${todayNow.getFullYear()}-${pad2(todayNow.getMonth() + 1)}-${pad2(todayNow.getDate())}`
     const fcRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
       fields: ['id', 'scope_key', 'state', 'date_target', 'line_ids'],
       domain: [['date_target', 'in', [todayStr, tomStr]], ['state', 'in', ['confirmed', 'done']], ['scope_key', 'in', scopeKeys]],

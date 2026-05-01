@@ -62,6 +62,21 @@ function XIcon({ color = '#ef4444' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  Forecast day label: "HOY", "MAÑANA", or the raw date
+// ─────────────────────────────────────────────────────────────────────────────
+function forecastDayLabel(dateStr) {
+  if (!dateStr) return ''
+  const pad = n => String(n).padStart(2, '0')
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const tom = new Date(now); tom.setDate(now.getDate() + 1)
+  const tomStr = `${tom.getFullYear()}-${pad(tom.getMonth() + 1)}-${pad(tom.getDate())}`
+  if (dateStr === todayStr) return 'HOY'
+  if (dateStr === tomStr) return 'MAÑANA'
+  return dateStr
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  Section label
 // ─────────────────────────────────────────────────────────────────────────────
 function SectionLabel({ children, typo }) {
@@ -502,7 +517,7 @@ export default function ScreenCargaUnidades() {
                       <>
                         <SectionLabel typo={typo}>
                           SUGERIDO SUPERVISOR
-                          {van.forecast_date ? ` · ${van.forecast_date}` : ''}
+                          {van.forecast_date ? ` (${forecastDayLabel(van.forecast_date)})` : ''}
                         </SectionLabel>
                         <div style={{
                           borderRadius: TOKENS.radius.sm,
