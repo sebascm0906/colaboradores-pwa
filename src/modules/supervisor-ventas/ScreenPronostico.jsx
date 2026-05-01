@@ -1,8 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getForecastProducts, createForecast, getForecasts, getTeam, confirmForecast, cancelForecast, deleteForecast } from './api'
+import {
+  getForecastProducts,
+  createForecast,
+  getForecasts,
+  confirmForecast,
+  cancelForecast,
+  deleteForecast,
+  getRouteTemplatesForPlanning,
+  ensureDailyRoutePlan,
+} from './api'
+import {
+  buildRouteForecastPayload,
+  getTomorrowDateString,
+  normalizeRoutePlanningRow,
+} from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
 
 const CHANNELS = ['Van', 'Mostrador']
@@ -178,35 +192,32 @@ export default function ScreenPronostico() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [products, setProducts] = useState([])
   const [forecasts, setForecasts] = useState([])
-  const [team, setTeam] = useState([])
+  const [routes, setRoutes] = useState([])
+  const [dateTarget] = useState(() => getTomorrowDateString())
   const [lines, setLines] = useState([{ product_id: '', channel: 'Van', qty: '' }])
-  const [selectedVendor, setSelectedVendor] = useState('') // '' = global sucursal
+  const [selectedRouteId, setSelectedRouteId] = useState(null)
+  const [routeLoading, setRouteLoading] = useState(null)
+  const [routeError, setRouteError] = useState('')
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
 
-  // Sheet state — un solo sheet a la vez. `productLineIdx` indica qué línea
-  // se está editando; null cuando el sheet abierto es el de vendedor.
-  const [vendorSheetOpen, setVendorSheetOpen] = useState(false)
+  // Sheet state. `productLineIdx` indica qué línea se está editando.
   const [productLineIdx, setProductLineIdx] = useState(null)
-
-  // Opciones formateadas para el sheet ({ id, label }).
-  // El vendedor incluye una opción especial id=''  para "Sucursal completa".
-  const vendorOptions = useMemo(() => ([
-    { id: '', label: 'Sucursal completa (global)' },
-    ...team.map(v => ({ id: String(v.id), label: v.name })),
-  ]), [team])
 
   const productOptions = useMemo(
     () => products.map(p => ({ id: String(p.id), label: p.name || p.display_name || `#${p.id}` })),
     [products],
   )
 
-  const selectedVendorLabel = useMemo(() => {
-    if (!selectedVendor) return 'Sucursal completa (global)'
-    const v = team.find(x => String(x.id) === String(selectedVendor))
-    return v?.name || `Vendedor #${selectedVendor}`
-  }, [selectedVendor, team])
+  const selectedRoute = useMemo(
+    () => routes.find((r) => Number(r.route_id) === Number(selectedRouteId)) || null,
+    [routes, selectedRouteId],
+  )
+
+  const routesWithPlan = routes.filter((r) => r.plan_id).length
+  const routesWithoutPlan = routes.length - routesWithPlan
+  const warehouseLabel = session?.warehouse_name || session?.warehouse || (session?.warehouse_id ? `CEDIS #${session.warehouse_id}` : 'CEDIS no asignado')
 
   function productLabelForLine(line) {
     if (!line.product_id) return null
@@ -233,22 +244,32 @@ export default function ScreenPronostico() {
     msgTimerRef.current = setTimeout(() => setMsg(null), ms)
   }
 
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
+    setRouteError('')
     try {
-      const [p, f, t] = await Promise.all([
+      const [p, f, routeRows] = await Promise.all([
         getForecastProducts().catch((e) => { logScreenError('ScreenPronostico', 'getForecastProducts', e); return [] }),
         getForecasts().catch((e) => { logScreenError('ScreenPronostico', 'getForecasts', e); return [] }),
-        getTeam().catch((e) => { logScreenError('ScreenPronostico', 'getTeam', e); return [] }),
+        getRouteTemplatesForPlanning(dateTarget).catch((e) => {
+          logScreenError('ScreenPronostico', 'getRouteTemplatesForPlanning', e)
+          setRouteError(e?.message || 'Error al cargar rutas del CEDIS')
+          return []
+        }),
       ])
+      const normalizedRoutes = (Array.isArray(routeRows) ? routeRows : []).map(normalizeRoutePlanningRow)
       setProducts(p || [])
       setForecasts(f || [])
-      setTeam(t || [])
+      setRoutes(normalizedRoutes)
+      setSelectedRouteId((current) => {
+        if (current && normalizedRoutes.some((r) => Number(r.route_id) === Number(current))) return current
+        return normalizedRoutes.find((r) => r.plan_id)?.route_id || normalizedRoutes[0]?.route_id || null
+      })
     } catch (e) { logScreenError('ScreenPronostico', 'loadData', e) }
     finally { setLoading(false) }
-  }
+  }, [dateTarget])
+
+  useEffect(() => { loadData() }, [loadData])
 
   function updateLine(idx, field, value) {
     setLines(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
@@ -266,29 +287,45 @@ export default function ScreenPronostico() {
   async function handleSubmit() {
     const validLines = lines.filter(l => l.product_id && l.qty > 0)
     if (validLines.length === 0) { setMsg('Agrega al menos un producto'); return }
-
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const dateTarget = tomorrow.toISOString().split('T')[0]
+    if (!selectedRoute) { setMsg('Selecciona una ruta'); return }
+    if (!selectedRoute.plan_id) { setMsg('Primero crea el plan diario de la ruta'); return }
 
     setSubmitting(true)
     setMsg(null)
     try {
-      const forecastData = {
-        date_target: dateTarget,
-        lines: validLines.map(l => ({ product_id: Number(l.product_id), channel: l.channel, qty: Number(l.qty) })),
-        sucursal: session?.sucursal_id || session?.sucursal,
-      }
-      // Per-vendor forecast: si se seleccionó un vendedor, incluir employee_id
-      if (selectedVendor) forecastData.employee_id = Number(selectedVendor)
+      const forecastData = buildRouteForecastPayload({
+        routeId: selectedRoute.route_id,
+        planId: selectedRoute.plan_id,
+        dateTarget,
+        lines: validLines,
+      })
       await createForecast(forecastData)
       setMsg('Pronostico guardado')
       setLines([{ product_id: '', channel: 'Van', qty: '' }])
-      const f = await getForecasts().catch(() => [])
-      setForecasts(f || [])
+      await loadData()
     } catch (e) {
       setMsg(e.message || 'Error al guardar')
     } finally { setSubmitting(false) }
+  }
+
+  async function handleEnsurePlan(route) {
+    if (!route?.route_id) return
+    setRouteLoading(route.route_id)
+    setMsg(null)
+    try {
+      const res = await ensureDailyRoutePlan(route.route_id, dateTarget)
+      if (res?.ok === false) {
+        flashMsg(res.error || 'No se pudo crear el plan diario', 5000)
+        return
+      }
+      await loadData()
+      setSelectedRouteId(route.route_id)
+      flashMsg('Plan diario listo')
+    } catch (e) {
+      flashMsg(e.message || 'No se pudo crear el plan diario', 5000)
+    } finally {
+      setRouteLoading(null)
+    }
   }
 
   const [actionLoading, setActionLoading] = useState(null) // forecast id being acted on
@@ -297,8 +334,7 @@ export default function ScreenPronostico() {
     setActionLoading(forecastId)
     try {
       await confirmForecast(forecastId)
-      const f = await getForecasts().catch(() => [])
-      setForecasts(f || [])
+      await loadData()
       flashMsg('Pronostico confirmado')
     } catch (e) {
       flashMsg(e.message || 'Error al confirmar', 5000)
@@ -309,8 +345,7 @@ export default function ScreenPronostico() {
     setActionLoading(forecastId)
     try {
       await cancelForecast(forecastId)
-      const f = await getForecasts().catch(() => [])
-      setForecasts(f || [])
+      await loadData()
       flashMsg('Pronostico regresado a borrador')
     } catch (e) {
       flashMsg(e.message || 'Error al cancelar', 5000)
@@ -321,8 +356,7 @@ export default function ScreenPronostico() {
     setActionLoading(forecastId)
     try {
       await deleteForecast(forecastId)
-      const f = await getForecasts().catch(() => [])
-      setForecasts(f || [])
+      await loadData()
       flashMsg('Pronostico eliminado')
     } catch (e) {
       flashMsg(e.message || 'Error al eliminar', 5000)
@@ -340,6 +374,24 @@ export default function ScreenPronostico() {
     if (status === 'done') return 'Realizado'
     if (status === 'draft') return 'Borrador'
     return status || 'draft'
+  }
+
+  function routeStateColor(state) {
+    if (state === 'load_executed') return TOKENS.colors.success
+    if (state === 'load_ready' || state === 'forecast_confirmed') return TOKENS.colors.blue2
+    if (state === 'plan_draft') return TOKENS.colors.warning
+    if (state === 'blocked') return TOKENS.colors.error
+    return TOKENS.colors.textMuted
+  }
+
+  function routeStateLabel(state) {
+    if (state === 'sin_plan') return 'Sin plan'
+    if (state === 'plan_draft') return 'Plan creado'
+    if (state === 'forecast_confirmed') return 'Forecast confirmado'
+    if (state === 'load_ready') return 'Carga lista'
+    if (state === 'load_executed') return 'Carga ejecutada'
+    if (state === 'blocked') return 'Bloqueada'
+    return state || 'Sin estado'
   }
 
   return (
@@ -380,34 +432,148 @@ export default function ScreenPronostico() {
               background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
               boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
             }}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PRONOSTICO PARA MANANA</p>
+              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PLAN DIARIO PARA MANANA</p>
 
-              {/* Vendor selector — per-vendor or global */}
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>Alcance del pronostico</p>
-                <button
-                  type="button"
-                  onClick={() => setVendorSheetOpen(true)}
-                  style={{
-                    width: '100%', minHeight: 44, padding: '10px 12px', borderRadius: TOKENS.radius.sm,
-                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {selectedVendorLabel}
-                  </span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M6 9l6 6 6-6"/>
-                  </svg>
-                </button>
-                {selectedVendor && (
-                  <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '4px 0 0', fontSize: 10 }}>
-                    Pronostico individual para {selectedVendorLabel}
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14,
+              }}>
+                <div style={{
+                  padding: 10, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>CEDIS</p>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {warehouseLabel}
                   </p>
-                )}
+                </div>
+                <div style={{
+                  padding: 10, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Fecha objetivo</p>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 13 }}>{dateTarget}</p>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14,
+              }}>
+                <div style={{
+                  padding: 10, borderRadius: TOKENS.radius.md,
+                  background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.22)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Con plan</p>
+                  <p style={{ ...typo.h2, color: TOKENS.colors.success, margin: '2px 0 0', fontSize: 18 }}>{routesWithPlan}</p>
+                </div>
+                <div style={{
+                  padding: 10, borderRadius: TOKENS.radius.md,
+                  background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.22)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Sin plan</p>
+                  <p style={{ ...typo.h2, color: TOKENS.colors.warning, margin: '2px 0 0', fontSize: 18 }}>{routesWithoutPlan}</p>
+                </div>
+              </div>
+
+              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Rutas del CEDIS</p>
+              {routeError && (
+                <div style={{
+                  marginBottom: 10, padding: 10, borderRadius: TOKENS.radius.sm,
+                  background: TOKENS.colors.errorSoft, border: '1px solid rgba(239,68,68,0.25)',
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: 0 }}>{routeError}</p>
+                </div>
+              )}
+              {!routeError && routes.length === 0 && (
+                <div style={{
+                  marginBottom: 10, padding: 12, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>
+                    No hay rutas asignadas para el CEDIS de tu sesion.
+                  </p>
+                </div>
+              )}
+              {routes.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                  {routes.map((route) => {
+                    const selected = Number(selectedRouteId) === Number(route.route_id)
+                    const color = routeStateColor(route.state)
+                    const isCreating = routeLoading === route.route_id
+                    return (
+                      <div
+                        key={route.route_id}
+                        style={{
+                          padding: 12, borderRadius: TOKENS.radius.md,
+                          background: selected ? 'rgba(43,143,224,0.10)' : TOKENS.colors.surfaceSoft,
+                          border: `1px solid ${selected ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                          display: 'flex', gap: 10, alignItems: 'center',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRouteId(route.route_id)}
+                          style={{
+                            flex: 1, minWidth: 0, textAlign: 'left',
+                            display: 'flex', flexDirection: 'column', gap: 3,
+                          }}
+                        >
+                          <span style={{ ...typo.title, color: TOKENS.colors.text, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {route.route_name || `Ruta #${route.route_id}`}
+                          </span>
+                          <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {route.employee_name || 'Sin empleado'}
+                          </span>
+                          <span style={{
+                            width: 'fit-content', marginTop: 2, padding: '2px 8px', borderRadius: TOKENS.radius.pill,
+                            color, background: `${color}14`, border: `1px solid ${color}30`,
+                            fontSize: 10, fontWeight: 700,
+                          }}>
+                            {routeStateLabel(route.state)}
+                          </span>
+                        </button>
+                        {!route.plan_id ? (
+                          <button
+                            type="button"
+                            onClick={() => handleEnsurePlan(route)}
+                            disabled={isCreating}
+                            style={{
+                              flexShrink: 0, padding: '8px 10px', borderRadius: TOKENS.radius.md,
+                              background: isCreating ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                              color: '#fff', fontSize: 11, fontWeight: 700, opacity: isCreating ? 0.6 : 1,
+                            }}
+                          >
+                            {isCreating ? 'Creando...' : 'Crear plan'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRouteId(route.route_id)}
+                            style={{
+                              flexShrink: 0, padding: '8px 10px', borderRadius: TOKENS.radius.md,
+                              background: selected ? TOKENS.colors.blueGlow : TOKENS.colors.surface,
+                              border: `1px solid ${selected ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                              color: selected ? TOKENS.colors.blue2 : TOKENS.colors.textMuted,
+                              fontSize: 11, fontWeight: 700,
+                            }}
+                          >
+                            {selected ? 'Editando' : 'Editar'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div style={{
+                marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
+                background: selectedRoute ? 'rgba(43,143,224,0.08)' : TOKENS.colors.surfaceSoft,
+                border: `1px solid ${selectedRoute ? 'rgba(43,143,224,0.25)' : TOKENS.colors.border}`,
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Forecast asociado a</p>
+                <p style={{ ...typo.title, color: selectedRoute ? TOKENS.colors.text : TOKENS.colors.textMuted, margin: '2px 0 0', fontSize: 14 }}>
+                  {selectedRoute ? `${selectedRoute.route_name || `Ruta #${selectedRoute.route_id}`} - ${selectedRoute.employee_name || 'Sin empleado'}` : 'Selecciona una ruta'}
+                </p>
               </div>
 
               {lines.map((line, idx) => (
@@ -498,7 +664,7 @@ export default function ScreenPronostico() {
               {msg && (
                 <p style={{
                   ...typo.caption, textAlign: 'center', marginTop: 10,
-                  color: msg.includes('guardado') ? TOKENS.colors.success : TOKENS.colors.error,
+                  color: msg.includes('guardado') || msg.includes('listo') || msg.includes('confirmado') ? TOKENS.colors.success : TOKENS.colors.error,
                 }}>{msg}</p>
               )}
             </div>
@@ -580,18 +746,6 @@ export default function ScreenPronostico() {
           </>
         )}
       </div>
-
-      {/* Vendor sheet */}
-      <SearchableSheet
-        open={vendorSheetOpen}
-        onClose={() => setVendorSheetOpen(false)}
-        title="Alcance del pronostico"
-        placeholder="Buscar vendedor..."
-        options={vendorOptions}
-        selectedId={selectedVendor || ''}
-        onSelect={(opt) => setSelectedVendor(opt.id)}
-        emptyText="No se encontraron vendedores"
-      />
 
       {/* Product sheet (per-line) */}
       <SearchableSheet
