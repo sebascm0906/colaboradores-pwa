@@ -1,0 +1,81 @@
+<h2>Decision fijada: CEDIS automatico por sesion</h2>
+<p class="subtitle">La supervisora no escoge CEDIS manualmente. La PWA toma <code>session.warehouse_id</code> y solo muestra rutas maestras asignadas a ese CEDIS.</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">
+    <div class="mockup">
+      <div class="mockup-header">Sesion PWA</div>
+      <div class="mockup-body">
+        <div style="padding:14px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong><code>warehouse_id</code></strong>
+          <p style="margin:6px 0 0">Se toma del usuario logueado. Es la misma fuente que usa Almacenista Entregas.</p>
+        </div>
+        <div style="padding:14px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35)">
+          <strong><code>company_id</code></strong>
+          <p style="margin:6px 0 0">Se conserva como filtro adicional para evitar cruce entre empresas.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">Consulta rutas maestras</div>
+      <div class="mockup-body">
+        <div style="padding:14px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35);margin-bottom:10px">
+          <strong><code>gf.route</code></strong>
+          <p style="margin:6px 0 0">Buscar rutas activas con CEDIS de despacho igual a la sesion.</p>
+        </div>
+        <div style="padding:14px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35)">
+          <strong>Solo rutas asignadas</strong>
+          <p style="margin:6px 0 0">Excluir rutas sin empleado/vendedor para que no nazcan planes incompletos.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">Planes diarios</div>
+      <div class="mockup-body">
+        <div style="padding:14px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40);margin-bottom:10px">
+          <strong>Crear por fecha</strong>
+          <p style="margin:6px 0 0">Por default manana; una ruta = un <code>gf.route.plan</code>.</p>
+        </div>
+        <div style="padding:14px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40)">
+          <strong>Idempotente</strong>
+          <p style="margin:6px 0 0">Si ya existe plan para ruta + fecha, se reutiliza/actualiza en lugar de duplicar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Pantalla esperada para la supervisora</h3>
+  <div class="mockup">
+    <div class="mockup-header">Pronostico / Plan diario</div>
+    <div class="mockup-body">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px">
+        <div>
+          <div class="label">CEDIS</div>
+          <strong>Automatico desde sesion</strong>
+        </div>
+        <div>
+          <div class="label">Fecha</div>
+          <strong>Manana</strong>
+        </div>
+      </div>
+      <div style="display:grid;gap:8px">
+        <div style="padding:12px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Ruta 01</strong><p style="margin:4px 0 0;color:#9aa8ba">Vendedor asignado · sin plan creado</p></div>
+          <button class="mock-button">Crear plan</button>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Ruta 02</strong><p style="margin:4px 0 0;color:#9aa8ba">Plan creado · forecast pendiente</p></div>
+          <button class="mock-button">Editar forecast</button>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Ruta 03</strong><p style="margin:4px 0 0;color:#9aa8ba">Forecast confirmado · visible para Entregas</p></div>
+          <button class="mock-button">Ver carga</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

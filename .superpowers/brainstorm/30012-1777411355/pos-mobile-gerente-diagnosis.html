@@ -1,0 +1,82 @@
+<h2>POS móvil de gerente: lectura del problema</h2>
+<p class="subtitle">Quiero validar si el fallo que ves coincide con esta hipótesis antes de tocar la pantalla.</p>
+
+<div class="split section">
+  <div class="mockup">
+    <div class="mockup-header">Estado actual en celular</div>
+    <div class="mockup-body">
+      <div style="background:#071327;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:14px;min-height:420px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.06)"></div>
+          <div>
+            <div class="label">POS MOSTRADOR</div>
+            <div style="font-weight:700">Vista gerente / mobile</div>
+          </div>
+        </div>
+        <input class="mock-input" value="Buscar producto..." readonly>
+        <div style="border:1px dashed rgba(255,255,255,.14);border-radius:16px;padding:18px;display:flex;align-items:center;justify-content:center;min-height:190px;background:rgba(255,255,255,.02)">
+          <div style="text-align:center">
+            <div style="font-weight:700;margin-bottom:6px">No se encontraron productos</div>
+            <div class="subtitle" style="margin:0">La grilla queda vacía aunque el backend sí tenga catálogo.</div>
+          </div>
+        </div>
+        <div style="opacity:.45">
+          <div class="label">CARRITO</div>
+          <div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02)">Sin artículos</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Estado esperado tras el ajuste</div>
+    <div class="mockup-body">
+      <div style="background:#071327;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:14px;min-height:420px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:10px;background:rgba(43,143,224,.18)"></div>
+          <div>
+            <div class="label">POS MOSTRADOR</div>
+            <div style="font-weight:700">Productos visibles</div>
+          </div>
+        </div>
+        <input class="mock-input" value="Buscar producto..." readonly>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="border:1px solid rgba(43,143,224,.24);border-radius:14px;padding:12px;background:rgba(255,255,255,.03)">
+            <div style="font-weight:700;font-size:13px">Hielo 5 kg</div>
+            <div style="margin-top:8px;color:#7bb8ff;font-weight:700">$85.00</div>
+            <div class="subtitle" style="margin-top:4px">Stock 0</div>
+          </div>
+          <div style="border:1px solid rgba(43,143,224,.24);border-radius:14px;padding:12px;background:rgba(255,255,255,.03)">
+            <div style="font-weight:700;font-size:13px">Paleta mango</div>
+            <div style="margin-top:8px;color:#7bb8ff;font-weight:700">$18.00</div>
+            <div class="subtitle" style="margin-top:4px">Stock 12</div>
+          </div>
+        </div>
+        <div style="border:1px solid rgba(34,197,94,.24);border-radius:14px;padding:12px;background:rgba(34,197,94,.06)">
+          <div class="label">CARRITO</div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span>Hielo 5 kg</span>
+            <strong>1</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="match" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Sí, coincide</h3>
+      <p>El problema real es que en celular la lista de productos queda vacía o no aparece.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="different" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>No, es otro fallo</h3>
+      <p>La lista sí aparece, pero se rompe por layout, scroll, filtros o interacción.</p>
+    </div>
+  </div>
+</div>

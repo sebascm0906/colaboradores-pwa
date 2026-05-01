@@ -1,0 +1,109 @@
+<h2>Nuevo flujo: rutas maestras → planes diarios por CEDIS</h2>
+<p class="subtitle">La supervisora no empieza capturando forecast suelto. Primero ve <code>gf.route</code> activas/asignadas y crea los <code>gf.route.plan</code> de manana filtrados por CEDIS.</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">
+    <div class="mockup">
+      <div class="mockup-header">A. Fuente maestra</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35);margin-bottom:10px">
+          <strong><code>gf.route</code></strong>
+          <p style="margin:6px 0 0">Ruta configurada en Odoo: nombre, CEDIS de despacho, empleado/vendedor asignado, unidad si aplica.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Filtro requerido</strong>
+          <p style="margin:6px 0 0"><code>warehouse_dispatch_id = CEDIS</code> y empleado asignado presente.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35)">
+          <strong>Resultado visible</strong>
+          <p style="margin:6px 0 0">Lista de rutas listas para planear: Ruta 1, Ruta 2, Ruta 3, etc.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">B. Supervisora ventas</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40);margin-bottom:10px">
+          <strong>Pantalla nueva / ajustar Pronostico</strong>
+          <p style="margin:6px 0 0">Selector de CEDIS + fecha objetivo (manana por default) + tarjetas de rutas asignadas.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40);margin-bottom:10px">
+          <strong>Crear planes diarios</strong>
+          <p style="margin:6px 0 0">La supervisora selecciona rutas y genera/actualiza un <code>gf.route.plan</code> por ruta para la fecha.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40)">
+          <strong>Forecast por ruta</strong>
+          <p style="margin:6px 0 0">Las cantidades de producto se capturan asociadas a la ruta/plan, no solo a un vendedor global.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">C. Almacenista entregas</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Bloques por unidad/ruta</strong>
+          <p style="margin:6px 0 0">La vista actual de Cargar Unidades ya funciona bien como destino del plan.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Filtro por CEDIS</strong>
+          <p style="margin:6px 0 0">Ya filtra planes por <code>route_id.warehouse_dispatch_id</code>.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35)">
+          <strong>Carga final</strong>
+          <p style="margin:6px 0 0">Recibe los planes de manana con picking/carga ya generada desde forecast.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Lo que cambia contra el flujo actual</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Actual</div>
+      <div class="mockup-body">
+        <ol style="margin:0;padding-left:20px">
+          <li>Supervisora captura productos.</li>
+          <li>Opcionalmente escoge vendedor.</li>
+          <li>Confirma forecast.</li>
+          <li>Backend debe convertirlo en carga/plan.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">Propuesto</div>
+      <div class="mockup-body">
+        <ol style="margin:0;padding-left:20px">
+          <li>Supervisora escoge CEDIS y fecha.</li>
+          <li>Ve rutas <code>gf.route</code> ya asignadas.</li>
+          <li>Selecciona rutas y crea planes diarios.</li>
+          <li>Captura/ajusta forecast por ruta.</li>
+          <li>Almacenista recibe bloques por ruta/unidad.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Decision de alcance inmediata</h3>
+  <div class="options">
+    <div class="option" data-choice="cedis_session" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>CEDIS automatico por sesion</h3>
+        <p>La supervisora ve solo las rutas del CEDIS vinculado a su usuario/sucursal. Menos riesgo y menos UI.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="cedis_selectable" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>CEDIS seleccionable</h3>
+        <p>La supervisora puede elegir CEDIS antes de listar rutas. Sirve si una supervisora opera varias bases.</p>
+      </div>
+    </div>
+  </div>
+</div>

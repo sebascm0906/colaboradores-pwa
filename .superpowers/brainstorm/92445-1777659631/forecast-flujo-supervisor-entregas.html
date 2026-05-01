@@ -1,0 +1,113 @@
+<h2>Flujo forecast → carga de unidades → visibilidad ruta</h2>
+<p class="subtitle">Mapa basado en el código actual de la PWA. Verde = ya existe, ámbar = existe parcialmente, rojo = punto que falta amarrar.</p>
+
+<div class="section">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">
+    <div class="mockup">
+      <div class="mockup-header">1. Supervisor de ventas</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Pronostico para manana</strong>
+          <p style="margin:6px 0 0">Captura fecha objetivo automaticamente como manana.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Alcance</strong>
+          <p style="margin:6px 0 0">Sucursal completa o vendedor especifico.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Lineas</strong>
+          <p style="margin:6px 0 0">Producto + canal Van/Mostrador + cantidad.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40)">
+          <strong>Confirmar forecast</strong>
+          <p style="margin:6px 0 0">Llama <code>/gf/salesops/supervisor/v2/forecast/confirm</code>. Aqui debe nacer o actualizar el plan de ruta de manana.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">2. Almacenista entregas</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Cargar unidades</strong>
+          <p style="margin:6px 0 0">Consulta rutas de hoy y manana en <code>/pwa-entregas/today-routes</code>.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Bloque por unidad/ruta</strong>
+          <p style="margin:6px 0 0">Cada tarjeta muestra ruta, chofer, estado, paradas, detalle de carga y stock CEDIS.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.35);margin-bottom:10px">
+          <strong>Editar carga</strong>
+          <p style="margin:6px 0 0">Puede ajustar lineas del picking antes de ejecutar la carga.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40)">
+          <strong>Confirmar carga</strong>
+          <p style="margin:6px 0 0">Ejecuta stock CEDIS → unidad via <code>/gf/salesops/warehouse/load/execute</code>. No necesariamente inicia la ruta.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-header">3. App ventas v2 / ruta</div>
+      <div class="mockup-body">
+        <div style="padding:12px;border-radius:10px;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.40);margin-bottom:10px">
+          <strong>Visibilidad esperada</strong>
+          <p style="margin:6px 0 0">Al confirmar almacenista, la ruta debe quedar visible como publicada/iniciada en ventas.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40);margin-bottom:10px">
+          <strong>Hoy la PWA ruta filtra solo hoy</strong>
+          <p style="margin:6px 0 0"><code>/pwa-ruta/my-plan</code> no toma manana para evitar contaminar la operacion del dia actual.</p>
+        </div>
+        <div style="padding:12px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.40)">
+          <strong>Transicion critica</strong>
+          <p style="margin:6px 0 0">Definir si el almacenista solo deja ruta publicada para manana o tambien dispara equivalente de "iniciar/publicar" en Odoo/app ventas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Cadena tecnica actual</h3>
+  <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap">
+    <div style="flex:1;min-width:210px;padding:12px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35)">
+      <strong>forecast-create</strong>
+      <p style="margin:6px 0 0">Crea/actualiza <code>gf.saleops.forecast</code> con <code>date_target=manana</code>.</p>
+    </div>
+    <div style="align-self:center;font-size:24px;color:#8aa4c2">→</div>
+    <div style="flex:1;min-width:210px;padding:12px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35)">
+      <strong>forecast-confirm</strong>
+      <p style="margin:6px 0 0">Backend debe materializar plan/picking para almacen.</p>
+    </div>
+    <div style="align-self:center;font-size:24px;color:#8aa4c2">→</div>
+    <div style="flex:1;min-width:210px;padding:12px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35)">
+      <strong>today-routes</strong>
+      <p style="margin:6px 0 0">Lista planes de hoy + manana por almacen de despacho.</p>
+    </div>
+    <div style="align-self:center;font-size:24px;color:#8aa4c2">→</div>
+    <div style="flex:1;min-width:210px;padding:12px;border-radius:10px;background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.35)">
+      <strong>load-execute</strong>
+      <p style="margin:6px 0 0">Mueve inventario CEDIS → unidad usando el picking del plan.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Decision que falta</h3>
+  <div class="options">
+    <div class="option" data-choice="publish_tomorrow" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Dejar lista para manana</h3>
+        <p>El almacenista ejecuta la carga hoy; la ruta queda publicada para manana, pero el vendedor la ve/arranca cuando sea el dia de ruta.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="publish_and_start" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Publicar e iniciar al confirmar carga</h3>
+        <p>Al terminar el almacenista, backend replica el efecto operativo de publicar/iniciar ruta en Odoo/app ventas v2.</p>
+      </div>
+    </div>
+  </div>
+</div>
