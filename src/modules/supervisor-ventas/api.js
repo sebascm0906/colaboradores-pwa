@@ -42,6 +42,8 @@ export function getForecastProducts() {
  * @param {string} data.date_target - YYYY-MM-DD
  * @param {Array} data.lines - [{product_id, channel, qty}]
  * @param {number} [data.sucursal] - analytic_account_id (sucursal)
+ * @param {number} [data.route_id] - Ruta maestra gf.route para forecast por ruta.
+ * @param {number} [data.route_plan_id] - Plan diario gf.route.plan asociado.
  * @param {number} [data.employee_id] - Si se especifica, forecast es per-vendor.
  *   Si se omite, es forecast global de sucursal.
  *   NOTA: Requiere que gf.saleops.forecast tenga campo employee_id
@@ -49,6 +51,20 @@ export function getForecastProducts() {
  */
 export function createForecast(data) {
   return api('POST', '/pwa-supv/forecast-create', data)
+}
+
+/** Rutas maestras asignadas al CEDIS de la sesión para planeación diaria */
+export function getRouteTemplatesForPlanning(dateTarget) {
+  const qs = dateTarget ? `?date_target=${encodeURIComponent(dateTarget)}` : ''
+  return api('GET', `/pwa-supv/route-templates${qs}`)
+}
+
+/** Crear o reutilizar el plan diario de una ruta para la fecha objetivo */
+export function ensureDailyRoutePlan(routeId, dateTarget) {
+  return api('POST', '/pwa-supv/route-plan-ensure', {
+    route_id: Number(routeId || 0),
+    date_target: dateTarget,
+  })
 }
 
 /**
