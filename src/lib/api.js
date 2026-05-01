@@ -6496,8 +6496,10 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
+    const warehouseId = getWarehouseId()
     const domain = [['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']]]
     if (companyId) domain.push(['company_id', '=', companyId])
+    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
     const result = await readModelSorted('hr.employee', {
       fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128', 'work_phone', 'mobile_phone'],
       domain,
