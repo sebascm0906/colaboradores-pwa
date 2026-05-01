@@ -6071,6 +6071,126 @@ async function directEntregas(method, path, body) {
     }
   }
 
+  // ── VAN ROSTER ──────────────────────────────────────────────────────────────
+  // Repartidores/vans del CEDIS + sugerido de pronóstico para mañana.
+  if (cleanPath === '/pwa-entregas/van-roster' && method === 'GET') {
+    const whId = Number(query.get('warehouse_id') || 0)
+    if (!whId) return []
+
+    const routeRows = pickListResponse(await readModelSorted('gf.route', {
+      fields: ['id', 'salesperson_employee_id', 'location_en_ruta_id'],
+      domain: [['warehouse_dispatch_id', '=', whId]],
+      sort_column: 'id', sort_desc: false, limit: 100, sudo: 1,
+    }))
+
+    const seen = new Set()
+    const vans = []
+    for (const r of routeRows) {
+      const empId = Number(r.salesperson_employee_id?.[0] || r.salesperson_employee_id || 0)
+      const empName = Array.isArray(r.salesperson_employee_id) ? r.salesperson_employee_id[1] : ''
+      const locId = Number(r.location_en_ruta_id?.[0] || r.location_en_ruta_id || 0)
+      const locName = Array.isArray(r.location_en_ruta_id) ? r.location_en_ruta_id[1] : ''
+      if (!empId || !locId || seen.has(empId)) continue
+      seen.add(empId)
+      vans.push({ employee_id: empId, employee_name: empName, mobile_location_id: locId, mobile_location_name: locName, suggestion: [] })
+    }
+    if (!vans.length) return []
+
+    // Obtener la ubicación de existencias del warehouse (lot_stock_id) para check de stock
+    const whRows = pickListResponse(await readModelSorted('stock.warehouse', {
+      fields: ['id', 'lot_stock_id'],
+      domain: [['id', '=', whId]],
+      sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
+    }))
+    const cedisLocationId = Number(whRows[0]?.lot_stock_id?.[0] || whRows[0]?.lot_stock_id || 0)
+    const cedisLocationName = Array.isArray(whRows[0]?.lot_stock_id) ? whRows[0].lot_stock_id[1] : ''
+
+    const employeeIds = vans.map(v => v.employee_id)
+    const todayNow = new Date()
+    const tom = new Date(todayNow); tom.setDate(todayNow.getDate() + 1)
+    const pad2 = n => String(n).padStart(2, '0')
+    const tomStr = `${tom.getFullYear()}-${pad2(tom.getMonth() + 1)}-${pad2(tom.getDate())}`
+    const scopeKeys = employeeIds.map(id => `employee:${id}`)
+
+    // Buscar el forecast confirmado más reciente para cada empleado:
+    // cubre hoy Y mañana (el supervisor puede publicar para hoy mismo),
+    // ordenado por id desc para que el más nuevo gane en fcByScope.
+    const pad2 = n => String(n).padStart(2, '0')
+    const todayNow2 = new Date()
+    const todayStr = `${todayNow2.getFullYear()}-${pad2(todayNow2.getMonth() + 1)}-${pad2(todayNow2.getDate())}`
+    const fcRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
+      fields: ['id', 'scope_key', 'state', 'date_target', 'line_ids'],
+      domain: [['date_target', 'in', [todayStr, tomStr]], ['state', 'in', ['confirmed', 'done']], ['scope_key', 'in', scopeKeys]],
+      sort_column: 'id', sort_desc: true, limit: 100, sudo: 1,
+    }))
+
+    const allLineIds = fcRows.flatMap(f => Array.isArray(f.line_ids) ? f.line_ids : [])
+    const lineRows = allLineIds.length ? pickListResponse(await readModelSorted('gf.saleops.forecast.line', {
+      fields: ['id', 'product_id', 'qty', 'channel', 'forecast_id'],
+      domain: [['id', 'in', allLineIds], ['channel', '=', 'van']],
+      sort_column: 'id', sort_desc: false, limit: 500, sudo: 1,
+    })) : []
+
+    const linesByFc = new Map()
+    for (const l of lineRows) {
+      const fid = Number(l.forecast_id?.[0] || l.forecast_id || 0)
+      if (!linesByFc.has(fid)) linesByFc.set(fid, [])
+      linesByFc.get(fid).push({
+        product_id: Number(l.product_id?.[0] || l.product_id),
+        product_name: Array.isArray(l.product_id) ? l.product_id[1] : '',
+        qty: Number(l.qty || 0),
+      })
+    }
+    // Solo el forecast más reciente por scope (sort_desc:true → primer match gana)
+    const fcByScope = new Map()
+    for (const f of fcRows) {
+      if (!fcByScope.has(f.scope_key)) fcByScope.set(f.scope_key, { forecast_id: f.id, state: f.state, date_target: f.date_target })
+    }
+
+    return vans.map(v => {
+      const fc = fcByScope.get(`employee:${v.employee_id}`)
+      return { ...v, cedis_location_id: cedisLocationId || null, cedis_location_name: cedisLocationName || null, forecast_id: fc?.forecast_id || null, forecast_state: fc?.state || null, forecast_date: fc?.date_target || null, suggestion: fc ? (linesByFc.get(fc.forecast_id) || []) : [] }
+    })
+  }
+
+  // ── STOCK AT LOCATION ────────────────────────────────────────────────────────
+  // stock.quant en una ubicación para lista de productos.
+  if (cleanPath === '/pwa-entregas/stock-at-location' && method === 'GET') {
+    const locId = Number(query.get('location_id') || 0)
+    const prodIds = (query.get('product_ids') || '').split(',').map(Number).filter(Boolean)
+    if (!locId || !prodIds.length) return []
+    const qRows = pickListResponse(await readModelSorted('stock.quant', {
+      fields: ['product_id', 'quantity'],
+      domain: [['location_id', '=', locId], ['product_id', 'in', prodIds]],
+      sort_column: 'product_id', sort_desc: false, limit: prodIds.length * 3, sudo: 1,
+    }))
+    const qMap = new Map()
+    for (const q of qRows) {
+      const pid = Number(q.product_id?.[0] || q.product_id)
+      qMap.set(pid, (qMap.get(pid) || 0) + Number(q.quantity || 0))
+    }
+    return prodIds.map(pid => ({ product_id: pid, on_hand: Math.max(0, qMap.get(pid) || 0) }))
+  }
+
+  // ── VAN MANUAL LOAD ──────────────────────────────────────────────────────────
+  // Crea y ejecuta picking de carga manual CIGU → van sin necesitar pronóstico.
+  if (cleanPath === '/pwa-entregas/van-manual-load' && method === 'POST') {
+    const session = getSession()
+    const mobileLocationId = Number(body?.mobile_location_id || 0)
+    const lines = Array.isArray(body?.lines) ? body.lines : []
+    if (!mobileLocationId) return { ok: false, error: 'mobile_location_id requerido', message: 'mobile_location_id requerido' }
+    if (!lines.length) return { ok: false, error: 'lines requerido', message: 'lines requerido' }
+    const empId = Number(session.employee_id || getEmployeeId() || 0) || 0
+    const whId2 = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+    const meta = { warehouse_id: whId2 || undefined }
+    if (empId) meta.employee_id = empId
+    const envelope = await odooJson('/gf/salesops/warehouse/van_load/create_execute', { meta, data: { mobile_location_id: mobileLocationId, lines } })
+    const status = String(envelope?.status || '').toLowerCase()
+    const userMessage = envelope?.user_message || envelope?.message || ''
+    if (status === 'ok') return { ok: true, message: userMessage || 'Carga ejecutada', data: envelope?.data || {} }
+    return { ok: false, error: userMessage || 'Error al ejecutar carga', message: userMessage || 'Error al ejecutar carga', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
+  }
+
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
     // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
     // por Sebastián + introspección live (2026-04-26):
