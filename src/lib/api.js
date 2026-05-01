@@ -6497,9 +6497,44 @@ async function directSupervisorVentas(method, path, body) {
 
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
     const warehouseId = getWarehouseId()
-    const domain = [['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']]]
-    if (companyId) domain.push(['company_id', '=', companyId])
-    if (warehouseId) domain.push(['warehouse_id', '=', warehouseId])
+
+    // Obtener employee_ids de las rutas asignadas al CEDIS del supervisor.
+    // hr.employee.warehouse_id frecuentemente no está configurado, así que
+    // derivamos el scope del CEDIS desde gf.route.warehouse_dispatch_id.
+    let employeeIdFilter = null
+    if (warehouseId) {
+      const routeHasCompany = await modelHasField('gf.route', 'company_id')
+      const routeHasActive = await modelHasField('gf.route', 'active')
+      const empFields = await getSupportedFields('gf.route', [
+        'salesperson_employee_id', 'driver_employee_id',
+        'employee_id', 'assigned_employee_id',
+      ])
+      const routeDomain = [['warehouse_dispatch_id', '=', warehouseId]]
+      if (companyId && routeHasCompany) routeDomain.push(['company_id', '=', companyId])
+      if (routeHasActive) routeDomain.push(['active', '=', true])
+      const routeRows = pickListResponse(await readModelSorted('gf.route', {
+        fields: ['id', ...empFields],
+        domain: routeDomain,
+        sort_column: 'id', sort_desc: false, limit: 200, sudo: 1,
+      }))
+      const empIds = new Set()
+      for (const r of routeRows) {
+        for (const f of empFields) {
+          const v = r[f]
+          const id = Array.isArray(v) ? Number(v[0] || 0) : Number(v || 0)
+          if (id) empIds.add(id)
+        }
+      }
+      if (empIds.size > 0) employeeIdFilter = [...empIds]
+    }
+
+    const domain = []
+    if (employeeIdFilter) {
+      domain.push(['id', 'in', employeeIdFilter])
+    } else {
+      domain.push(['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']])
+      if (companyId) domain.push(['company_id', '=', companyId])
+    }
     const result = await readModelSorted('hr.employee', {
       fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128', 'work_phone', 'mobile_phone'],
       domain,
