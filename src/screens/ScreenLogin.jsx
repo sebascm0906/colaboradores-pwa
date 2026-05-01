@@ -149,7 +149,10 @@ function buildSessionFromOdoo(result, cleanPin, cleanBarcode) {
   const company = employee?.company_id?.[1] || inferCompanyLabel(companyId, role);
   const now = Math.floor(Date.now() / 1000);
 
-  const warehouseId = Number(employee?.warehouse_id) || Number(employee?.default_source_warehouse_id) || 0;
+  const rawWh = employee?.warehouse_id;
+  const warehouseId = (Array.isArray(rawWh) ? Number(rawWh[0]) : Number(rawWh))
+    || (Array.isArray(employee?.default_source_warehouse_id) ? Number(employee.default_source_warehouse_id[0]) : Number(employee?.default_source_warehouse_id))
+    || 0;
 
   const fallbackPayload = {
     source: "odoo",
