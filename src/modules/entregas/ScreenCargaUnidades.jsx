@@ -8,9 +8,6 @@ import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 //  Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const FC_STATE_LABEL = { confirmed: 'Confirmado', done: 'Aprobado' }
-const FC_STATE_COLOR = { confirmed: TOKENS.colors.blue2, done: TOKENS.colors.success }
-
 function Spinner({ size = 22, color }) {
   return (
     <div style={{
@@ -369,6 +366,8 @@ export default function ScreenCargaUnidades() {
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes toast-in { from { transform: translateX(-50%) translateY(16px); opacity:0; } to { transform: translateX(-50%) translateY(0); opacity:1; } }
         @keyframes slide-down { from { max-height:0; opacity:0; } to { max-height:2000px; opacity:1; } }
+        select { color-scheme: dark; }
+        select option { background-color: #1a1f2e; color: #e2e8f0; }
       `}</style>
 
       {/* ── Summary bar ─────────────────────────────────────────────────── */}
@@ -464,26 +463,6 @@ export default function ScreenCargaUnidades() {
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                      {/* Forecast badge */}
-                      {van.forecast_state && (
-                        <span style={{
-                          padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                          background: `${FC_STATE_COLOR[van.forecast_state] || TOKENS.colors.textMuted}18`,
-                          border: `1px solid ${FC_STATE_COLOR[van.forecast_state] || TOKENS.colors.textMuted}40`,
-                          fontSize: 10, fontWeight: 700,
-                          color: FC_STATE_COLOR[van.forecast_state] || TOKENS.colors.textMuted,
-                        }}>
-                          {FC_STATE_LABEL[van.forecast_state] || van.forecast_state}
-                        </span>
-                      )}
-                      {/* Loaded badge */}
-                      {result?.ok && (
-                        <span style={{
-                          padding: '3px 8px', borderRadius: TOKENS.radius.pill,
-                          background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.28)',
-                          fontSize: 10, fontWeight: 700, color: TOKENS.colors.success,
-                        }}>✓ Cargada</span>
-                      )}
                       <ChevronIcon open={isExpanded} />
                     </div>
                   </div>
@@ -519,23 +498,33 @@ export default function ScreenCargaUnidades() {
                     )}
 
                     {/* ── SUGERIDO ──────────────────────────────────── */}
-                    {hasSuggestion && (
+                    {hasSuggestion ? (
                       <>
-                        <SectionLabel typo={typo}>SUGERIDO SUPERVISOR (MAÑANA)</SectionLabel>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        <SectionLabel typo={typo}>
+                          SUGERIDO SUPERVISOR
+                          {van.forecast_date ? ` · ${van.forecast_date}` : ''}
+                        </SectionLabel>
+                        <div style={{
+                          borderRadius: TOKENS.radius.sm,
+                          border: '1px solid rgba(43,143,224,0.18)',
+                          background: 'rgba(43,143,224,0.05)',
+                          overflow: 'hidden',
+                          marginBottom: 8,
+                        }}>
                           {van.suggestion.map((s, i) => (
                             <div key={i} style={{
-                              padding: '5px 10px', borderRadius: TOKENS.radius.pill,
-                              background: 'rgba(43,143,224,0.09)', border: '1px solid rgba(43,143,224,0.22)',
-                              display: 'flex', alignItems: 'center', gap: 6,
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              padding: '9px 12px',
+                              borderBottom: i < van.suggestion.length - 1
+                                ? '1px solid rgba(43,143,224,0.10)' : 'none',
                             }}>
-                              <span style={{ fontSize: 12, color: TOKENS.colors.textSoft, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ ...typo.body, color: TOKENS.colors.textSoft, flex: 1, minWidth: 0 }}>
                                 {s.product_name || `#${s.product_id}`}
                               </span>
                               <span style={{
-                                fontSize: 11, fontWeight: 700, color: TOKENS.colors.blue2,
-                                background: 'rgba(43,143,224,0.18)', borderRadius: TOKENS.radius.pill,
-                                padding: '1px 6px',
+                                fontSize: 13, fontWeight: 700, color: TOKENS.colors.blue2,
+                                background: 'rgba(43,143,224,0.15)', borderRadius: TOKENS.radius.pill,
+                                padding: '2px 10px', flexShrink: 0, marginLeft: 10,
                               }}>{s.qty}</span>
                             </div>
                           ))}
@@ -543,7 +532,7 @@ export default function ScreenCargaUnidades() {
                         <button
                           onClick={() => useSuggestion(van)}
                           style={{
-                            width: '100%', padding: '7px 0', borderRadius: TOKENS.radius.sm,
+                            width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.sm,
                             background: 'rgba(43,143,224,0.08)', border: '1px dashed rgba(43,143,224,0.35)',
                             color: TOKENS.colors.blue2, fontSize: 12, fontWeight: 600, cursor: 'pointer',
                             marginBottom: 4,
@@ -552,12 +541,10 @@ export default function ScreenCargaUnidades() {
                           Usar sugerido como base
                         </button>
                       </>
-                    )}
-
-                    {!hasSuggestion && (
+                    ) : (
                       <div style={{ marginTop: 12, marginBottom: 4 }}>
                         <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>
-                          Sin pronóstico confirmado para mañana — captura la carga manualmente.
+                          Sin pronóstico confirmado — captura la carga manualmente.
                         </p>
                       </div>
                     )}

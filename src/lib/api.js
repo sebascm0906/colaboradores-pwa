@@ -6112,17 +6112,23 @@ async function directEntregas(method, path, body) {
     const tomStr = `${tom.getFullYear()}-${pad2(tom.getMonth() + 1)}-${pad2(tom.getDate())}`
     const scopeKeys = employeeIds.map(id => `employee:${id}`)
 
+    // Buscar el forecast confirmado más reciente para cada empleado:
+    // cubre hoy Y mañana (el supervisor puede publicar para hoy mismo),
+    // ordenado por id desc para que el más nuevo gane en fcByScope.
+    const pad2 = n => String(n).padStart(2, '0')
+    const todayNow2 = new Date()
+    const todayStr = `${todayNow2.getFullYear()}-${pad2(todayNow2.getMonth() + 1)}-${pad2(todayNow2.getDate())}`
     const fcRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
       fields: ['id', 'scope_key', 'state', 'date_target', 'line_ids'],
-      domain: [['date_target', '=', tomStr], ['state', 'in', ['confirmed', 'done']], ['scope_key', 'in', scopeKeys]],
-      sort_column: 'id', sort_desc: false, limit: 50, sudo: 1,
+      domain: [['date_target', 'in', [todayStr, tomStr]], ['state', 'in', ['confirmed', 'done']], ['scope_key', 'in', scopeKeys]],
+      sort_column: 'id', sort_desc: true, limit: 100, sudo: 1,
     }))
 
     const allLineIds = fcRows.flatMap(f => Array.isArray(f.line_ids) ? f.line_ids : [])
     const lineRows = allLineIds.length ? pickListResponse(await readModelSorted('gf.saleops.forecast.line', {
       fields: ['id', 'product_id', 'qty', 'channel', 'forecast_id'],
       domain: [['id', 'in', allLineIds], ['channel', '=', 'van']],
-      sort_column: 'id', sort_desc: false, limit: 300, sudo: 1,
+      sort_column: 'id', sort_desc: false, limit: 500, sudo: 1,
     })) : []
 
     const linesByFc = new Map()
@@ -6135,12 +6141,15 @@ async function directEntregas(method, path, body) {
         qty: Number(l.qty || 0),
       })
     }
+    // Solo el forecast más reciente por scope (sort_desc:true → primer match gana)
     const fcByScope = new Map()
-    for (const f of fcRows) fcByScope.set(f.scope_key, { forecast_id: f.id, state: f.state })
+    for (const f of fcRows) {
+      if (!fcByScope.has(f.scope_key)) fcByScope.set(f.scope_key, { forecast_id: f.id, state: f.state, date_target: f.date_target })
+    }
 
     return vans.map(v => {
       const fc = fcByScope.get(`employee:${v.employee_id}`)
-      return { ...v, cedis_location_id: cedisLocationId || null, cedis_location_name: cedisLocationName || null, forecast_id: fc?.forecast_id || null, forecast_state: fc?.state || null, suggestion: fc ? (linesByFc.get(fc.forecast_id) || []) : [] }
+      return { ...v, cedis_location_id: cedisLocationId || null, cedis_location_name: cedisLocationName || null, forecast_id: fc?.forecast_id || null, forecast_state: fc?.state || null, forecast_date: fc?.date_target || null, suggestion: fc ? (linesByFc.get(fc.forecast_id) || []) : [] }
     })
   }
 
