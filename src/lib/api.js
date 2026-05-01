@@ -6471,6 +6471,30 @@ async function directSupervisorVentas(method, path, body) {
 
   if (!cleanPath.startsWith('/pwa-supv/')) return NO_DIRECT
 
+  async function getSupportedFields(model, candidates) {
+    const supported = []
+    for (const field of candidates) {
+      if (await modelHasField(model, field)) supported.push(field)
+    }
+    return supported
+  }
+
+  function firstM2o(row, fields) {
+    for (const field of fields) {
+      const value = row?.[field]
+      const id = Array.isArray(value) ? Number(value[0] || 0) : Number(value || 0)
+      if (id) return value
+    }
+    return null
+  }
+
+  function tomorrowDateString() {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
     const domain = [['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']]]
     if (companyId) domain.push(['company_id', '=', companyId])
@@ -6553,6 +6577,131 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/route-templates' && method === 'GET') {
+    const warehouseId = getWarehouseId()
+    if (!warehouseId) {
+      throw new ApiError(
+        'Tu usuario no tiene CEDIS asignado. Pide a administracion que configure warehouse_id.',
+        { status: 400, code: 'missing_warehouse_id' }
+      )
+    }
+
+    const requestedDate = query.get('date_target') || ''
+    const dateTarget = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : tomorrowDateString()
+    const routeHasCompany = await modelHasField('gf.route', 'company_id')
+    const routeHasActive = await modelHasField('gf.route', 'active')
+    const employeeFields = await getSupportedFields('gf.route', [
+      'salesperson_employee_id',
+      'driver_employee_id',
+      'employee_id',
+      'assigned_employee_id',
+      'salesperson_id',
+      'driver_id',
+      'user_employee_id',
+    ])
+
+    const routeFields = [
+      'id',
+      'name',
+      'warehouse_dispatch_id',
+      ...(routeHasCompany ? ['company_id'] : []),
+      ...(routeHasActive ? ['active'] : []),
+      ...employeeFields,
+    ]
+
+    const domain = [['warehouse_dispatch_id', '=', warehouseId]]
+    if (companyId && routeHasCompany) domain.push(['company_id', '=', companyId])
+    if (routeHasActive) domain.push(['active', '=', true])
+
+    const routeRows = pickListResponse(await readModelSorted('gf.route', {
+      fields: routeFields,
+      domain,
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    }))
+
+    const assignedRoutes = routeRows
+      .map((route) => ({ route, employeeRef: firstM2o(route, employeeFields) }))
+      .filter((item) => item.employeeRef)
+
+    const routeIds = assignedRoutes.map((item) => Number(item.route.id || 0)).filter(Boolean)
+    const planRows = routeIds.length
+      ? pickListResponse(await readModelSorted('gf.route.plan', {
+          fields: [
+            'id', 'name', 'date', 'route_id', 'state',
+            'driver_employee_id', 'salesperson_employee_id',
+            'stops_total', 'stops_done', 'load_picking_id', 'load_sealed',
+          ],
+          domain: [['route_id', 'in', routeIds], ['date', '=', dateTarget]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: routeIds.length,
+          sudo: 1,
+        }))
+      : []
+    const planByRouteId = new Map(planRows.map((plan) => [Number(plan.route_id?.[0] || plan.route_id || 0), plan]))
+
+    const forecastHasRoutePlan = await modelHasField('gf.saleops.forecast', 'route_plan_id')
+    const forecastHasRoute = await modelHasField('gf.saleops.forecast', 'route_id')
+    const planIds = planRows.map((plan) => Number(plan.id || 0)).filter(Boolean)
+    let forecastRows = []
+    if (forecastHasRoutePlan && planIds.length) {
+      forecastRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
+        fields: ['id', 'state', 'date_target', 'route_plan_id'],
+        domain: [['route_plan_id', 'in', planIds], ['date_target', '=', dateTarget]],
+        sort_column: 'id',
+        sort_desc: true,
+        limit: planIds.length,
+        sudo: 1,
+      }))
+    } else if (forecastHasRoute && routeIds.length) {
+      forecastRows = pickListResponse(await readModelSorted('gf.saleops.forecast', {
+        fields: ['id', 'state', 'date_target', 'route_id'],
+        domain: [['route_id', 'in', routeIds], ['date_target', '=', dateTarget]],
+        sort_column: 'id',
+        sort_desc: true,
+        limit: routeIds.length,
+        sudo: 1,
+      }))
+    }
+    const forecastByPlanId = new Map()
+    const forecastByRouteId = new Map()
+    for (const forecast of forecastRows) {
+      const planId = Number(forecast.route_plan_id?.[0] || forecast.route_plan_id || 0)
+      const routeId = Number(forecast.route_id?.[0] || forecast.route_id || 0)
+      if (planId && !forecastByPlanId.has(planId)) forecastByPlanId.set(planId, forecast)
+      if (routeId && !forecastByRouteId.has(routeId)) forecastByRouteId.set(routeId, forecast)
+    }
+
+    return assignedRoutes.map(({ route, employeeRef }) => {
+      const routeId = Number(route.id || 0)
+      const plan = planByRouteId.get(routeId) || null
+      const forecast = plan?.id
+        ? forecastByPlanId.get(Number(plan.id)) || forecastByRouteId.get(routeId) || null
+        : forecastByRouteId.get(routeId) || null
+      return {
+        route_id: routeId,
+        route_name: route.name || '',
+        warehouse_id: route.warehouse_dispatch_id?.[0] || warehouseId,
+        warehouse_name: route.warehouse_dispatch_id?.[1] || '',
+        employee_id: Array.isArray(employeeRef) ? employeeRef[0] : employeeRef,
+        employee_name: Array.isArray(employeeRef) ? employeeRef[1] : '',
+        plan_id: plan?.id || 0,
+        plan_name: plan?.name || '',
+        plan_state: plan?.state || '',
+        stops_total: Number(plan?.stops_total || 0),
+        stops_done: Number(plan?.stops_done || 0),
+        forecast_id: forecast?.id || 0,
+        forecast_state: forecast?.state || '',
+        load_picking_id: plan?.load_picking_id || null,
+        load_sealed: plan?.load_sealed === true,
+        date_target: dateTarget,
+      }
+    })
+  }
+
   if (cleanPath === '/pwa-supv/forecast-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'list_price', 'weight', 'sale_ok', 'barcode'],
@@ -6569,6 +6718,66 @@ async function directSupervisorVentas(method, path, body) {
       weight: Number(row.weight || 0),
       barcode: row.barcode || '',
     }))
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-ensure' && method === 'POST') {
+    // Plan creation must stay server-side: the backend owns idempotency,
+    // route defaults, stops, and load picking creation. The PWA only wraps it.
+    const warehouseId = getWarehouseId()
+    const supervisorEmpId = Number(getEmployeeId() || 0) || 0
+    const routeId = Number(body?.route_id || 0)
+    const dateTarget = body?.date_target || ''
+
+    if (!warehouseId) {
+      throw new ApiError('Tu usuario no tiene CEDIS asignado.', { status: 400, code: 'missing_warehouse_id' })
+    }
+    if (!routeId) return { ok: false, error: 'route_id requerido', code: 'route_id_required' }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateTarget)) {
+      return { ok: false, error: 'date_target invalida', code: 'invalid_date_target' }
+    }
+
+    const routeRows = pickListResponse(await readModelSorted('gf.route', {
+      fields: ['id', 'name', 'warehouse_dispatch_id'],
+      domain: [['id', '=', routeId], ['warehouse_dispatch_id', '=', warehouseId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    if (!routeRows.length) {
+      return { ok: false, error: 'Ruta fuera del CEDIS de la sesion.', code: 'route_not_in_warehouse' }
+    }
+
+    try {
+      const envelope = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
+        meta: {
+          employee_id: supervisorEmpId || undefined,
+          warehouse_id: warehouseId,
+        },
+        data: {
+          route_id: routeId,
+          date_target: dateTarget,
+        },
+      })
+
+      const status = String(envelope?.status || '').toLowerCase()
+      if (status === 'ok' || envelope?.ok === true) {
+        return { ok: true, ...(envelope?.data || envelope) }
+      }
+      return {
+        ok: false,
+        error: envelope?.user_message || envelope?.message || 'No se pudo crear el plan diario; endpoint no disponible.',
+        code: envelope?.code || 'route_plan_ensure_failed',
+        data: envelope?.data || {},
+      }
+    } catch (e) {
+      return {
+        ok: false,
+        error: e?.message || 'No se pudo crear el plan diario; endpoint no disponible.',
+        code: e?.code || 'route_plan_ensure_failed',
+        data: {},
+      }
+    }
   }
 
   if (cleanPath === '/pwa-supv/forecast-create' && method === 'POST') {
@@ -6606,6 +6815,8 @@ async function directSupervisorVentas(method, path, body) {
       replace: true,
     }
     if (employeeId) upsertData.employee_id = employeeId
+    if (body?.route_id) upsertData.route_id = Number(body.route_id)
+    if (body?.route_plan_id) upsertData.route_plan_id = Number(body.route_plan_id)
 
     const result = await odooJson('/gf/salesops/supervisor/v2/forecast/upsert', {
       meta: supvMeta,
