@@ -567,6 +567,7 @@ export default function ScreenCargaUnidades() {
                               background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                               color: line.product_id ? TOKENS.colors.text : TOKENS.colors.textMuted,
                               fontSize: 13, marginBottom: 8, outline: 'none',
+                              colorScheme: 'dark',
                             }}
                           >
                             <option value="">Seleccionar producto...</option>
