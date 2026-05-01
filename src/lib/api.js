@@ -6887,9 +6887,54 @@ async function directSupervisorVentas(method, path, body) {
     })
     return pickListResponse(result).map((row) => ({
       ...row,
-      // line_ids viene como array de IDs; line_count es lo que muestra la UI
       line_count: Array.isArray(row.line_ids) ? row.line_ids.length : 0,
     }))
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-lines' && method === 'GET') {
+    const forecastId = Number(query.get('forecast_id') || 0)
+    if (!forecastId) return []
+    const result = await readModelSorted('gf.saleops.forecast.line', {
+      fields: ['id', 'product_id', 'qty', 'channel', 'forecast_id'],
+      domain: [['forecast_id', '=', forecastId]],
+      sort_column: 'id', sort_desc: false, limit: 200, sudo: 1,
+    })
+    return pickListResponse(result).map((l) => ({
+      id: l.id,
+      product_id: Number(Array.isArray(l.product_id) ? l.product_id[0] : l.product_id || 0),
+      product_name: Array.isArray(l.product_id) ? String(l.product_id[1] || '') : '',
+      qty: Number(l.qty || 0),
+      channel: l.channel || 'van',
+    }))
+  }
+
+  if (cleanPath === '/pwa-supv/forecast-update-lines' && method === 'POST') {
+    const forecastId = Number(body?.forecast_id || 0)
+    if (!forecastId) return { success: false, error: 'forecast_id requerido' }
+    const normalizeChannel = (ch) => {
+      const raw = String(ch || '').trim().toLowerCase()
+      if (raw === 'mostrador' || raw === 'counter') return 'counter'
+      return 'van'
+    }
+    const lines = Array.isArray(body?.lines)
+      ? body.lines
+          .filter((l) => l?.product_id && Number(l.qty) > 0)
+          .map((l) => ({
+            product_id: Number(l.product_id),
+            qty: Number(l.qty || 0),
+            channel: normalizeChannel(l.channel),
+          }))
+      : []
+    // (5,0,0) removes all existing lines; (0,0,{...}) creates each new one
+    const lineCommands = [[5, 0, 0], ...lines.map((l) => [0, 0, l])]
+    await createUpdate({
+      model: 'gf.saleops.forecast',
+      method: 'write',
+      ids: [forecastId],
+      dict: { line_ids: lineCommands },
+      sudo: 1,
+    })
+    return { success: true, updated: true, forecast_id: forecastId }
   }
 
   if (cleanPath === '/pwa-supv/forecast-confirm' && method === 'POST') {

@@ -92,6 +92,16 @@ export function deleteForecast(forecastId) {
   return api('POST', '/pwa-supv/forecast-delete', { forecast_id: forecastId })
 }
 
+/** Líneas de un forecast (productos, canal, qty) */
+export function getForecastLines(forecastId) {
+  return api('GET', `/pwa-supv/forecast-lines?forecast_id=${forecastId}`)
+}
+
+/** Reemplazar las líneas de un forecast borrador */
+export function updateForecastLines(forecastId, lines) {
+  return api('POST', '/pwa-supv/forecast-update-lines', { forecast_id: forecastId, lines })
+}
+
 // ── Metas mensuales ──────────────────────────────────────────────────────────
 
 /** Metas de todos los vendedores del equipo (mes actual) */

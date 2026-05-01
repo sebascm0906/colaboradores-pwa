@@ -9,6 +9,8 @@ import {
   confirmForecast,
   cancelForecast,
   deleteForecast,
+  getForecastLines,
+  updateForecastLines,
   getRouteTemplatesForPlanning,
   ensureDailyRoutePlan,
 } from './api'
@@ -205,6 +207,15 @@ export default function ScreenPronostico() {
   // Sheet state. `productLineIdx` indica qué línea se está editando.
   const [productLineIdx, setProductLineIdx] = useState(null)
 
+  // Expand / edit forecast lines
+  const [expandedForecastId, setExpandedForecastId] = useState(null)
+  const [forecastLinesCache, setForecastLinesCache] = useState({})
+  const [forecastLinesLoading, setForecastLinesLoading] = useState(null)
+  const [editingForecastId, setEditingForecastId] = useState(null)
+  const [editLines, setEditLines] = useState([])
+  const [editProductLineIdx, setEditProductLineIdx] = useState(null)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
   const productOptions = useMemo(
     () => products.map(p => ({ id: String(p.id), label: p.name || p.display_name || `#${p.id}` })),
     [products],
@@ -223,6 +234,81 @@ export default function ScreenPronostico() {
     if (!line.product_id) return null
     const p = products.find(x => String(x.id) === String(line.product_id))
     return p?.name || p?.display_name || `Producto #${line.product_id}`
+  }
+
+  function productNameForId(productId) {
+    if (!productId) return ''
+    const p = products.find(x => String(x.id) === String(productId))
+    return p?.name || p?.display_name || `#${productId}`
+  }
+
+  async function handleToggleExpand(forecastId) {
+    if (expandedForecastId === forecastId) {
+      setExpandedForecastId(null)
+      return
+    }
+    setExpandedForecastId(forecastId)
+    if (!forecastLinesCache[forecastId]) {
+      setForecastLinesLoading(forecastId)
+      try {
+        const fLines = await getForecastLines(forecastId)
+        setForecastLinesCache(prev => ({ ...prev, [forecastId]: fLines }))
+      } catch (e) {
+        logScreenError('ScreenPronostico', 'getForecastLines', e)
+        setForecastLinesCache(prev => ({ ...prev, [forecastId]: [] }))
+      } finally {
+        setForecastLinesLoading(null)
+      }
+    }
+  }
+
+  function handleStartEdit(forecast) {
+    const cached = forecastLinesCache[forecast.id] || []
+    setEditLines(cached.length
+      ? cached.map(l => ({
+          product_id: String(l.product_id),
+          channel: l.channel === 'counter' ? 'Mostrador' : 'Van',
+          qty: String(l.qty),
+        }))
+      : [{ product_id: '', channel: 'Van', qty: '' }])
+    setEditingForecastId(forecast.id)
+  }
+
+  function handleCancelEdit() {
+    setEditingForecastId(null)
+    setEditLines([])
+  }
+
+  function updateEditLine(idx, field, value) {
+    setEditLines(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
+  }
+
+  function addEditLine() {
+    setEditLines(prev => [...prev, { product_id: '', channel: 'Van', qty: '' }])
+  }
+
+  function removeEditLine(idx) {
+    if (editLines.length <= 1) return
+    setEditLines(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  async function handleSaveEdit(forecastId) {
+    const validLines = editLines.filter(l => l.product_id && Number(l.qty) > 0)
+    if (validLines.length === 0) { flashMsg('Agrega al menos un producto'); return }
+    setEditSubmitting(true)
+    try {
+      await updateForecastLines(forecastId, validLines)
+      // Refresh lines cache for this forecast
+      const refreshed = await getForecastLines(forecastId)
+      setForecastLinesCache(prev => ({ ...prev, [forecastId]: refreshed }))
+      setEditingForecastId(null)
+      setEditLines([])
+      flashMsg('Pronostico actualizado')
+    } catch (e) {
+      flashMsg(e.message || 'Error al guardar', 5000)
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   useEffect(() => {
@@ -678,62 +764,229 @@ export default function ScreenPronostico() {
                     const vendorName = f.created_by_employee_id?.[1] || ''
                     const st = f.state || f.status || 'draft'
                     const isActing = actionLoading === f.id
+                    const isExpanded = expandedForecastId === f.id
+                    const isLinesLoading = forecastLinesLoading === f.id
+                    const cachedLines = forecastLinesCache[f.id] || null
+                    const isEditing = editingForecastId === f.id
                     return (
                     <div key={f.id || i} style={{
-                      padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                      borderRadius: TOKENS.radius.lg,
                       background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                      overflow: 'hidden',
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 14 }}>{f.date_target || f.date}</p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                            {f.line_count || f.lines?.length || 0} productos
-                            {vendorName ? ` — ${vendorName}` : ' — Sucursal'}
-                          </p>
+                      {/* Header row */}
+                      <div style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button
+                            onClick={() => handleToggleExpand(f.id)}
+                            style={{
+                              flex: 1, textAlign: 'left', background: 'none', border: 'none', padding: 0,
+                              display: 'flex', alignItems: 'center', gap: 8,
+                            }}
+                          >
+                            <div>
+                              <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 14 }}>{f.date_target || f.date}</p>
+                              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                                {f.line_count || f.lines?.length || 0} productos
+                                {vendorName ? ` — ${vendorName}` : ' — Sucursal'}
+                              </p>
+                            </div>
+                            <svg
+                              width="16" height="16" viewBox="0 0 24 24" fill="none"
+                              stroke={TOKENS.colors.textMuted} strokeWidth="2"
+                              strokeLinecap="round" strokeLinejoin="round"
+                              style={{ flexShrink: 0, transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                            >
+                              <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                          </button>
+                          <div style={{
+                            marginLeft: 8, padding: '4px 10px', borderRadius: TOKENS.radius.pill,
+                            background: `${statusColor(st)}14`,
+                            border: `1px solid ${statusColor(st)}30`,
+                            flexShrink: 0,
+                          }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(st) }}>{statusLabel(st)}</span>
+                          </div>
                         </div>
-                        <div style={{
-                          padding: '4px 10px', borderRadius: TOKENS.radius.pill,
-                          background: `${statusColor(st)}14`,
-                          border: `1px solid ${statusColor(st)}30`,
-                        }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(st) }}>{statusLabel(st)}</span>
-                        </div>
-                      </div>
-                      {/* Action buttons — only for draft or confirmed */}
-                      {(st === 'draft' || st === 'confirmed') && (
-                        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                          {st === 'draft' && (
-                            <>
-                              <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
+
+                        {/* Action buttons */}
+                        {!isEditing && (st === 'draft' || st === 'confirmed') && (
+                          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                            {st === 'draft' && (
+                              <>
+                                <button onClick={() => handleConfirm(f.id)} disabled={isActing} style={{
+                                  flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
+                                  background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
+                                  border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
+                                  fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
+                                }}>
+                                  {isActing ? '...' : 'Confirmar'}
+                                </button>
+                                <button
+                                  onClick={() => { if (!isExpanded) handleToggleExpand(f.id); handleStartEdit(f) }}
+                                  disabled={isActing}
+                                  style={{
+                                    padding: '8px 12px', borderRadius: TOKENS.radius.md,
+                                    background: isActing ? TOKENS.colors.surface : 'rgba(99,179,237,0.12)',
+                                    border: `1px solid ${TOKENS.colors.blue2}40`, color: TOKENS.colors.blue3,
+                                    fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1, flexShrink: 0,
+                                  }}
+                                >
+                                  Editar
+                                </button>
+                                <button onClick={() => handleDelete(f.id)} disabled={isActing} style={{
+                                  width: 36, height: 34, borderRadius: TOKENS.radius.md, flexShrink: 0,
+                                  background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
+                                  border: '1px solid rgba(239,68,68,0.25)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  opacity: isActing ? 0.5 : 1,
+                                }}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                            {st === 'confirmed' && (
+                              <button onClick={() => handleCancel(f.id)} disabled={isActing} style={{
                                 flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
-                                background: isActing ? TOKENS.colors.surface : 'rgba(34,197,94,0.12)',
-                                border: '1px solid rgba(34,197,94,0.3)', color: '#22c55e',
+                                background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
+                                border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444',
                                 fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
                               }}>
-                                {isActing ? '...' : 'Confirmar'}
+                                {isActing ? '...' : 'Regresar a borrador'}
                               </button>
-                              <button onClick={() => handleDelete(f.id)} disabled={isActing} style={{
-                                width: 36, height: 34, borderRadius: TOKENS.radius.md, flexShrink: 0,
-                                background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
-                                border: '1px solid rgba(239,68,68,0.25)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                opacity: isActing ? 0.5 : 1,
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Expanded: line breakdown / edit */}
+                      {isExpanded && (
+                        <div style={{ borderTop: `1px solid ${TOKENS.colors.border}`, padding: '12px 16px' }}>
+                          {isLinesLoading ? (
+                            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>Cargando líneas…</p>
+                          ) : isEditing ? (
+                            /* ── Edit mode ── */
+                            <>
+                              {editLines.map((el, idx) => (
+                                <div key={idx} style={{ marginBottom: 10 }}>
+                                  {/* Product selector */}
+                                  <button
+                                    onClick={() => setEditProductLineIdx(idx)}
+                                    style={{
+                                      width: '100%', padding: '9px 12px', borderRadius: TOKENS.radius.md,
+                                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                      color: el.product_id ? TOKENS.colors.text : TOKENS.colors.textMuted,
+                                      fontSize: 13, textAlign: 'left', marginBottom: 6,
+                                    }}
+                                  >
+                                    {el.product_id
+                                      ? (productNameForId(el.product_id) || `Producto #${el.product_id}`)
+                                      : 'Seleccionar producto'}
+                                  </button>
+                                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    {/* Channel pills */}
+                                    {CHANNELS.map(ch => (
+                                      <button
+                                        key={ch}
+                                        onClick={() => updateEditLine(idx, 'channel', ch)}
+                                        style={{
+                                          padding: '6px 10px', borderRadius: TOKENS.radius.pill,
+                                          fontSize: 12, fontWeight: 600,
+                                          background: el.channel === ch ? TOKENS.colors.blue2 : TOKENS.colors.surface,
+                                          border: `1px solid ${el.channel === ch ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                                          color: el.channel === ch ? '#fff' : TOKENS.colors.textMuted,
+                                        }}
+                                      >{ch}</button>
+                                    ))}
+                                    {/* Qty */}
+                                    <input
+                                      type="number" inputMode="decimal" min="0"
+                                      value={el.qty}
+                                      onChange={e => updateEditLine(idx, 'qty', e.target.value)}
+                                      placeholder="Qty"
+                                      style={{
+                                        flex: 1, padding: '6px 10px', borderRadius: TOKENS.radius.md,
+                                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                        color: TOKENS.colors.text, fontSize: 13, textAlign: 'right',
+                                      }}
+                                    />
+                                    {/* Remove */}
+                                    <button onClick={() => removeEditLine(idx)} style={{
+                                      width: 32, height: 32, borderRadius: TOKENS.radius.sm,
+                                      background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                    }}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Add line */}
+                              <button onClick={addEditLine} style={{
+                                width: '100%', padding: '8px 0', borderRadius: TOKENS.radius.md, marginBottom: 10,
+                                background: TOKENS.colors.surface, border: `1px dashed ${TOKENS.colors.border}`,
+                                color: TOKENS.colors.textMuted, fontSize: 12, fontWeight: 600,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                               }}>
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                                </svg>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                Agregar producto
                               </button>
+                              {/* Save / Cancel */}
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => handleSaveEdit(f.id)} disabled={editSubmitting} style={{
+                                  flex: 1, padding: '9px 0', borderRadius: TOKENS.radius.md,
+                                  background: TOKENS.colors.blue2, color: '#fff', fontSize: 13, fontWeight: 700,
+                                  opacity: editSubmitting ? 0.6 : 1,
+                                }}>
+                                  {editSubmitting ? 'Guardando…' : 'Guardar cambios'}
+                                </button>
+                                <button onClick={handleCancelEdit} disabled={editSubmitting} style={{
+                                  padding: '9px 14px', borderRadius: TOKENS.radius.md,
+                                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                  color: TOKENS.colors.textMuted, fontSize: 13, fontWeight: 600,
+                                }}>
+                                  Cancelar
+                                </button>
+                              </div>
                             </>
-                          )}
-                          {st === 'confirmed' && (
-                            <button onClick={() => handleCancel(f.id)} disabled={isActing} style={{
-                              flex: 1, padding: '8px 0', borderRadius: TOKENS.radius.md,
-                              background: isActing ? TOKENS.colors.surface : 'rgba(239,68,68,0.08)',
-                              border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444',
-                              fontSize: 12, fontWeight: 700, opacity: isActing ? 0.5 : 1,
-                            }}>
-                              {isActing ? '...' : 'Regresar a borrador'}
-                            </button>
+                          ) : (
+                            /* ── Read-only line list ── */
+                            cachedLines && cachedLines.length > 0 ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {cachedLines.map((l, li) => (
+                                  <div key={l.id || li} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '7px 10px', borderRadius: TOKENS.radius.md,
+                                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                  }}>
+                                    <span style={{ fontSize: 13, color: TOKENS.colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {productNameForId(l.product_id) || l.product_name || `#${l.product_id}`}
+                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                      <span style={{
+                                        fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: TOKENS.radius.pill,
+                                        background: l.channel === 'counter' ? 'rgba(168,85,247,0.12)' : 'rgba(59,130,246,0.12)',
+                                        color: l.channel === 'counter' ? '#a855f7' : '#3b82f6',
+                                        border: l.channel === 'counter' ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(59,130,246,0.25)',
+                                        textTransform: 'uppercase',
+                                      }}>
+                                        {l.channel === 'counter' ? 'Mostrador' : 'Van'}
+                                      </span>
+                                      <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.text, minWidth: 32, textAlign: 'right' }}>
+                                        {l.qty}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, textAlign: 'center' }}>Sin líneas registradas</p>
+                            )
                           )}
                         </div>
                       )}
@@ -747,7 +1000,7 @@ export default function ScreenPronostico() {
         )}
       </div>
 
-      {/* Product sheet (per-line) */}
+      {/* Product sheet — new forecast */}
       <SearchableSheet
         open={productLineIdx !== null}
         onClose={() => setProductLineIdx(null)}
@@ -757,6 +1010,20 @@ export default function ScreenPronostico() {
         selectedId={productLineIdx !== null ? lines[productLineIdx]?.product_id || '' : ''}
         onSelect={(opt) => {
           if (productLineIdx !== null) updateLine(productLineIdx, 'product_id', opt.id)
+        }}
+        emptyText="No se encontraron productos"
+      />
+
+      {/* Product sheet — edit forecast */}
+      <SearchableSheet
+        open={editProductLineIdx !== null}
+        onClose={() => setEditProductLineIdx(null)}
+        title="Seleccionar producto"
+        placeholder="Buscar producto..."
+        options={productOptions}
+        selectedId={editProductLineIdx !== null ? editLines[editProductLineIdx]?.product_id || '' : ''}
+        onSelect={(opt) => {
+          if (editProductLineIdx !== null) updateEditLine(editProductLineIdx, 'product_id', opt.id)
         }}
         emptyText="No se encontraron productos"
       />
