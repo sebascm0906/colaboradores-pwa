@@ -6748,6 +6748,7 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, error: 'Ruta fuera del CEDIS de la sesion.', code: 'route_not_in_warehouse' }
     }
 
+    // Intentar endpoint custom primero; si no existe (404 / parse error), crear plan directamente vía ORM.
     try {
       const envelope = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
         meta: {
@@ -6764,17 +6765,54 @@ async function directSupervisorVentas(method, path, body) {
       if (status === 'ok' || envelope?.ok === true) {
         return { ok: true, ...(envelope?.data || envelope) }
       }
-      return {
-        ok: false,
-        error: envelope?.user_message || envelope?.message || 'No se pudo crear el plan diario; endpoint no disponible.',
-        code: envelope?.code || 'route_plan_ensure_failed',
-        data: envelope?.data || {},
+      // Si el backend devuelve HTML (404 website) el JSON parse ya lanzó; no llega aquí.
+      // Pero si devuelve JSON con error, caer al fallback ORM.
+    } catch {
+      // endpoint no existe → fallback ORM
+    }
+
+    // ── Fallback: buscar plan existente o crear uno nuevo vía ORM ────────────
+    try {
+      const existingPlans = pickListResponse(await readModelSorted('gf.route.plan', {
+        fields: ['id', 'name', 'state', 'route_id', 'date'],
+        domain: [['route_id', '=', routeId], ['date', '=', dateTarget]],
+        sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
+      }))
+      if (existingPlans.length) {
+        const p = existingPlans[0]
+        return { ok: true, plan_id: Number(p.id), plan_name: p.name || '', state: p.state || 'draft' }
       }
+
+      // Verificar qué campos soporta gf.route.plan para el create
+      const planHasDate = await modelHasField('gf.route.plan', 'date')
+      const planHasDateTarget = await modelHasField('gf.route.plan', 'date_target')
+      const planHasWarehouse = await modelHasField('gf.route.plan', 'warehouse_id')
+      const dateFieldName = planHasDate ? 'date' : (planHasDateTarget ? 'date_target' : 'date')
+
+      const createDict = { route_id: routeId, [dateFieldName]: dateTarget }
+      if (planHasWarehouse && warehouseId) createDict.warehouse_id = warehouseId
+
+      const created = await createUpdate({
+        model: 'gf.route.plan',
+        method: 'create',
+        dict: createDict,
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+      const newId = Number(Array.isArray(created?.result) ? created.result[0] : (created?.result || created || 0))
+      if (!newId) return { ok: false, error: 'No se pudo crear el plan diario', code: 'create_failed' }
+
+      const newPlan = pickListResponse(await readModelSorted('gf.route.plan', {
+        fields: ['id', 'name', 'state'],
+        domain: [['id', '=', newId]],
+        sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
+      }))[0] || {}
+      return { ok: true, plan_id: newId, plan_name: newPlan.name || '', state: newPlan.state || 'draft' }
     } catch (e) {
       return {
         ok: false,
-        error: e?.message || 'No se pudo crear el plan diario; endpoint no disponible.',
-        code: e?.code || 'route_plan_ensure_failed',
+        error: e?.message || 'No se pudo crear el plan diario',
+        code: e?.code || 'route_plan_create_failed',
         data: {},
       }
     }
