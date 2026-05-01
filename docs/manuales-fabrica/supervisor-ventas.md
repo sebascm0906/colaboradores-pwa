@@ -23,32 +23,33 @@
 2. Verás el resumen del día y el día anterior.
 3. Toca un vendedor para ver su detalle.
 
-### 2. Hacer el pronóstico del día
+### 2. Hacer la planeacion por ruta
 
-> Hacer el pronóstico **antes** que el CEDIS empiece a cargar. Sin pronóstico, no hay carga.
+> La pantalla toma automaticamente el CEDIS de tu sesion. Solo veras rutas `gf.route` de ese CEDIS que ya tengan empleado asignado.
 
 1. Toca **Pronóstico**.
-2. Toca **Nuevo pronóstico**.
-3. Captura la **fecha**: normalmente hoy.
-4. Si el pronóstico es para **un vendedor específico**, selecciónalo.
-5. Si es **global de la sucursal**, déjalo vacío.
+2. Revisa el bloque **CEDIS** y la **Fecha objetivo**. Normalmente la fecha es manana.
+3. En **Rutas del CEDIS**, selecciona la ruta que vas a planear.
+4. Si la ruta aparece **Sin plan**, toca **Crear plan**.
+5. Cuando la ruta diga **Plan creado**, captura los productos del forecast.
 6. Para cada producto:
    1. **Selecciona el producto.**
    2. **Selecciona el canal**: `Van` o `Mostrador`.
    3. **Escribe la cantidad.**
 7. Si necesitas más productos, toca **+** para agregar otra línea.
-8. Cuando termines, toca **Guardar**.
-9. Verás el pronóstico en la lista con estado **Pendiente**.
+8. Cuando termines, toca **Guardar Pronostico**.
+9. El forecast queda asociado a esa ruta y a su plan diario.
+10. Repite el proceso para cada ruta que necesite plan.
 
-### 3. Confirmar el pronóstico
+### 3. Confirmar el forecast de la ruta
 
-1. Busca el pronóstico que acabas de guardar (estado **Pendiente**).
-2. Tócalo para abrirlo.
+1. Busca el pronostico que acabas de guardar en **Pronosticos recientes**.
+2. Revisa que corresponda a la ruta correcta.
 3. Revisa los productos y cantidades.
 4. Toca **Confirmar**.
-5. Una vez confirmado, el CEDIS puede preparar la carga.
+5. Una vez confirmado, el almacenista de entregas puede preparar la carga por unidad desde el plan diario.
 
-> **Guardar** y **confirmar** son dos pasos distintos. Un pronóstico **pendiente** todavía no está oficial.
+> **Guardar** y **confirmar** son dos pasos distintos. Un forecast sin confirmar todavia no esta oficial.
 
 ### 4. Revisar clientes sin visitar
 
@@ -98,11 +99,11 @@
 1. Confirma con tu supervisor que el producto está habilitado para tu canal.
 2. Si está habilitado y no aparece, avisa a soporte.
 
-## Si sale mensaje de "sucursal no asignada"
+## Si sale mensaje de "CEDIS no asignado"
 
-1. Si aparece un mensaje que dice algo como "Tu empleado no tiene sucursal asignada":
+1. Si aparece un mensaje que dice algo como "CEDIS no asignado":
 2. **Avisa a administración** para que revisen tu usuario en RRHH.
-3. **No puedes guardar pronóstico** hasta que te configuren la sucursal.
+3. **No puedes crear planes ni guardar forecast** hasta que te configuren el CEDIS.
 
 ## Si te equivocas
 
@@ -115,13 +116,13 @@
 
 - No confirmes pronósticos sin revisar números.
 - No prestes tu PIN.
-- No esperes al final del día para hacer pronóstico. El CEDIS necesita tu pronóstico temprano.
+- No esperes al final del dia para hacer la planeacion. El CEDIS necesita el forecast temprano.
 
 ## Errores comunes
 
 | Mensaje en pantalla | Qué hacer |
 |---------------------|-----------|
-| Tu empleado no tiene sucursal asignada | Avisa a administración para que revisen tu usuario. |
+| CEDIS no asignado | Avisa a administración para que revisen tu usuario. |
 | No se pudo guardar | Revisa tu internet y vuelve a intentar una vez. Si sigue igual, avisa. |
 | Producto no válido | Revisa que el producto esté activo y sea de tu canal. |
 | Algo salió mal | Toca **Volver al inicio**. Si vuelve a salir, avisa. |
@@ -129,7 +130,7 @@
 
 ## Al terminar
 
-1. Revisa que el pronóstico del día esté confirmado.
+1. Revisa que los forecasts por ruta esten confirmados.
 2. Cierra el día desde **Cierre del día**.
 3. Sal de la app desde tu perfil.
 4. Entrega el celular si aplica.
