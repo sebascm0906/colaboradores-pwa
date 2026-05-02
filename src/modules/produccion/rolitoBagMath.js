@@ -10,8 +10,21 @@ export function getRolitoRelationId(value) {
   return normalizeRolitoBagNumber(value)
 }
 
+export function getRolitoPackingProductName(entry = {}) {
+  if (typeof entry?.product_name === 'string' && entry.product_name.trim()) return entry.product_name.trim()
+  if (Array.isArray(entry?.product_id) && typeof entry.product_id[1] === 'string') return entry.product_id[1].trim()
+  if (Array.isArray(entry?.productId) && typeof entry.productId[1] === 'string') return entry.productId[1].trim()
+  return ''
+}
+
+export function isBarraPackingEntry(entry = {}) {
+  const productName = getRolitoPackingProductName(entry).toUpperCase()
+  return productName.includes('BARRA DE HIELO')
+}
+
 export function sumRolitoUsedBags(packingEntries = []) {
   return (Array.isArray(packingEntries) ? packingEntries : []).reduce((sum, entry) => {
+    if (isBarraPackingEntry(entry)) return sum
     const materialQty = normalizeRolitoBagNumber(entry?.material_qty_total ?? entry?.materialQtyTotal)
     if (materialQty > 0) return sum + materialQty
     return sum + normalizeRolitoBagNumber(entry?.qty_bags ?? entry?.qtyBags)

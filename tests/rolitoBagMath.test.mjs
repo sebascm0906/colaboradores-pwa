@@ -19,6 +19,31 @@ test('sumRolitoUsedBags prefers material_qty_total over packed output bags', () 
   assert.equal(total, 923)
 })
 
+test('sumRolitoUsedBags excludes barra products from bag usage even if they carry material_qty_total', () => {
+  const total = sumRolitoUsedBags([
+    {
+      id: 1,
+      qty_bags: 100,
+      material_qty_total: 100,
+      product_name: 'LAURITA BOLSA DE HIELO ROLITO (3.8KG)',
+    },
+    {
+      id: 2,
+      qty_bags: 8,
+      material_qty_total: 8,
+      product_name: 'BARRA DE HIELO CHICA (50KG)',
+    },
+    {
+      id: 3,
+      qty_bags: 8,
+      material_qty_total: 8,
+      product_id: [724, 'BARRA DE HIELO GRANDE (75KG)'],
+    },
+  ])
+
+  assert.equal(total, 100)
+})
+
 test('computeRolitoBagDifference uses received - used - remaining - damaged', () => {
   const diff = computeRolitoBagDifference({
     bagsReceived: 1230,
