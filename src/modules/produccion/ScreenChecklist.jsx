@@ -412,7 +412,20 @@ function CheckItem({ check, idx, typo, onUpdate, onSave, onPhoto }) {
             inputMode="decimal"
             value={check.localNumeric}
             onChange={e => onUpdate(idx, 'localNumeric', e.target.value)}
-            onBlur={() => onSave(idx)}
+            onBlur={() => {
+              // Auto-negate: si el rango es completamente negativo (ej. -18° a 0°)
+              // y el usuario ingresa un valor positivo, lo convertimos a negativo.
+              if (check.min_value < 0 && check.max_value <= 0 && check.localNumeric !== '') {
+                const num = parseFloat(check.localNumeric)
+                if (Number.isFinite(num) && num > 0) {
+                  const negated = String(-num)
+                  onUpdate(idx, 'localNumeric', negated)
+                  onSave(idx, { localNumeric: negated })
+                  return
+                }
+              }
+              onSave(idx)
+            }}
             placeholder={`${check.min_value ?? ''} a ${check.max_value ?? ''}`}
             style={{
               flex: 1, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
