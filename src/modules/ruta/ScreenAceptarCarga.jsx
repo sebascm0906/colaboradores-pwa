@@ -17,6 +17,11 @@ export default function ScreenAceptarCarga() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requiresChecklist, setRequiresChecklist] = useState(false)
+  // checklist_state viene del backend cuando code=vehicle_checklist_required.
+  // Valores esperados: 'missing' | 'draft' | 'in_progress' | null.
+  // Lo usamos sólo para escoger el texto del CTA; el screen /ruta/checklist
+  // sigue siendo la fuente de verdad y se encarga de crear/inicializar.
+  const [checklistState, setChecklistState] = useState(null)
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -63,6 +68,7 @@ export default function ScreenAceptarCarga() {
     setSubmitting(true)
     setError('')
     setRequiresChecklist(false)
+    setChecklistState(null)
     try {
       const res = await acceptLoad(plan.id)
       const ok = res?.ok === true || res?.success === true
@@ -74,6 +80,7 @@ export default function ScreenAceptarCarga() {
         const code = res?.data?.code || res?.code || null
         if (code === 'vehicle_checklist_required') {
           setRequiresChecklist(true)
+          setChecklistState(res?.data?.checklist_state || null)
           setError(res?.message || 'Antes de aceptar la carga, debes completar el checklist de unidad.')
           return
         }
@@ -168,7 +175,11 @@ export default function ScreenAceptarCarga() {
                     boxShadow: '0 10px 24px rgba(245,158,11,0.25)',
                   }}
                 >
-                  Ir a checklist de unidad
+                  {checklistState === 'missing'
+                    ? 'Realizar inspección de unidad'
+                    : (checklistState === 'draft' || checklistState === 'in_progress')
+                      ? 'Continuar inspección de unidad'
+                      : 'Ir a checklist de unidad'}
                 </button>
               </div>
             )}

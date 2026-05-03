@@ -267,6 +267,11 @@ export default function ScreenChecklistUnidad() {
           setReasonModal({ check, value: payload.result_bool ?? null, payload })
           return
         }
+        // Mensaje amigable cuando el valor numérico está fuera de rango.
+        if (code === 'numeric_out_of_range') {
+          setError('El valor está fuera del rango permitido.')
+          return
+        }
         setError(msg)
         return
       }
@@ -353,7 +358,14 @@ export default function ScreenChecklistUnidad() {
         const msg = res?.message || 'No se pudo guardar la foto.'
         logScreenError('ScreenChecklistUnidad', 'submitPhoto.invalidResponse',
           new Error(msg), { check_id: checkId, code, size_bytes: compressed.sizeBytes })
-        setError(msg)
+        // Mensajes amigables para errores conocidos del backend.
+        if (code === 'invalid_photo_format') {
+          setError('La foto no tiene formato válido. Toma otra foto.')
+        } else if (code === 'photo_too_large') {
+          setError('La foto es muy pesada. Intenta tomarla de nuevo.')
+        } else {
+          setError(msg)
+        }
         return
       }
       await reloadChecks()
@@ -522,6 +534,16 @@ export default function ScreenChecklistUnidad() {
               Continuar a aceptar carga
             </button>
           </div>
+        )}
+
+        {/* Texto guía antes del listado de checks */}
+        {!loading && !isCompleted && checks.length > 0 && (
+          <p style={{
+            ...typo.caption, color: TOKENS.colors.textMuted,
+            margin: '0 0 14px', lineHeight: 1.5,
+          }}>
+            Antes de salir a ruta necesitamos validar el estado del vehículo.
+          </p>
         )}
 
         {/* Lista de checks */}
@@ -861,6 +883,14 @@ function PhotoInput({ check, uploadingPhoto, onPhotoClick, answered, typo }) {
         </svg>
         {uploadingPhoto ? 'Subiendo…' : answered ? 'Cambiar foto' : 'Tomar foto'}
       </button>
+      {!answered && (
+        <p style={{
+          ...typo.caption, color: TOKENS.colors.textLow,
+          margin: '6px 0 0', fontStyle: 'italic',
+        }}>
+          Toma una foto clara, con buena luz.
+        </p>
+      )}
       {answered && check.result_photo_url && (
         <div style={{ marginTop: 8 }}>
           <img
