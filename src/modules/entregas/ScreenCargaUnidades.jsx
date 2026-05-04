@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getVanRoster, executeVanLoad, getStockAtLocation, getLoadProducts } from './entregasService'
+import { getVanRoster, executeVanLoad, getProductsAtCedis } from './entregasService'
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 import { buildLoadPreviewSummary } from './loadPreviewSummary'
 import LoadConfirmPreview from './components/LoadConfirmPreview'
@@ -139,12 +139,10 @@ export default function ScreenCargaUnidades() {
   // ── Manual lines per van: { [employee_id]: [{product_id, qty, product_name}] } ──
   const [manualLines, setManualLines] = useState({})
 
-  // ── Product catalog ───────────────────────────────────────────────────────
-  const [products, setProducts] = useState([])
-  const [productsLoaded, setProductsLoaded] = useState(false)
-
-  // ── Stock check: { [employee_id]: { loading, items:[{product_id,on_hand}], error } } ──
-  const [stockCheck, setStockCheck] = useState({})
+  // ── Catálogo por van: { [employee_id]: { loading, items:[{product_id,product_name,on_hand}], error } }
+  // Cargado desde stock.quant de CIGU/Existencias al abrir cada van.
+  // Ya incluye on_hand → no se necesita stockCheck separado.
+  const [vanCatalog, setVanCatalog] = useState({})
 
   // ── Execution ─────────────────────────────────────────────────────────────
   const [executing, setExecuting] = useState(null) // employee_id
@@ -155,7 +153,6 @@ export default function ScreenCargaUnidades() {
   const [toast, setToast] = useState(null)
 
   const warehouseId = Number(session?.warehouse_id || 0) || null
-  const stockDebounceRef = useRef({})
 
   useEffect(() => {
     const h = () => setSw(window.innerWidth)
@@ -181,22 +178,29 @@ export default function ScreenCargaUnidades() {
 
   useEffect(() => { loadVans() }, [loadVans])
 
-  // ── Load product catalog ──────────────────────────────────────────────────
-  async function loadProductsIfNeeded() {
-    if (productsLoaded) return
-    try {
-      const ps = await getLoadProducts()
-      setProducts(Array.isArray(ps) ? ps : [])
-      setProductsLoaded(true)
-    } catch {
-      setProductsLoaded(true) // avoid infinite retry
-    }
-  }
-
   // ── Toast helper ──────────────────────────────────────────────────────────
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Cargar catálogo CIGU para una van (solo productos con stock > 0)
+  // ─────────────────────────────────────────────────────────────────────────
+  async function loadVanCatalog(van) {
+    const empId = van.employee_id
+    const locationId = van.cedis_location_id
+    if (!locationId) return
+    // Evitar recarga si ya está cargado y sin error
+    const current = vanCatalog[empId]
+    if (current && !current.error && !current.loading) return
+    setVanCatalog((prev) => ({ ...prev, [empId]: { loading: true, items: [], error: '' } }))
+    try {
+      const items = await getProductsAtCedis(locationId)
+      setVanCatalog((prev) => ({ ...prev, [empId]: { loading: false, items: Array.isArray(items) ? items : [], error: '' } }))
+    } catch {
+      setVanCatalog((prev) => ({ ...prev, [empId]: { loading: false, items: [], error: 'No se pudo cargar el stock del CEDIS' } }))
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -206,7 +210,7 @@ export default function ScreenCargaUnidades() {
     const id = van.employee_id
     if (expandedId === id) { setExpandedId(null); return }
     setExpandedId(id)
-    loadProductsIfNeeded()
+    loadVanCatalog(van)
     // Init manual lines if empty
     if (!manualLines[id] || manualLines[id].length === 0) {
       setManualLines((prev) => ({ ...prev, [id]: [{ product_id: '', qty: '', product_name: '' }] }))
@@ -221,15 +225,12 @@ export default function ScreenCargaUnidades() {
       const lines = [...(prev[empId] || [])]
       lines[idx] = { ...lines[idx], [field]: value }
       if (field === 'product_id' && value) {
-        const p = products.find((p) => String(p.id) === String(value))
-        if (p) lines[idx].product_name = p.name
+        const cat = vanCatalog[empId]?.items || []
+        const p = cat.find((p) => String(p.product_id) === String(value))
+        if (p) lines[idx].product_name = p.product_name
       }
       return { ...prev, [empId]: lines }
     })
-    // Debounce stock check when products change
-    if (field === 'product_id') {
-      scheduleStockCheck(empId)
-    }
   }
 
   function addLine(empId) {
@@ -244,7 +245,6 @@ export default function ScreenCargaUnidades() {
       const lines = (prev[empId] || []).filter((_, i) => i !== idx)
       return { ...prev, [empId]: lines.length ? lines : [{ product_id: '', qty: '', product_name: '' }] }
     })
-    scheduleStockCheck(empId)
   }
 
   function useSuggestion(van) {
@@ -254,44 +254,7 @@ export default function ScreenCargaUnidades() {
       .filter((s) => s.qty > 0)
       .map((s) => ({ product_id: String(s.product_id), qty: String(s.qty), product_name: s.product_name || '' }))
     setManualLines((prev) => ({ ...prev, [id]: lines.length ? lines : [{ product_id: '', qty: '', product_name: '' }] }))
-    scheduleStockCheck(id)
     showToast('Sugerido cargado como base', 'success')
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  //  Stock check (debounced)
-  // ─────────────────────────────────────────────────────────────────────────
-  function scheduleStockCheck(empId) {
-    // Cancel pending timer
-    if (stockDebounceRef.current[empId]) clearTimeout(stockDebounceRef.current[empId])
-    stockDebounceRef.current[empId] = setTimeout(() => runStockCheck(empId), 600)
-  }
-
-  async function runStockCheck(empId) {
-    const van = vans.find((v) => v.employee_id === empId)
-    if (!van) return
-    const locationId = van.cedis_location_id
-    if (!locationId) return
-
-    const lines = manualLines[empId] || []
-    const productIds = [...new Set(
-      lines.map((l) => Number(l.product_id)).filter(Boolean)
-    )]
-    if (!productIds.length) {
-      setStockCheck((prev) => ({ ...prev, [empId]: { loading: false, items: [], error: '' } }))
-      return
-    }
-
-    setStockCheck((prev) => ({ ...prev, [empId]: { loading: true, items: [], error: '' } }))
-    try {
-      const result = await getStockAtLocation(locationId, productIds)
-      setStockCheck((prev) => ({
-        ...prev,
-        [empId]: { loading: false, items: Array.isArray(result) ? result : [], error: '' },
-      }))
-    } catch {
-      setStockCheck((prev) => ({ ...prev, [empId]: { loading: false, items: [], error: 'No se pudo verificar stock' } }))
-    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -317,9 +280,9 @@ export default function ScreenCargaUnidades() {
         const pickName = res.data?.picking_name || ''
         showToast(`Carga ejecutada${pickName ? ` · ${pickName}` : ''}`, 'success')
         setExecResults((prev) => ({ ...prev, [empId]: { ok: true, message: res.message, data: res.data } }))
-        // Reset manual lines for this van
+        // Reset manual lines y fuerza recarga del catálogo (stock cambió)
         setManualLines((prev) => ({ ...prev, [empId]: [{ product_id: '', qty: '', product_name: '' }] }))
-        setStockCheck((prev) => { const n = { ...prev }; delete n[empId]; return n })
+        setVanCatalog((prev) => { const n = { ...prev }; delete n[empId]; return n })
         setExpandedId(null)
       } else {
         const msg = res?.error || res?.message || 'Error al ejecutar carga'
@@ -341,11 +304,12 @@ export default function ScreenCargaUnidades() {
   }
 
   function getStockSummary(empId) {
-    const sc = stockCheck[empId]
-    if (!sc || sc.loading || !sc.items.length) return null
+    const cat = vanCatalog[empId]
+    if (!cat || cat.loading || !cat.items.length) return null
+    // Usa el catálogo (on_hand de CIGU) como fuente de stock
     return buildLoadPreviewSummary({
       lines: manualLines[empId] || [],
-      stockItems: sc.items,
+      stockItems: cat.items.map(p => ({ product_id: p.product_id, on_hand: p.on_hand })),
     })
   }
 
@@ -428,13 +392,14 @@ export default function ScreenCargaUnidades() {
             const isExpanded = expandedId === empId
             const lines = manualLines[empId] || []
             const validLines = getValidLines(empId)
-            const sc = stockCheck[empId]
+            const cat = vanCatalog[empId] // { loading, items, error }
+            const catalogItems = cat?.items || []
             const stockSummary = getStockSummary(empId)
             const stockInsufficient = hasInsufficientStock(empId)
             const isExecuting = executing === empId
             const result = execResults[empId]
             const hasSuggestion = van.suggestion?.length > 0
-            const canConfirm = validLines.length > 0 && !isExecuting && !sc?.loading && !stockInsufficient
+            const canConfirm = validLines.length > 0 && !isExecuting && !cat?.loading && !stockInsufficient
 
             return (
               <div key={empId} style={{
@@ -558,27 +523,40 @@ export default function ScreenCargaUnidades() {
                           padding: 10, borderRadius: TOKENS.radius.sm,
                           background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
                         }}>
-                          {/* Product select */}
-                          <select
-                            value={String(line.product_id || '')}
-                            onChange={(e) => updateLine(empId, idx, 'product_id', e.target.value)}
-                            style={{
-                              width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                              color: line.product_id ? TOKENS.colors.text : TOKENS.colors.textMuted,
-                              fontSize: 13, marginBottom: 8, outline: 'none',
-                              colorScheme: 'dark',
-                            }}
-                          >
-                            <option value="">Seleccionar producto...</option>
-                            {/* Keep current if not in catalog */}
-                            {line.product_id && !products.find((p) => String(p.id) === String(line.product_id)) && (
-                              <option value={String(line.product_id)}>{line.product_name || `Producto ${line.product_id}`}</option>
-                            )}
-                            {products.map((p) => (
-                              <option key={p.id} value={String(p.id)}>{p.name}</option>
-                            ))}
-                          </select>
+                          {/* Product select — solo productos con stock en CIGU */}
+                          {cat?.loading ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', marginBottom: 8 }}>
+                              <Spinner size={14} />
+                              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Cargando productos del CEDIS...</span>
+                            </div>
+                          ) : cat?.error ? (
+                            <p style={{ ...typo.caption, color: TOKENS.colors.error, margin: '0 0 8px' }}>{cat.error}</p>
+                          ) : (
+                            <select
+                              value={String(line.product_id || '')}
+                              onChange={(e) => updateLine(empId, idx, 'product_id', e.target.value)}
+                              style={{
+                                width: '100%', padding: '8px 10px', borderRadius: TOKENS.radius.sm,
+                                background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                color: line.product_id ? TOKENS.colors.text : TOKENS.colors.textMuted,
+                                fontSize: 13, marginBottom: 8, outline: 'none',
+                                colorScheme: 'dark',
+                              }}
+                            >
+                              <option value="">
+                                {catalogItems.length ? `Seleccionar producto (${catalogItems.length} disponibles)...` : 'Sin stock en CEDIS'}
+                              </option>
+                              {/* Conservar selección actual si ya no está en catálogo */}
+                              {line.product_id && !catalogItems.find((p) => String(p.product_id) === String(line.product_id)) && (
+                                <option value={String(line.product_id)}>{line.product_name || `Producto ${line.product_id}`}</option>
+                              )}
+                              {catalogItems.map((p) => (
+                                <option key={p.product_id} value={String(p.product_id)}>
+                                  {p.product_name} — {p.on_hand} unid
+                                </option>
+                              ))}
+                            </select>
+                          )}
 
                           {/* Qty + remove */}
                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -624,38 +602,21 @@ export default function ScreenCargaUnidades() {
                       <PlusIcon /> Agregar producto
                     </button>
 
-                    {/* ── STOCK EN CEDIS ──────────────────────────── */}
-                    {(sc || stockSummary) && (
+                    {/* ── STOCK DE PRODUCTOS SELECCIONADOS ────────── */}
+                    {stockSummary && stockSummary.length > 0 && (
                       <>
                         <SectionLabel typo={typo}>
-                          STOCK EN CEDIS
+                          DISPONIBILIDAD EN CEDIS
                           {van.cedis_location_name ? ` · ${van.cedis_location_name}` : ''}
                         </SectionLabel>
-
-                        {sc?.loading && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
-                            <Spinner size={16} />
-                            <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Verificando disponibilidad...</span>
-                          </div>
-                        )}
-
-                        {!sc?.loading && stockSummary && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
-                            {stockSummary.map((row, i) => (
-                              <StockRow key={row.product_id || i} {...row} typo={typo} />
-                            ))}
-                          </div>
-                        )}
-
-                        {!sc?.loading && sc?.error && (
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0' }}>
-                            {sc.error}
-                          </p>
-                        )}
-
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
+                          {stockSummary.map((row, i) => (
+                            <StockRow key={row.product_id || i} {...row} typo={typo} />
+                          ))}
+                        </div>
                         {stockInsufficient && (
                           <div style={{
-                            marginTop: 6, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
+                            marginTop: 4, padding: '8px 12px', borderRadius: TOKENS.radius.sm,
                             background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.28)',
                             display: 'flex', alignItems: 'center', gap: 8,
                           }}>
@@ -666,20 +627,6 @@ export default function ScreenCargaUnidades() {
                           </div>
                         )}
                       </>
-                    )}
-
-                    {/* Manual stock check trigger (when no auto-check happened yet) */}
-                    {!sc && validLines.length > 0 && van.cedis_location_id && (
-                      <button
-                        onClick={() => runStockCheck(empId)}
-                        style={{
-                          width: '100%', padding: '7px 0', borderRadius: TOKENS.radius.sm, marginBottom: 8,
-                          background: 'rgba(43,143,224,0.06)', border: '1px dashed rgba(43,143,224,0.25)',
-                          color: TOKENS.colors.blue2, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        Verificar stock en CEDIS
-                      </button>
                     )}
 
                     {/* ── Confirm button ───────────────────────────── */}
@@ -706,8 +653,8 @@ export default function ScreenCargaUnidades() {
                     >
                       {isExecuting
                         ? 'Ejecutando carga...'
-                        : sc?.loading
-                          ? 'Verificando stock...'
+                        : cat?.loading
+                          ? 'Cargando catálogo...'
                           : stockInsufficient
                             ? 'Sin stock suficiente'
                             : validLines.length === 0

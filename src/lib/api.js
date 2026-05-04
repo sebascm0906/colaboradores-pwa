@@ -6149,6 +6149,32 @@ async function directEntregas(method, path, body) {
     return prodIds.map(pid => ({ product_id: pid, on_hand: Math.max(0, qMap.get(pid) || 0) }))
   }
 
+  // ── PRODUCTS AT CEDIS ────────────────────────────────────────────────────────
+  // Productos con existencia real en una ubicación de almacén (stock.quant).
+  // Filtra quantity > 0 y devuelve [{product_id, product_name, on_hand}] ordenado
+  // por nombre, para usarse como catálogo filtrado del selector de carga manual.
+  if (cleanPath === '/pwa-entregas/products-at-cedis' && method === 'GET') {
+    const locId = Number(query.get('location_id') || 0)
+    if (!locId) return []
+    const qRows = pickListResponse(await readModelSorted('stock.quant', {
+      fields: ['product_id', 'quantity'],
+      domain: [['location_id', '=', locId], ['quantity', '>', 0]],
+      sort_column: 'product_id', sort_desc: false, limit: 500, sudo: 1,
+    }))
+    // Agrupar por producto (puede haber varios lotes/series en la misma ubicación)
+    const aggMap = new Map()
+    for (const q of qRows) {
+      const pid = Number(q.product_id?.[0] || q.product_id)
+      const pname = Array.isArray(q.product_id) ? q.product_id[1] : ''
+      if (!pid) continue
+      if (!aggMap.has(pid)) aggMap.set(pid, { product_id: pid, product_name: pname, on_hand: 0 })
+      aggMap.get(pid).on_hand += Number(q.quantity || 0)
+    }
+    return [...aggMap.values()]
+      .filter(p => p.on_hand > 0)
+      .sort((a, b) => a.product_name.localeCompare(b.product_name, 'es', { sensitivity: 'base' }))
+  }
+
   // ── VAN MANUAL LOAD ──────────────────────────────────────────────────────────
   // Crea y ejecuta picking de carga manual CIGU → van sin necesitar pronóstico.
   if (cleanPath === '/pwa-entregas/van-manual-load' && method === 'POST') {

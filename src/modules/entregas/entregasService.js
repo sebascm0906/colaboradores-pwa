@@ -276,6 +276,25 @@ export async function getStockAtLocation(locationId, productIds) {
 }
 
 /**
+ * Catálogo filtrado de productos con existencia real en una ubicación de CEDIS.
+ * Consulta stock.quant (quantity > 0) y devuelve lista ordenada por nombre.
+ * Úsalo en lugar de getLoadProducts() para el selector de carga manual,
+ * de modo que solo aparezcan productos que realmente hay en el almacén.
+ *
+ * @param {number} locationId - stock.location ID del CEDIS (ej. CIGU/Existencias)
+ * @returns {Promise<Array<{product_id:number, product_name:string, on_hand:number}>>}
+ */
+export async function getProductsAtCedis(locationId) {
+  if (!locationId) return []
+  try {
+    const result = await api('GET', `/pwa-entregas/products-at-cedis?location_id=${locationId}`)
+    return Array.isArray(result) ? result : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Carga manual de van: crea y ejecuta picking CIGU → van en un paso.
  * No requiere pronóstico previo del supervisor.
  * @param {number} mobileLocationId - stock.location de la van destino
