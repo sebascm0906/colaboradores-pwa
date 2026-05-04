@@ -1,0 +1,22 @@
+# CODEOWNERS — colaboradores-pwa
+# Reviewers asignados automáticamente cuando un PR toca rutas críticas.
+# Actívalo junto con branch protection (Settings → Branches → main).
+#
+# Sintaxis: GitHub CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default — toda la base requiere review de uno de estos
+*  @sebascm0906 @yamilestebanh-collab
+
+# Capa API y auth — PRs aquí siempre requieren review
+/src/lib/api.js  @sebascm0906 @yamilestebanh-collab
+/src/lib/clearLocalState.js  @sebascm0906 @yamilestebanh-collab
+/src/lib/logout.js  @sebascm0906 @yamilestebanh-collab
+/src/App.jsx  @sebascm0906 @yamilestebanh-collab
+/src/screens/ScreenLogin.jsx  @sebascm0906 @yamilestebanh-collab
+
+# Configuración de despliegue / seguridad
+/vercel.json  @sebascm0906 @yamilestebanh-collab
+/vite.config.js  @sebascm0906 @yamilestebanh-collab
+/vite.config.ts  @sebascm0906 @yamilestebanh-collab
+/.github/  @sebascm0906 @yamilestebanh-collab
