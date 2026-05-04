@@ -4,6 +4,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { ToastProvider } from './components/Toast'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
+import { clearGrupoFrioLocalState } from './lib/clearLocalState'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
@@ -319,9 +320,13 @@ export default function App() {
     }
   }, [session])
 
-  // Global listener: any api.js that detects expired/missing token fires this
+  // Global listener: any api.js that detects expired/missing token fires this.
+  // Limpieza completa de estado operativo conocido — phone-loss data retention.
   useEffect(() => {
-    function onSessionExpired() { setSession(null) }
+    function onSessionExpired() {
+      try { clearGrupoFrioLocalState() } catch { /* ignore */ }
+      setSession(null)
+    }
     window.addEventListener('gf:session-expired', onSessionExpired)
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
   }, [])
@@ -372,8 +377,12 @@ export default function App() {
   }
   function logout() {
     setSession(null)
-    // Reload para descartar cualquier dato en RAM del usuario que sale.
-    try { localStorage.removeItem('gf_session') } catch {}
+    // Reload para descartar cualquier dato en RAM del usuario que sale +
+    // limpieza explícita de estado operativo conocido en localStorage
+    // (KM, cierre, liquidación, handover, inventario, reconciliaciones).
+    // No usamos localStorage.clear() para no tocar preferencias de UI ni
+    // storage de librerías externas — ver src/lib/clearLocalState.js.
+    try { clearGrupoFrioLocalState() } catch { /* ignore */ }
     window.location.replace('/login')
   }
   function updateSession(patch) {

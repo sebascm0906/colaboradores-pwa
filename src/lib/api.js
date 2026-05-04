@@ -145,15 +145,6 @@ function buildBaseHeaders(path = '') {
   if (String(path || '').startsWith('/gf/salesops/')) {
     const salesOpsMeta = getSalesOpsTokenMeta()
     if (salesOpsMeta.token) headers['X-GF-Token'] = salesOpsMeta.token
-    console.info('[gf_salesops] auth header prepared', {
-      path,
-      token_present: salesOpsMeta.present,
-      token_length: salesOpsMeta.length,
-      token_source: salesOpsMeta.source,
-      session_token_present: salesOpsMeta.session_present,
-      env_token_present: salesOpsMeta.env_present,
-      header_attached: Boolean(headers['X-GF-Token']),
-    })
   }
   return headers
 }
@@ -368,14 +359,6 @@ function pickListResponse(payload) {
 
 async function odooJson(path, params = {}) {
   const headers = buildBaseHeaders(path)
-  if (String(path || '').startsWith('/gf/salesops/')) {
-    console.info('[gf_salesops] jsonrpc request', {
-      path,
-      token_present: Boolean(headers['X-GF-Token']),
-      token_length: String(headers['X-GF-Token'] || '').length,
-      header_keys: Object.keys(headers),
-    })
-  }
   const res = await fetch(`${ODOO_BASE}${path}`, {
     method: 'POST',
     headers,
@@ -5294,16 +5277,12 @@ async function directAlmacenPT(method, path, body) {
   // ── Transfer orchestrate PT→CEDIS (Sebastián commit 16341c5) ─────────────
   if (cleanPath === '/pwa-pt/transfer-orchestrate' && method === 'POST') {
     const salesOpsMeta = getSalesOpsTokenMeta()
+    // Log operativo (sin metadata de token/credenciales) para debugging de transfers.
     console.info('[gf_salesops] orchestrate preflight', {
       warehouse_id: body?.warehouse_id || warehouseId,
       cedis_id: body?.destination_warehouse_id || body?.cedis_id || 0,
       employee_id: body?.employee_id || getEmployeeId() || 0,
       lines_count: Array.isArray(body?.lines) ? body.lines.length : 0,
-      token_present: salesOpsMeta.present,
-      token_length: salesOpsMeta.length,
-      token_source: salesOpsMeta.source,
-      session_token_present: salesOpsMeta.session_present,
-      env_token_present: salesOpsMeta.env_present,
     })
     if (!salesOpsMeta.token) {
       throw new Error('Falta configurar X-GF-Token para SalesOps. Revisa gf_salesops.api_token en la PWA.')
