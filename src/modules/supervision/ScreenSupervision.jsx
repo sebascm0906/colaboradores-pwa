@@ -85,7 +85,7 @@ export default function ScreenSupervision() {
       setShift(s)
       setTanks(tanksRes?.tanks || [])
       if (s?.id) {
-        const r = await loadShiftReadiness(s.id)
+        const r = await loadShiftReadiness(s.id, { includeSnapshot: false })
         setReadiness(r.readiness)
         setSummary(r.summary || {})
       } else {

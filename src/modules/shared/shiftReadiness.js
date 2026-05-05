@@ -24,13 +24,14 @@ import { getHandoverLocal } from './handoverLocalStore'
  * (totales produccion, coherencia empaque, listas).
  *
  * @param {number} shiftId
+ * @param {{ includeSnapshot?: boolean }} [options]
  * @returns {Promise<{
  *   readiness: { canClose: boolean, blockers: string[], warnings: string[] },
  *   summary: object,
  *   snapshot: object,
  * }>}
  */
-export async function loadShiftReadiness(shiftId) {
+export async function loadShiftReadiness(shiftId, options = {}) {
   if (!shiftId) {
     return {
       readiness: { canClose: false, blockers: ['Sin turno activo'], warnings: [] },
@@ -39,11 +40,9 @@ export async function loadShiftReadiness(shiftId) {
     }
   }
 
-  // Cargar readiness del backend y snapshot local en paralelo
-  const [backendRaw, snapshot] = await Promise.all([
-    getCloseReadiness(shiftId),
-    loadSnapshot(shiftId),
-  ])
+  const includeSnapshot = options.includeSnapshot !== false
+  const backendRaw = await getCloseReadiness(shiftId)
+  const snapshot = includeSnapshot ? await loadSnapshot(shiftId) : null
 
   // Contrato REAL verificado via live endpoint 2026-04-14:
   //   JSON-RPC envelope: { jsonrpc, id, result: { ok, message, data } }

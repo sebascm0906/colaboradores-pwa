@@ -226,7 +226,7 @@ export default function ScreenControlTurno() {
       let nextOperatorSummary = s?.id ? getOperatorCloseSummary(s) : []
       if (s?.id && s.state !== 'draft') {
         try {
-          const { summary } = await loadShiftReadiness(s.id)
+          const { summary } = await loadShiftReadiness(s.id, { includeSnapshot: false })
           nextOperatorSummary = buildOperatorSummaryForSupervisor(s, summary)
         } catch {
           nextOperatorSummary = buildOperatorSummaryForSupervisor(s, null)
@@ -271,7 +271,7 @@ export default function ScreenControlTurno() {
     if (!shift?.id) return null
     setLoadingReadiness(true)
     try {
-      const { readiness, summary } = await loadShiftReadiness(shift.id)
+      const { readiness, summary } = await loadShiftReadiness(shift.id, { includeSnapshot: false })
       const effectiveReadiness = buildSupervisorCloseReadiness(
         { ...readiness, summary },
         shift,
@@ -447,7 +447,7 @@ export default function ScreenControlTurno() {
         return
       }
       try {
-        const { summary } = await loadShiftReadiness(shift.id)
+        const { summary } = await loadShiftReadiness(shift.id, { includeSnapshot: false })
         if (!active) return
         setOperatorSummary(buildOperatorSummaryForSupervisor(shift, summary))
       } catch {
