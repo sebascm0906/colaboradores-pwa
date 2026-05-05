@@ -4727,15 +4727,32 @@ async function directSupervision(method, path, body) {
   if (cleanPath === '/pwa-sup/energy' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
+    const shift = pickFirstResponse(await readModelSorted('gf.production.shift', {
+      fields: ['id', 'energy_start_id', 'energy_end_id'],
+      domain: [['id', '=', shiftId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    const linkedReadingIds = [
+      shift?.energy_start_id?.[0] || shift?.energy_start_id,
+      shift?.energy_end_id?.[0] || shift?.energy_end_id,
+    ].map((id) => Number(id || 0)).filter((id) => id > 0)
+
+    const domain = linkedReadingIds.length > 0
+      ? ['|', ['shift_id', '=', shiftId], ['id', 'in', linkedReadingIds]]
+      : [['shift_id', '=', shiftId]]
     const result = await readModelSorted('gf.energy.reading', {
       fields: ['id', 'shift_id', 'kwh_value', 'reading_type', 'timestamp', 'photo', 'employee_id', 'create_date'],
-      domain: [['shift_id', '=', shiftId]],
+      domain,
       sort_column: 'id',
       sort_desc: true,
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
+    const rowsById = new Map(pickListResponse(result).map((row) => [Number(row.id || 0), row]))
+    return [...rowsById.values()].map((row) => ({
       ...row,
       created_at: row.timestamp || row.create_date || '',
       employee_name: Array.isArray(row.employee_id) ? row.employee_id[1] : '',
