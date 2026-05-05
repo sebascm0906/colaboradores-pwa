@@ -15,6 +15,10 @@ import {
 } from '../modules/produccion/checklistNumericRange.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
+import {
+  collectRouteEmployeeIds,
+  SUPV_ROUTE_EMPLOYEE_FIELDS,
+} from '../modules/supervisor-ventas/teamScope.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -6510,10 +6514,7 @@ async function directSupervisorVentas(method, path, body) {
     if (warehouseId) {
       const routeHasCompany = await modelHasField('gf.route', 'company_id')
       const routeHasActive = await modelHasField('gf.route', 'active')
-      const empFields = await getSupportedFields('gf.route', [
-        'salesperson_employee_id', 'driver_employee_id',
-        'employee_id', 'assigned_employee_id',
-      ])
+      const empFields = await getSupportedFields('gf.route', SUPV_ROUTE_EMPLOYEE_FIELDS)
       const routeDomain = [['warehouse_dispatch_id', '=', warehouseId]]
       if (companyId && routeHasCompany) routeDomain.push(['company_id', '=', companyId])
       if (routeHasActive) routeDomain.push(['active', '=', true])
@@ -6522,15 +6523,8 @@ async function directSupervisorVentas(method, path, body) {
         domain: routeDomain,
         sort_column: 'id', sort_desc: false, limit: 200, sudo: 1,
       }))
-      const empIds = new Set()
-      for (const r of routeRows) {
-        for (const f of empFields) {
-          const v = r[f]
-          const id = Array.isArray(v) ? Number(v[0] || 0) : Number(v || 0)
-          if (id) empIds.add(id)
-        }
-      }
-      if (empIds.size > 0) employeeIdFilter = [...empIds]
+      const empIds = collectRouteEmployeeIds(routeRows, empFields)
+      if (empIds.length > 0) employeeIdFilter = empIds
     }
 
     const domain = []
@@ -6632,15 +6626,7 @@ async function directSupervisorVentas(method, path, body) {
     const dateTarget = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : tomorrowDateString()
     const routeHasCompany = await modelHasField('gf.route', 'company_id')
     const routeHasActive = await modelHasField('gf.route', 'active')
-    const employeeFields = await getSupportedFields('gf.route', [
-      'salesperson_employee_id',
-      'driver_employee_id',
-      'employee_id',
-      'assigned_employee_id',
-      'salesperson_id',
-      'driver_id',
-      'user_employee_id',
-    ])
+    const employeeFields = await getSupportedFields('gf.route', SUPV_ROUTE_EMPLOYEE_FIELDS)
 
     const routeFields = [
       'id',
