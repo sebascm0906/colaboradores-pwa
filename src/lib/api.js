@@ -3992,10 +3992,23 @@ async function directRuta(method, path, body) {
   if (cleanPath === '/pwa-ruta/reconciliation' && method === 'GET') {
     const routePlanId = Number(query.get('route_plan_id') || 0)
     if (!routePlanId) return null
-    const result = await readModel('gf.dispatch.reconciliation', {
-      fields: ['id', 'route_plan_id', 'state', 'total_expected', 'total_received', 'difference', 'line_ids'],
+    const result = await readModelSorted('gf.dispatch.reconciliation', {
+      fields: [
+        'id',
+        'route_plan_id',
+        'state',
+        'qty_loaded',
+        'qty_delivered',
+        'qty_returned',
+        'qty_scrap',
+        'qty_difference',
+        'total_expected',
+        'total_received',
+        'difference',
+      ],
       domain: [['route_plan_id', '=', routePlanId]],
-      many: ['line_ids'],
+      sort_column: 'id',
+      sort_desc: true,
       limit: 1,
       sudo: 1,
     })

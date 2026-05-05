@@ -20,6 +20,7 @@ import {
   closeRoute,
 } from './api'
 export { calculateFlowState } from './routeFlowState'
+export { buildInventoryView } from './routeInventoryView'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Constants
@@ -158,63 +159,6 @@ export function getTargetProgress(target) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Inventory Calculations (from reconciliation + load lines)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Build inventory view: what was loaded vs delivered vs returned vs remaining.
- * Uses reconciliation data (LIVE) when available.
- */
-export function buildInventoryView(reconciliation, loadLines) {
-  if (reconciliation?.line_ids && reconciliation.line_ids.length > 0) {
-    // Use reconciliation lines (more accurate)
-    return {
-      source: 'reconciliation',
-      totals: {
-        loaded: reconciliation.qty_loaded || 0,
-        delivered: reconciliation.qty_delivered || 0,
-        returned: reconciliation.qty_returned || 0,
-        scrap: reconciliation.qty_scrap || 0,
-        difference: reconciliation.qty_difference || 0,
-      },
-      lines: (reconciliation.line_ids || []).map(line => ({
-        product: line.product_id?.[1] || line.product_name || 'Producto',
-        product_id: line.product_id?.[0] || line.product_id,
-        loaded: line.qty_loaded || 0,
-        delivered: line.qty_delivered || 0,
-        returned: line.qty_returned || 0,
-        scrap: line.qty_scrap || 0,
-        difference: line.qty_difference || 0,
-        remaining: (line.qty_loaded || 0) - (line.qty_delivered || 0) - (line.qty_returned || 0) - (line.qty_scrap || 0),
-      })),
-    }
-  }
-
-  // Fallback: use load lines only (no delivery info yet)
-  if (loadLines && loadLines.length > 0) {
-    const totalLoaded = loadLines.reduce((s, l) => s + (l.product_uom_qty || l.quantity || 0), 0)
-    return {
-      source: 'load_lines',
-      totals: {
-        loaded: totalLoaded,
-        delivered: 0,
-        returned: 0,
-        scrap: 0,
-        difference: 0,
-      },
-      lines: loadLines.map(line => ({
-        product: line.product_id?.[1] || line.product_name || 'Producto',
-        product_id: line.product_id?.[0] || line.product_id,
-        loaded: line.product_uom_qty || line.quantity || 0,
-        delivered: 0,
-        returned: 0,
-        scrap: 0,
-        difference: 0,
-        remaining: line.product_uom_qty || line.quantity || 0,
-      })),
-    }
-  }
-
-  return { source: 'empty', totals: { loaded: 0, delivered: 0, returned: 0, scrap: 0, difference: 0 }, lines: [] }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LIVE — Corte Validation

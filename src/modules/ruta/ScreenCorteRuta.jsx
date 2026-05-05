@@ -153,7 +153,7 @@ export default function ScreenCorteRuta() {
       logScreenError('ScreenCorteRuta', 'handleConfirmCorte.invalidResponse', err)
       setBackendNote({
         kind: 'error',
-        message: res?.message || 'No se pudo validar el corte. Intenta de nuevo o reporta a soporte.',
+        message: res?.message || res?.error || 'No se pudo validar el corte. Intenta de nuevo o reporta a soporte.',
       })
     } catch (e) {
       // Network error, 404 con HTML, 5xx, JSON parse error.
