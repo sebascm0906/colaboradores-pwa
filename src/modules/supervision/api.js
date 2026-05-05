@@ -42,7 +42,14 @@ export function getScrapProducts() { return api('GET', '/pwa-sup/scrap-products'
 export function createScrap(data) { return api('POST', '/pwa-sup/scrap-create', data) }
 
 // ── Energía (sin reemplazo REST aun) ────────────────────────────────────────
-export function getEnergyReadings(shiftId) { return api('GET', `/pwa-sup/energy?shift_id=${shiftId}`) }
+export function getEnergyReadings(shiftId, shift = null) {
+  const qs = new URLSearchParams({ shift_id: String(shiftId) })
+  const startId = Number(shift?.energy_start_id || 0) || 0
+  const endId = Number(shift?.energy_end_id || 0) || 0
+  if (startId) qs.set('energy_start_id', String(startId))
+  if (endId) qs.set('energy_end_id', String(endId))
+  return api('GET', `/pwa-sup/energy?${qs.toString()}`)
+}
 export function createEnergyReading(data) { return api('POST', '/pwa-sup/energy-create', data) }
 
 // ── Mantenimiento (sin reemplazo REST aun) ──────────────────────────────────

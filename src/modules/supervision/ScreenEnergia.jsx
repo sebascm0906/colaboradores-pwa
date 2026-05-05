@@ -31,7 +31,7 @@ export default function ScreenEnergia() {
       const s = await getActiveShift(supervisionWarehouseId)
       setShift(s)
       if (s?.id) {
-        const r = await getEnergyReadings(s.id).catch((e) => {
+        const r = await getEnergyReadings(s.id, s).catch((e) => {
           logScreenError('ScreenEnergia', 'getEnergyReadings', e)
           return []
         })

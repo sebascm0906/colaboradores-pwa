@@ -4413,6 +4413,8 @@ async function directSupervision(method, path, body) {
       total_scrap_kg: dash.total_scrap_kg ?? null,
       total_downtime_min: dash.total_downtime_min ?? null,
       energy_kwh: dash.energy_kwh ?? null,
+      energy_start_id: toMany2oneId(data.energy_start_id ?? dash.energy_start_id),
+      energy_end_id: toMany2oneId(data.energy_end_id ?? dash.energy_end_id),
       yield_pct: dash.yield_pct ?? null,
       open_downtimes_ids: Array.isArray(dash.open_downtimes) ? dash.open_downtimes : [],
       open_maintenance_requests: dash.open_maintenance_requests ?? 0,
@@ -4731,17 +4733,9 @@ async function directSupervision(method, path, body) {
   if (cleanPath === '/pwa-sup/energy' && method === 'GET') {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return []
-    const shift = pickFirstResponse(await readModelSorted('gf.production.shift', {
-      fields: ['id', 'energy_start_id', 'energy_end_id'],
-      domain: [['id', '=', shiftId]],
-      sort_column: 'id',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
-    }))
     const linkedReadingIds = [
-      toMany2oneId(shift?.energy_start_id),
-      toMany2oneId(shift?.energy_end_id),
+      toMany2oneId(query.get('energy_start_id')),
+      toMany2oneId(query.get('energy_end_id')),
     ].filter((id) => id > 0)
 
     const domain = linkedReadingIds.length > 0
