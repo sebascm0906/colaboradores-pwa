@@ -301,10 +301,23 @@ export async function getProductsAtCedis(locationId) {
  * @param {Array<{product_id:number, qty:number}>} lines
  * @returns {Promise<{ok:boolean, message:string, data?:{picking_id, picking_name, picking_state}}>}
  */
-export async function executeVanLoad(mobileLocationId, lines) {
+/**
+ * Crea un picking de carga para la van del repartidor.
+ *
+ * Flujo dos etapas:
+ *   1. Backend confirma + reserva stock (picking → assigned, NO valida).
+ *   2. Vincula el picking al plan de ruta del chofer (gf.route.plan.load_picking_id).
+ *   3. El chofer ve la carga en ScreenAceptarCarga y acepta → stock se mueve.
+ *
+ * @param {number} mobileLocationId - Ubicación de stock de la van (destino del picking)
+ * @param {Array}  lines            - [{product_id, qty}]
+ * @param {number} [driverEmployeeId] - Employee ID del repartidor (para vincular al route plan)
+ */
+export async function executeVanLoad(mobileLocationId, lines, driverEmployeeId) {
   return api('POST', '/pwa-entregas/van-manual-load', {
     mobile_location_id: mobileLocationId,
     lines,
+    ...(driverEmployeeId ? { driver_employee_id: driverEmployeeId } : {}),
   })
 }
 

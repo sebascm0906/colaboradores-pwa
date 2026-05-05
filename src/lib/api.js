@@ -6185,16 +6185,21 @@ async function directEntregas(method, path, body) {
     const session = getSession()
     const mobileLocationId = Number(body?.mobile_location_id || 0)
     const lines = Array.isArray(body?.lines) ? body.lines : []
+    // driver_employee_id: el empleado del repartidor (no el almacenista).
+    // Se usa para vincular el picking al gf.route.plan del chofer.
+    const driverEmployeeId = Number(body?.driver_employee_id || 0)
     if (!mobileLocationId) return { ok: false, error: 'mobile_location_id requerido', message: 'mobile_location_id requerido' }
     if (!lines.length) return { ok: false, error: 'lines requerido', message: 'lines requerido' }
     const empId = Number(session.employee_id || getEmployeeId() || 0) || 0
     const whId2 = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
     const meta = { warehouse_id: whId2 || undefined }
     if (empId) meta.employee_id = empId
-    const envelope = await odooJson('/gf/salesops/warehouse/van_load/create_execute', { meta, data: { mobile_location_id: mobileLocationId, lines } })
+    const data = { mobile_location_id: mobileLocationId, lines }
+    if (driverEmployeeId) data.driver_employee_id = driverEmployeeId
+    const envelope = await odooJson('/gf/salesops/warehouse/van_load/create_execute', { meta, data })
     const status = String(envelope?.status || '').toLowerCase()
     const userMessage = envelope?.user_message || envelope?.message || ''
-    if (status === 'ok') return { ok: true, message: userMessage || 'Carga ejecutada', data: envelope?.data || {} }
+    if (status === 'ok') return { ok: true, message: userMessage || 'Carga pendiente de aceptación', data: envelope?.data || {} }
     return { ok: false, error: userMessage || 'Error al ejecutar carga', message: userMessage || 'Error al ejecutar carga', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
   }
 

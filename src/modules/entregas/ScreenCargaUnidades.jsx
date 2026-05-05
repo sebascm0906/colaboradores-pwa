@@ -275,12 +275,18 @@ export default function ScreenCargaUnidades() {
 
     setExecuting(empId)
     try {
-      const res = await executeVanLoad(van.mobile_location_id, lines)
+      // Pasamos el employee_id del repartidor para que el backend vincule
+      // el picking al plan de ruta del chofer (flujo dos etapas).
+      const res = await executeVanLoad(van.mobile_location_id, lines, van.employee_id)
       if (res?.ok) {
         const pickName = res.data?.picking_name || ''
-        showToast(`Carga ejecutada${pickName ? ` · ${pickName}` : ''}`, 'success')
-        setExecResults((prev) => ({ ...prev, [empId]: { ok: true, message: res.message, data: res.data } }))
-        // Reset manual lines y fuerza recarga del catálogo (stock cambió)
+        const linked = res.data?.route_plan_linked === true
+        const toastMsg = linked
+          ? `Carga enviada al chofer para aceptación${pickName ? ` · ${pickName}` : ''}`
+          : `Carga reservada${pickName ? ` · ${pickName}` : ''} (sin plan de ruta hoy)`
+        showToast(toastMsg, 'success')
+        setExecResults((prev) => ({ ...prev, [empId]: { ok: true, message: toastMsg, data: res.data } }))
+        // Reset manual lines y fuerza recarga del catálogo (stock reservado, cambió disponible)
         setManualLines((prev) => ({ ...prev, [empId]: [{ product_id: '', qty: '', product_name: '' }] }))
         setVanCatalog((prev) => { const n = { ...prev }; delete n[empId]; return n })
         setExpandedId(null)
