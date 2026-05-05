@@ -30,7 +30,7 @@
 //   - Controllers de Sebastián (/gf/logistics/api/employee/*) para funciones nuevas
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api'
+import { api } from '../../lib/api.js'
 
 // ── STEP STATUS CONSTANTS ───────────────────────────────────────────────────
 
@@ -668,7 +668,7 @@ export function computeStepStatuses(summary) {
       ? STEP_STATUS.PENDING
       : summary.routes_total > 0
         ? STEP_STATUS.COMPLETED
-        : STEP_STATUS.LOCKED,
+        : STEP_STATUS.PENDING,
 
     operacionDia: STEP_STATUS.IN_PROGRESS, // always available during the day
 
