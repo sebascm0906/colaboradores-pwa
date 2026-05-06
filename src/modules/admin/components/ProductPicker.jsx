@@ -42,6 +42,7 @@ export default function ProductPicker({
   value = null,
   onChange,
   warehouseId,
+  companyId,
   scope = 'purchase',
   placeholder = 'Buscar producto…',
   disabled = false,
@@ -75,7 +76,7 @@ export default function ProductPicker({
     let alive = true
     setLoading(true)
     const timer = setTimeout(() => {
-      searchProducts({ q: q || undefined, scope, limit: 50 })
+      searchProducts({ q: q || undefined, scope, limit: 50, companyId })
         .then(res => {
           if (!alive) return
           const data = res?.data ?? res
@@ -88,7 +89,7 @@ export default function ProductPicker({
         .finally(() => { if (alive) setLoading(false) })
     }, q ? 300 : 0)
     return () => { alive = false; clearTimeout(timer) }
-  }, [search, open, serverMode, scope])
+  }, [search, open, serverMode, scope, companyId])
 
   useEffect(() => {
     if (!open) return

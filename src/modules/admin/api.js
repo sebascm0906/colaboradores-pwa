@@ -152,6 +152,7 @@ export function getRequisitions(filters = {}) {
   const mapped = {
     company_id: filters.companyId ?? filters.company_id,
     state: filters.state,
+    operational_state: filters.operationalState ?? filters.operational_state,
     date_from: filters.dateFrom ?? filters.date_from,
     date_to: filters.dateTo ?? filters.date_to,
     limit: filters.limit,
@@ -292,8 +293,8 @@ export function getMpMoves(filters = {}) {
 /** Búsqueda real de productos por nombre/SKU/barcode. Reemplaza el
  *  fetch bulk de getPosProducts cuando BACKEND_CAPS.productSearch = true. */
 export function searchProducts(filters = {}) {
-  const { q, scope, limit, categId } = filters
-  const qs = toQuery({ q, scope, limit, categ_id: categId })
+  const { q, scope, limit, categId, companyId } = filters
+  const qs = toQuery({ q, scope, limit, categ_id: categId, company_id: companyId })
   return api('GET', `/pwa-admin/products/search${qs}`)
 }
 

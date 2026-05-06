@@ -8,9 +8,29 @@ const MAP = {
   received:           { key: 'received',           label: 'Recibido',              tone: 'success', canReceive: false },
 }
 
+const OPERATIONAL_MAP = {
+  approval_pending: { key: 'approval_pending', label: 'Aprobación pendiente', tone: 'warning' },
+  confirmed:        { key: 'confirmed',        label: 'Confirmado',           tone: 'blue' },
+  received:         { key: 'received',         label: 'Recibido',             tone: 'success' },
+  rejected:         { key: 'rejected',         label: 'Rechazado',            tone: 'error' },
+  cancelled:        { key: 'cancelled',        label: 'Cancelado',            tone: 'muted' },
+}
+
 /** Normalizes a raw receipt_state string to display metadata. */
 export function normalizeReceiptState(value) {
   return MAP[value] || { key: 'none', label: '', tone: 'muted', canReceive: false }
+}
+
+export function normalizeOperationalState(row = {}) {
+  const key = row.operational_state || row.pwa_operational_state || ''
+  if (key && OPERATIONAL_MAP[key]) return OPERATIONAL_MAP[key]
+
+  if (row.receipt_state === 'received') return OPERATIONAL_MAP.received
+  if (row.approval_state === 'rejected' || row.state === 'cancel') return OPERATIONAL_MAP.rejected
+  if (row.state === 'purchase' || row.state === 'done' || row.approval_state === 'approved') {
+    return OPERATIONAL_MAP.confirmed
+  }
+  return OPERATIONAL_MAP.approval_pending
 }
 
 /** Label for the primary CTA button on a requisition row / detail. */

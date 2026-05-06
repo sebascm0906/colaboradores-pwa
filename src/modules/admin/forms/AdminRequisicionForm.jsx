@@ -12,11 +12,9 @@
 // estimado > requisitionApprovalThreshold, la requisición queda en estado
 // "pending" y el badge lo indica. Gerente/Director puede aprobar/rechazar
 // desde la card del historial.
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
-import { useSession } from '../../../App'
-import { getEffectiveJobKeys } from '../../../lib/roleContext'
 import {
   createRequisition,
   BACKEND_CAPS,
@@ -24,10 +22,12 @@ import {
 } from '../adminService'
 import {
   getRequisitions,
-  approveRequisition,
-  rejectRequisition,
 } from '../api'
-import { resolveReceiptBadge, shouldShowReceiptAction, resolveReceiptActionLabel } from '../requisitionReceiptState'
+import {
+  normalizeOperationalState,
+  shouldShowReceiptAction,
+  resolveReceiptActionLabel,
+} from '../requisitionReceiptState'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 import ProductPicker from '../components/ProductPicker'
 import RequisitionDetailModal from '../components/RequisitionDetailModal'
@@ -43,13 +43,6 @@ const STATUS_MAP = {
   purchase:   { label: 'Confirmado',  tone: 'blue' },
   done:       { label: 'Completado',  tone: 'success' },
   cancel:     { label: 'Cancelado',   tone: 'error' },
-}
-
-const APPROVAL_MAP = {
-  none:     null,
-  pending:  { label: 'Aprobación pendiente', tone: 'warning' },
-  approved: { label: 'Aprobado',             tone: 'success' },
-  rejected: { label: 'Rechazado',            tone: 'error' },
 }
 
 function toneColor(tone) {
@@ -84,12 +77,6 @@ function Badge({ label, tone }) {
 const PAGE_SIZE = 20
 
 function HistorialTab({ companyId }) {
-  const { session } = useSession()
-  const canApprove = useMemo(
-    () => getEffectiveJobKeys(session).some(r => ['gerente_sucursal', 'direccion_general'].includes(r)),
-    [session],
-  )
-
   const [rows, setRows]         = useState([])
   const [total, setTotal]       = useState(0)
   const [page, setPage]         = useState(0)
@@ -110,7 +97,7 @@ function HistorialTab({ companyId }) {
     try {
       const res = await getRequisitions({
         companyId,
-        state: filterState || undefined,
+        operationalState: filterState || undefined,
         dateFrom: filterFrom || undefined,
         dateTo: filterTo || undefined,
         limit: PAGE_SIZE,
@@ -186,9 +173,10 @@ function HistorialTab({ companyId }) {
           style={{ ...inputStyle }}
         >
           <option value="">Todos los estados</option>
-          {Object.entries(STATUS_MAP).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
+          <option value="approval_pending">Aprobación pendiente</option>
+          <option value="confirmed">Confirmado</option>
+          <option value="received">Recibido</option>
+          <option value="cancelled">Cancelado</option>
         </select>
         <input
           type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
@@ -298,15 +286,15 @@ function HistorialTab({ companyId }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rows.map((req, i) => {
-            const isReceived = req.receipt_state === 'received'
-            const st = STATUS_MAP[req.state] || STATUS_MAP.draft
-            const apv = APPROVAL_MAP[req.approval_state]
-            const isPending = req.approval_state === 'pending'
+            const operational = normalizeOperationalState(req)
+            const isPending = operational.key === 'approval_pending'
             // Recibido SÍ es clickable — abre el detalle en modo solo-lectura
             // (el modal oculta acciones cuando receipt_state='received').
-            const clickable = req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
-            const receiptBadge = resolveReceiptBadge(req)
-            const showReceive = BACKEND_CAPS.requisitionReceipt && shouldShowReceiptAction(req) && !isPending
+            const clickable = !isPending && req.purchase_order_id != null && BACKEND_CAPS.requisitionDetail
+            const showReceive = BACKEND_CAPS.requisitionReceipt && shouldShowReceiptAction({
+              ...req,
+              can_receive: req.can_receive_ui ?? req.can_receive,
+            }) && !isPending
 
             return (
               <div
@@ -342,7 +330,7 @@ function HistorialTab({ companyId }) {
                     <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                       {fmtDate(req.date_order || req.date)}
                       {req.line_count != null && ` · ${req.line_count} líneas`}
-                      {req.approved_by && ` · ${apv?.label}: ${req.approved_by}`}
+                      {req.approved_by && operational.key === 'confirmed' && ` · Confirmó: ${req.approved_by}`}
                     </p>
                   </div>
 
@@ -351,9 +339,7 @@ function HistorialTab({ companyId }) {
                       {fmt(req.amount_total)}
                     </span>
                   )}
-                  {!isReceived && <Badge label={st.label} tone={st.tone} />}
-                  {!isReceived && apv && <Badge label={apv.label} tone={apv.tone} />}
-                  {receiptBadge && <Badge label={receiptBadge.label} tone={receiptBadge.tone} />}
+                  <Badge label={req.operational_label || operational.label} tone={operational.tone} />
                 </div>
 
                 {/* Acción de recepción — solo cuando hay picking pendiente */}
@@ -368,13 +354,16 @@ function HistorialTab({ companyId }) {
                         fontFamily: "'DM Sans', sans-serif", cursor: 'pointer',
                       }}
                     >
-                      {resolveReceiptActionLabel(req)}
+                      {resolveReceiptActionLabel({
+                        ...req,
+                        can_receive: req.can_receive_ui ?? req.can_receive,
+                      })}
                     </button>
                   </div>
                 )}
 
                 {/* Acciones de aprobación — solo para gerente/director y cuando está pending */}
-                {BACKEND_CAPS.requisitionApproval && canApprove && isPending && (
+                {false && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button
                       onClick={() => handleApprove(req.purchase_order_id ?? req.id)}
@@ -670,6 +659,8 @@ export default function AdminRequisicionForm() {
                       value={line.product}
                       onChange={(p) => updateLine(i, { product: p })}
                       warehouseId={warehouseId}
+                      companyId={companyId}
+                      scope="requisition"
                       placeholder={`Producto ${i + 1}`}
                     />
                     <input
@@ -824,9 +815,10 @@ function RecentList({ companyId }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {list.map((req, i) => {
-            const st = STATUS_MAP[req.state] || STATUS_MAP.draft
-            const apv = APPROVAL_MAP[req.approval_state]
-            const clickable = (req.purchase_order_id ?? req.id) != null && BACKEND_CAPS.requisitionDetail
+            const operational = normalizeOperationalState(req)
+            const clickable = operational.key !== 'approval_pending'
+              && (req.purchase_order_id ?? req.id) != null
+              && BACKEND_CAPS.requisitionDetail
 
             return (
               <div
@@ -868,8 +860,7 @@ function RecentList({ companyId }) {
                     {fmt(req.amount_total)}
                   </span>
                 )}
-                <Badge label={st.label} tone={st.tone} />
-                {apv && <Badge label={apv.label} tone={apv.tone} />}
+                <Badge label={req.operational_label || operational.label} tone={operational.tone} />
               </div>
             )
           })}

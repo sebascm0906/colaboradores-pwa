@@ -1131,6 +1131,7 @@ async function directAdmin(method, path, body) {
   // { data: { requisitions: [...] } }. Filtros: company_id, state, fechas.
   if (cleanPath === '/pwa-admin/requisitions' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooHttp('GET', `/pwa-admin/requisitions?${query.toString()}`, {})
     const reqCompanyId = Number(query.get('company_id') || companyId || 0)
     const state = query.get('state') || ''
     const dateFrom = query.get('date_from') || ''
@@ -1144,8 +1145,9 @@ async function directAdmin(method, path, body) {
     const offset = Number(query.get('offset') || 0)
     // Algunas instalaciones de Odoo restringen campos no esenciales.
     // Cuando eso pasa, degradamos con retries quitando solo grupos opcionales.
-    const REQUIRED_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'order_line']
+    const REQUIRED_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin']
     const OPTIONAL_FIELD_GROUPS = [
+      ['order_line'],
       ['notes'],
       ['picking_ids'],
     ]
@@ -1226,11 +1228,14 @@ async function directAdmin(method, path, body) {
   // ── Requisition detail (purchase.order + order_line) ────────────────────
   if (cleanPath === '/pwa-admin/requisition-detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
+    return odooHttp('GET', `/pwa-admin/requisition-detail?${query.toString()}`, {})
     const id = Number(query.get('id') || 0)
     if (!id) return { ok: false, error: 'id requerido' }
     const { result: headerResult } = await readWithOptionalFieldFallback(readModel, 'purchase.order', {
-      requiredFields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'order_line'],
+      requiredFields: ['id', 'name', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin'],
       optionalFieldGroups: [
+        ['partner_id'],
+        ['order_line'],
         ['notes'],
         ['picking_ids'],
       ],
@@ -1369,6 +1374,9 @@ async function directAdmin(method, path, body) {
   // scope=all      → todos los activos
   if (cleanPath === '/pwa-admin/products/search' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
+    if (!query.get('company_id') && companyId) query.set('company_id', String(companyId))
+    if (!query.get('scope')) query.set('scope', 'requisition')
+    return odooHttp('GET', `/pwa-admin/products/search?${query.toString()}`, {})
     const q = (query.get('q') || '').trim()
     const scope = query.get('scope') || 'purchase'
     const limit = Math.min(Number(query.get('limit') || 50), 200)

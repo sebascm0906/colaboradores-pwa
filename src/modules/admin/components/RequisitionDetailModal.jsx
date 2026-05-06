@@ -10,9 +10,9 @@ import { TOKENS } from '../../../tokens'
 import { getRequisitionDetail, cancelRequisition } from '../api'
 import { BACKEND_CAPS } from '../adminService'
 import {
+  normalizeOperationalState,
   normalizeReceiptSummary,
   resolveReceiptActionLabel,
-  resolveReceiptBadge,
 } from '../requisitionReceiptState'
 import RequisitionReceiptModal from './RequisitionReceiptModal'
 
@@ -25,14 +25,6 @@ function stripHtml(html) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ').trim()
-}
-
-const STATUS_MAP = {
-  draft:    { label: 'Borrador',   color: '#8b92a1' },
-  sent:     { label: 'Enviado',    color: '#4ba3e0' },
-  purchase: { label: 'Confirmado', color: '#4ba3e0' },
-  done:     { label: 'Completado', color: '#35c792' },
-  cancel:   { label: 'Cancelado',  color: '#e05a5a' },
 }
 
 export default function RequisitionDetailModal({ requisitionId, onClose, onCancelled, onReceived }) {
@@ -79,13 +71,15 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
   }
 
   const state = detail?.state || 'draft'
-  const st = STATUS_MAP[state] || STATUS_MAP.draft
   const lines = Array.isArray(detail?.lines) ? detail.lines : []
   const total = lines.reduce((s, l) => s + Number(l.price_subtotal ?? l.subtotal ?? ((Number(l.product_qty ?? l.quantity ?? l.qty ?? 0)) * Number(l.price_unit || 0))), 0)
   const canCancel = (state === 'draft' || state === 'sent') && BACKEND_CAPS.requisitionDetail
 
-  const receiptMeta = normalizeReceiptSummary(detail || {})
-  const receiptBadge = resolveReceiptBadge(receiptMeta)
+  const operational = normalizeOperationalState(detail || {})
+  const receiptMeta = normalizeReceiptSummary({
+    ...(detail || {}),
+    can_receive: detail?.can_receive_ui ?? detail?.can_receive,
+  })
   const receiptActionLabel = BACKEND_CAPS.requisitionReceipt ? resolveReceiptActionLabel(receiptMeta) : ''
 
   return (
@@ -175,27 +169,24 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
             }}>
               <MetaCell label="ESTADO">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {(() => {
+                    const color = operational.tone === 'success'
+                      ? TOKENS.colors.success
+                      : operational.tone === 'warning'
+                        ? (TOKENS.colors.warning ?? '#F59E0B')
+                        : operational.tone === 'error'
+                          ? TOKENS.colors.error
+                          : operational.tone === 'blue'
+                            ? TOKENS.colors.blue3
+                            : TOKENS.colors.textMuted
+                    return (
                   <span style={{
                     padding: '3px 10px', borderRadius: TOKENS.radius.pill,
-                    background: `${st.color}15`, border: `1px solid ${st.color}40`,
-                    fontSize: 11, fontWeight: 700, color: st.color,
+                    background: `${color}15`, border: `1px solid ${color}40`,
+                    fontSize: 11, fontWeight: 700, color,
                   }}>
-                    {st.label}
+                    {detail.operational_label || operational.label}
                   </span>
-                  {receiptBadge && (() => {
-                    const c = receiptBadge.tone === 'success'
-                      ? TOKENS.colors.success
-                      : receiptBadge.tone === 'warning'
-                        ? (TOKENS.colors.warning ?? '#F59E0B')
-                        : TOKENS.colors.blue3
-                    return (
-                      <span style={{
-                        padding: '3px 10px', borderRadius: TOKENS.radius.pill,
-                        background: `${c}15`, border: `1px solid ${c}40`,
-                        fontSize: 11, fontWeight: 700, color: c,
-                      }}>
-                        {receiptBadge.label}
-                      </span>
                     )
                   })()}
                 </div>
@@ -403,6 +394,9 @@ export default function RequisitionDetailModal({ requisitionId, onClose, onCance
                 ...prev,
                 receipt_state:      receiptData.receipt_state      ?? prev.receipt_state,
                 can_receive:        receiptData.can_receive        ?? prev.can_receive,
+                can_receive_ui:     receiptData.can_receive_ui     ?? prev.can_receive_ui,
+                operational_state:  receiptData.operational_state  ?? prev.operational_state,
+                operational_label:  receiptData.operational_label  ?? prev.operational_label,
                 qty_received_total: receiptData.qty_received_total ?? prev.qty_received_total,
                 qty_pending_total:  receiptData.qty_pending_total  ?? prev.qty_pending_total,
               } : prev)
