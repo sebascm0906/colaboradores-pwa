@@ -60,10 +60,53 @@ export function getRouteTemplatesForPlanning(dateTarget) {
 }
 
 /** Crear o reutilizar el plan diario de una ruta para la fecha objetivo */
-export function ensureDailyRoutePlan(routeId, dateTarget) {
+export function ensureDailyRoutePlan(routeId, dateTarget, criteria = {}) {
   return api('POST', '/pwa-supv/route-plan-ensure', {
     route_id: Number(routeId || 0),
     date_target: dateTarget,
+    ...criteria,
+  })
+}
+
+/** Poligonos disponibles para planeacion diaria */
+export function getPlanningPolygons() {
+  return api('GET', '/pwa-supv/polygons')
+}
+
+/** Subpoligonos de un poligono padre */
+export function getPlanningSubpolygons(polygonId) {
+  const qs = polygonId ? `?polygon_id=${encodeURIComponent(polygonId)}` : ''
+  return api('GET', `/pwa-supv/subpolygons${qs}`)
+}
+
+/** Canales comerciales disponibles para filtrar clientes */
+export function getPlanningChannels() {
+  return api('GET', '/pwa-supv/customer-channels')
+}
+
+/** Ventanas horarias disponibles para filtrar clientes */
+export function getPlanningTimeWindows() {
+  return api('GET', '/pwa-supv/time-windows')
+}
+
+/** Planes diarios activos/editables para agregar clientes manualmente */
+export function getActiveRoutePlans(dateTarget) {
+  const qs = dateTarget ? `?date_target=${encodeURIComponent(dateTarget)}` : ''
+  return api('GET', `/pwa-supv/active-route-plans${qs}`)
+}
+
+/** Buscar clientes para agregarlos manualmente a un plan */
+export function searchPlanningCustomers(query) {
+  const qs = query ? `?q=${encodeURIComponent(query)}` : ''
+  return api('GET', `/pwa-supv/customers/search${qs}`)
+}
+
+/** Agregar un cliente como parada manual a un plan activo */
+export function addCustomerToRoutePlan(routePlanId, customerId, notes = '') {
+  return api('POST', '/pwa-supv/route-plan-add-customer', {
+    route_plan_id: Number(routePlanId || 0),
+    customer_id: Number(customerId || 0),
+    notes: String(notes || '').trim(),
   })
 }
 
