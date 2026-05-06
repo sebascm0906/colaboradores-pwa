@@ -6523,6 +6523,13 @@ async function directSupervisorVentas(method, path, body) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
   }
 
+  function supervisorMeta() {
+    return {
+      employee_id: getEmployeeId() || undefined,
+      warehouse_id: getWarehouseId() || undefined,
+    }
+  }
+
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
     const warehouseId = getWarehouseId()
 
@@ -6749,6 +6756,59 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-supv/polygons' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/polygons', {
+      meta: supervisorMeta(),
+      data: {},
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/subpolygons' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/subpolygons', {
+      meta: supervisorMeta(),
+      data: { polygon_id: Number(query.get('polygon_id') || 0) || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customer-channels' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/customer_channels', {
+      meta: supervisorMeta(),
+      data: {},
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/time-windows' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/time_windows', {
+      meta: supervisorMeta(),
+      data: {},
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/active-route-plans' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/active', {
+      meta: supervisorMeta(),
+      data: { date_target: query.get('date_target') || undefined },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customers/search' && method === 'GET') {
+    return odooJson('/gf/salesops/supervisor/v2/customers/search', {
+      meta: supervisorMeta(),
+      data: { q: query.get('q') || '' },
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-plan-add-customer' && method === 'POST') {
+    return odooJson('/gf/salesops/supervisor/v2/route_plan/add_customer', {
+      meta: supervisorMeta(),
+      data: {
+        route_plan_id: Number(body?.route_plan_id || 0),
+        customer_id: Number(body?.customer_id || 0),
+        notes: String(body?.notes || '').trim(),
+      },
+    })
+  }
+
   if (cleanPath === '/pwa-supv/forecast-products' && method === 'GET') {
     const result = await readModelSorted('product.product', {
       fields: ['id', 'name', 'list_price', 'weight', 'sale_ok', 'barcode'],
@@ -6795,7 +6855,6 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, error: 'Ruta fuera del CEDIS de la sesion.', code: 'route_not_in_warehouse' }
     }
 
-    // Intentar endpoint custom primero; si no existe (404 / parse error), crear plan directamente vía ORM.
     try {
       const envelope = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
         meta: {
@@ -6805,6 +6864,11 @@ async function directSupervisorVentas(method, path, body) {
         data: {
           route_id: routeId,
           date_target: dateTarget,
+          polygon_id: Number(body?.polygon_id || 0) || undefined,
+          subpolygon_id: body?.subpolygon_id ? Number(body.subpolygon_id) : null,
+          channel_ids: Array.isArray(body?.channel_ids) ? body.channel_ids.map(Number).filter(Boolean) : [],
+          visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
+          time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
         },
       })
 
@@ -6812,54 +6876,17 @@ async function directSupervisorVentas(method, path, body) {
       if (status === 'ok' || envelope?.ok === true) {
         return { ok: true, ...(envelope?.data || envelope) }
       }
-      // Si el backend devuelve HTML (404 website) el JSON parse ya lanzó; no llega aquí.
-      // Pero si devuelve JSON con error, caer al fallback ORM.
-    } catch {
-      // endpoint no existe → fallback ORM
-    }
-
-    // ── Fallback: buscar plan existente o crear uno nuevo vía ORM ────────────
-    try {
-      const existingPlans = pickListResponse(await readModelSorted('gf.route.plan', {
-        fields: ['id', 'name', 'state', 'route_id', 'date'],
-        domain: [['route_id', '=', routeId], ['date', '=', dateTarget]],
-        sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
-      }))
-      if (existingPlans.length) {
-        const p = existingPlans[0]
-        return { ok: true, plan_id: Number(p.id), plan_name: p.name || '', state: p.state || 'draft' }
+      return {
+        ok: false,
+        error: envelope?.user_message || envelope?.message || 'No se pudo crear el plan diario',
+        code: envelope?.code || 'route_plan_ensure_failed',
+        data: envelope?.data || {},
       }
-
-      // Verificar qué campos soporta gf.route.plan para el create
-      const planHasDate = await modelHasField('gf.route.plan', 'date')
-      const planHasDateTarget = await modelHasField('gf.route.plan', 'date_target')
-      const planHasWarehouse = await modelHasField('gf.route.plan', 'warehouse_id')
-      const dateFieldName = planHasDate ? 'date' : (planHasDateTarget ? 'date_target' : 'date')
-
-      const createDict = { route_id: routeId, [dateFieldName]: dateTarget }
-      if (planHasWarehouse && warehouseId) createDict.warehouse_id = warehouseId
-
-      const created = await createUpdate({
-        model: 'gf.route.plan',
-        method: 'create',
-        dict: createDict,
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
-      const newId = Number(Array.isArray(created?.result) ? created.result[0] : (created?.result || created || 0))
-      if (!newId) return { ok: false, error: 'No se pudo crear el plan diario', code: 'create_failed' }
-
-      const newPlan = pickListResponse(await readModelSorted('gf.route.plan', {
-        fields: ['id', 'name', 'state'],
-        domain: [['id', '=', newId]],
-        sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
-      }))[0] || {}
-      return { ok: true, plan_id: newId, plan_name: newPlan.name || '', state: newPlan.state || 'draft' }
     } catch (e) {
       return {
         ok: false,
-        error: e?.message || 'No se pudo crear el plan diario',
-        code: e?.code || 'route_plan_create_failed',
+        error: e?.message || 'Endpoint de planeacion de rutas no disponible',
+        code: e?.code || 'route_plan_endpoint_unavailable',
         data: {},
       }
     }
