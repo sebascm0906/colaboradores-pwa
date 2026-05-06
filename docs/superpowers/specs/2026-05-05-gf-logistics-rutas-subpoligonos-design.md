@@ -78,19 +78,21 @@ Regla de dia:
 
 ## Ventanas horarias
 
-Debe existir un catalogo configurable de ventanas horarias. Nombre tecnico propuesto: `gf.route.time.window`.
+Debe existir un catalogo de ventanas horarias. Nombre tecnico propuesto: `gf.route.time.window`.
 
-Valores iniciales:
+Valores base:
 
-- Manana.
-- Tarde.
+- Cualquier hora: sin restriccion horaria. Debe ser el valor predeterminado.
+- Manana: 1am a 12pm.
+- Tarde: 12pm a 7pm.
+- Noche: 7pm a 12am.
 
 Reglas:
 
-- Administracion puede agregar mas ventanas.
+- Si Supervisor de Ventas no selecciona ventana, se usa "Cualquier hora".
 - Cada cliente puede tener una ventana preferente o permitida, segun el modelo final acordado.
 - En planeacion, Supervisor de Ventas puede filtrar por una ventana.
-- Si no selecciona ventana, no se aplica filtro por ventana.
+- "Cualquier hora" no aplica filtro por ventana.
 
 ## Flujo PWA de Supervisor de Ventas
 
@@ -101,7 +103,7 @@ La pantalla de planeacion diaria debe pedir:
 3. Subpoligono: lista filtrada por poligono padre, mas opcion "Ninguno".
 4. Canales: seleccion multiple.
 5. Dia de visita: seleccion opcional; si queda vacio, entran todos.
-6. Ventana horaria: seleccion opcional.
+6. Ventana horaria: valor predeterminado "Cualquier hora".
 7. Forecast de productos.
 
 Despues de capturar criterios y forecast, la PWA llama a un endpoint backend para asegurar/generar el plan.
@@ -136,7 +138,7 @@ Interpretacion:
 
 - `subpolygon_id = null`: usar todo el poligono padre.
 - `visit_days = []`: no filtrar por dia; incluir todos los clientes que cumplan los demas filtros.
-- `time_window_id = null`: no filtrar por ventana.
+- `time_window_id = null`: usar "Cualquier hora"; no filtrar por ventana.
 
 Respuesta exitosa:
 
@@ -197,7 +199,7 @@ Esto permite que el flujo diario avance de `draft` a `in_progress` inmediatament
 - Confirmar/agregar `active` en `gf.route`.
 - Agregar modelo de subpoligono y validacion geometrica contra poligono padre.
 - Agregar o confirmar campos de cliente para canal, dias de visita y ventana horaria.
-- Agregar catalogo de ventanas horarias.
+- Agregar catalogo de ventanas horarias con "Cualquier hora" como predeterminado.
 - Actualizar `route_plan/ensure` para:
   - validar permisos, CEDIS y compania;
   - crear o reutilizar `gf.route.plan`;
