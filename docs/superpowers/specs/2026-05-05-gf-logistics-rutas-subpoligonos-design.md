@@ -68,7 +68,9 @@ Reglas:
 
 ## Disenador de poligonos y subpoligonos
 
-La vista existente para crear poligonos debe evolucionar para tambien crear subpoligonos.
+El disenador de poligonos y subpoligonos vive solamente en Odoo. La PWA no debe implementar ni duplicar el disenador; solo consume poligonos y subpoligonos ya guardados para la planeacion de rutas.
+
+La vista existente de Odoo para crear poligonos debe evolucionar para tambien crear subpoligonos.
 
 Flujo:
 
@@ -300,8 +302,7 @@ Esto permite que el flujo diario avance de `draft` a `in_progress` inmediatament
 - Bloquear guardado/confirmacion de forecast si el plan no pudo generar stops.
 - Actualizar `ScreenAceptarCarga.jsx` para reflejar `plan.state = in_progress` tras `acceptLoad`.
 - Agregar accion de archivar ruta en pantalla administrativa o modulo definido para administradores.
-- Actualizar el disenador de poligonos para permitir dibujo de subpoligonos sin pedir dia, canal ni ventana.
-- Agregar marcadores de clientes mas grandes, colores por poligono, negro para clientes sin poligono, letras por subpoligono y leyenda dinamica en el mapa.
+- Consumir los poligonos y subpoligonos creados en Odoo; la PWA no implementa el disenador.
 
 ## Cambios Odoo necesarios
 
@@ -318,7 +319,9 @@ Esto permite que el flujo diario avance de `draft` a `in_progress` inmediatament
   - generar `gf.route.stop`;
   - devolver conteos y errores funcionales.
 - Actualizar `accept-load` para garantizar `state = in_progress`.
-- Actualizar el backend del disenador de poligonos para guardar subpoligonos y validar contencion geometrica.
+- Actualizar el disenador de poligonos de Odoo para permitir dibujo de subpoligonos sin pedir dia, canal ni ventana.
+- Agregar marcadores de clientes mas grandes, colores por poligono, negro para clientes sin poligono, letras por subpoligono y leyenda dinamica en el mapa del disenador de Odoo.
+- Actualizar el backend del disenador de poligonos de Odoo para guardar subpoligonos y validar contencion geometrica.
 
 ## Pruebas
 
