@@ -13,15 +13,31 @@ import {
   updateForecastLines,
   getRouteTemplatesForPlanning,
   ensureDailyRoutePlan,
+  getPlanningPolygons,
+  getPlanningSubpolygons,
+  getPlanningChannels,
+  getPlanningTimeWindows,
 } from './api'
 import {
+  buildRoutePlanCriteriaPayload,
   buildRouteForecastPayload,
+  getDefaultTimeWindow,
+  getSupervisorRouteErrorMessage,
   getTomorrowDateString,
   normalizeRoutePlanningRow,
 } from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
 
 const CHANNELS = ['Van', 'Mostrador']
+const VISIT_DAYS = [
+  { id: 'monday', label: 'Lun' },
+  { id: 'tuesday', label: 'Mar' },
+  { id: 'wednesday', label: 'Mie' },
+  { id: 'thursday', label: 'Jue' },
+  { id: 'friday', label: 'Vie' },
+  { id: 'saturday', label: 'Sab' },
+  { id: 'sunday', label: 'Dom' },
+]
 
 // Bottom-sheet oscuro con buscador. Reemplaza <select> nativo en móvil.
 // Recibe { id, label } y devuelve la opción completa al onSelect.
@@ -195,9 +211,18 @@ export default function ScreenPronostico() {
   const [products, setProducts] = useState([])
   const [forecasts, setForecasts] = useState([])
   const [routes, setRoutes] = useState([])
+  const [polygons, setPolygons] = useState([])
+  const [subpolygons, setSubpolygons] = useState([])
+  const [planningChannels, setPlanningChannels] = useState([])
+  const [timeWindows, setTimeWindows] = useState([])
   const [dateTarget] = useState(() => getTomorrowDateString())
   const [lines, setLines] = useState([{ product_id: '', channel: 'Van', qty: '' }])
   const [selectedRouteId, setSelectedRouteId] = useState(null)
+  const [selectedPolygonId, setSelectedPolygonId] = useState('')
+  const [selectedSubpolygonId, setSelectedSubpolygonId] = useState('')
+  const [selectedChannelIds, setSelectedChannelIds] = useState([])
+  const [selectedVisitDays, setSelectedVisitDays] = useState([])
+  const [selectedTimeWindowId, setSelectedTimeWindowId] = useState('')
   const [routeLoading, setRouteLoading] = useState(null)
   const [routeError, setRouteError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -225,6 +250,7 @@ export default function ScreenPronostico() {
     () => routes.find((r) => Number(r.route_id) === Number(selectedRouteId)) || null,
     [routes, selectedRouteId],
   )
+  const defaultTimeWindow = useMemo(() => getDefaultTimeWindow(), [])
 
   const routesWithPlan = routes.filter((r) => r.plan_id).length
   const routesWithoutPlan = routes.length - routesWithPlan
@@ -240,6 +266,23 @@ export default function ScreenPronostico() {
     if (!productId) return ''
     const p = products.find(x => String(x.id) === String(productId))
     return p?.name || p?.display_name || `#${productId}`
+  }
+
+  function unwrapList(payload) {
+    const value = payload?.data ?? payload
+    if (Array.isArray(value)) return value
+    if (Array.isArray(value?.items)) return value.items
+    if (Array.isArray(value?.records)) return value.records
+    return []
+  }
+
+  function optionId(row) {
+    if (String(row?.key || '').toLowerCase() === 'any') return ''
+    return String(row.id ?? row.value ?? row.key ?? '')
+  }
+
+  function optionLabel(row, fallback = '') {
+    return row.name || row.label || row.display_name || fallback || optionId(row)
   }
 
   async function handleToggleExpand(forecastId) {
@@ -334,7 +377,7 @@ export default function ScreenPronostico() {
     setLoading(true)
     setRouteError('')
     try {
-      const [p, f, routeRows] = await Promise.all([
+      const [p, f, routeRows, polygonRows, channelRows, timeWindowRows] = await Promise.all([
         getForecastProducts().catch((e) => { logScreenError('ScreenPronostico', 'getForecastProducts', e); return [] }),
         getForecasts().catch((e) => { logScreenError('ScreenPronostico', 'getForecasts', e); return [] }),
         getRouteTemplatesForPlanning(dateTarget).catch((e) => {
@@ -342,20 +385,51 @@ export default function ScreenPronostico() {
           setRouteError(e?.message || 'Error al cargar rutas del CEDIS')
           return []
         }),
+        getPlanningPolygons().catch((e) => { logScreenError('ScreenPronostico', 'getPlanningPolygons', e); return [] }),
+        getPlanningChannels().catch((e) => { logScreenError('ScreenPronostico', 'getPlanningChannels', e); return [] }),
+        getPlanningTimeWindows().catch((e) => { logScreenError('ScreenPronostico', 'getPlanningTimeWindows', e); return [] }),
       ])
       const normalizedRoutes = (Array.isArray(routeRows) ? routeRows : []).map(normalizeRoutePlanningRow)
+      const normalizedPolygons = unwrapList(polygonRows)
       setProducts(p || [])
       setForecasts(f || [])
       setRoutes(normalizedRoutes)
+      setPolygons(normalizedPolygons)
+      setPlanningChannels(unwrapList(channelRows))
+      setTimeWindows([defaultTimeWindow, ...unwrapList(timeWindowRows).filter((row) => String(row.key || row.id || '') !== 'any')])
       setSelectedRouteId((current) => {
         if (current && normalizedRoutes.some((r) => Number(r.route_id) === Number(current))) return current
         return normalizedRoutes.find((r) => r.plan_id)?.route_id || normalizedRoutes[0]?.route_id || null
       })
+      setSelectedPolygonId((current) => {
+        if (current && normalizedPolygons.some((p) => optionId(p) === String(current))) return current
+        return normalizedPolygons[0] ? optionId(normalizedPolygons[0]) : ''
+      })
     } catch (e) { logScreenError('ScreenPronostico', 'loadData', e) }
     finally { setLoading(false) }
-  }, [dateTarget])
+  }, [dateTarget, defaultTimeWindow])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadSubpolygons() {
+      setSelectedSubpolygonId('')
+      if (!selectedPolygonId) {
+        setSubpolygons([])
+        return
+      }
+      try {
+        const rows = await getPlanningSubpolygons(selectedPolygonId)
+        if (!cancelled) setSubpolygons(unwrapList(rows))
+      } catch (e) {
+        logScreenError('ScreenPronostico', 'getPlanningSubpolygons', e)
+        if (!cancelled) setSubpolygons([])
+      }
+    }
+    loadSubpolygons()
+    return () => { cancelled = true }
+  }, [selectedPolygonId])
 
   function updateLine(idx, field, value) {
     setLines(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l))
@@ -368,6 +442,30 @@ export default function ScreenPronostico() {
   function removeLine(idx) {
     if (lines.length <= 1) return
     setLines(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  function handleChannelToggle(channelId) {
+    setSelectedChannelIds(prev => prev.includes(channelId)
+      ? prev.filter((id) => id !== channelId)
+      : [...prev, channelId])
+  }
+
+  function handleVisitDayToggle(dayId) {
+    setSelectedVisitDays(prev => prev.includes(dayId)
+      ? prev.filter((id) => id !== dayId)
+      : [...prev, dayId])
+  }
+
+  function buildCurrentPlanCriteria(routeId) {
+    return buildRoutePlanCriteriaPayload({
+      routeId,
+      dateTarget,
+      polygonId: selectedPolygonId,
+      subpolygonId: selectedSubpolygonId,
+      channelIds: selectedChannelIds,
+      visitDays: selectedVisitDays,
+      timeWindowId: selectedTimeWindowId,
+    })
   }
 
   async function handleSubmit() {
@@ -399,16 +497,16 @@ export default function ScreenPronostico() {
     setRouteLoading(route.route_id)
     setMsg(null)
     try {
-      const res = await ensureDailyRoutePlan(route.route_id, dateTarget)
+      const res = await ensureDailyRoutePlan(route.route_id, dateTarget, buildCurrentPlanCriteria(route.route_id))
       if (res?.ok === false) {
-        flashMsg(res.error || 'No se pudo crear el plan diario', 5000)
+        flashMsg(getSupervisorRouteErrorMessage(res), 5000)
         return
       }
       await loadData()
       setSelectedRouteId(route.route_id)
       flashMsg('Plan diario listo')
     } catch (e) {
-      flashMsg(e.message || 'No se pudo crear el plan diario', 5000)
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
     } finally {
       setRouteLoading(null)
     }
@@ -558,6 +656,106 @@ export default function ScreenPronostico() {
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Sin plan</p>
                   <p style={{ ...typo.h2, color: TOKENS.colors.warning, margin: '2px 0 0', fontSize: 18 }}>{routesWithoutPlan}</p>
                 </div>
+              </div>
+
+              <div style={{
+                marginBottom: 14, padding: 12, borderRadius: TOKENS.radius.md,
+                background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              }}>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Filtros de clientes</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                  <select
+                    value={selectedPolygonId}
+                    onChange={(e) => setSelectedPolygonId(e.target.value)}
+                    style={{
+                      minWidth: 0, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                    }}
+                  >
+                    <option value="">Poligono</option>
+                    {polygons.map((polygon) => (
+                      <option key={optionId(polygon)} value={optionId(polygon)}>{optionLabel(polygon, 'Poligono')}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedSubpolygonId}
+                    onChange={(e) => setSelectedSubpolygonId(e.target.value)}
+                    disabled={!selectedPolygonId}
+                    style={{
+                      minWidth: 0, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 12, outline: 'none', opacity: selectedPolygonId ? 1 : 0.65,
+                    }}
+                  >
+                    <option value="">Ninguno</option>
+                    {subpolygons.map((subpolygon) => (
+                      <option key={optionId(subpolygon)} value={optionId(subpolygon)}>{optionLabel(subpolygon, 'Subpoligono')}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                  {planningChannels.map((channel) => {
+                    const id = optionId(channel)
+                    const selected = selectedChannelIds.includes(id)
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => handleChannelToggle(id)}
+                        style={{
+                          padding: '6px 9px', borderRadius: TOKENS.radius.pill,
+                          background: selected ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                          border: `1px solid ${selected ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                          color: selected ? TOKENS.colors.blue2 : TOKENS.colors.textMuted,
+                          fontSize: 11, fontWeight: 700,
+                        }}
+                      >
+                        {optionLabel(channel, 'Canal')}
+                      </button>
+                    )
+                  })}
+                  {planningChannels.length === 0 && (
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 11 }}>Sin canales cargados</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                  {VISIT_DAYS.map((day) => {
+                    const selected = selectedVisitDays.includes(day.id)
+                    return (
+                      <button
+                        key={day.id}
+                        type="button"
+                        onClick={() => handleVisitDayToggle(day.id)}
+                        style={{
+                          width: 38, height: 30, borderRadius: TOKENS.radius.pill,
+                          background: selected ? 'rgba(34,197,94,0.14)' : TOKENS.colors.surface,
+                          border: `1px solid ${selected ? TOKENS.colors.success : TOKENS.colors.border}`,
+                          color: selected ? TOKENS.colors.success : TOKENS.colors.textMuted,
+                          fontSize: 11, fontWeight: 700,
+                        }}
+                      >
+                        {day.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <select
+                  value={selectedTimeWindowId}
+                  onChange={(e) => setSelectedTimeWindowId(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 8px', borderRadius: TOKENS.radius.sm,
+                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                    color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                  }}
+                >
+                  {timeWindows.map((window) => (
+                    <option key={optionId(window) || 'any'} value={optionId(window)}>{optionLabel(window, defaultTimeWindow.label)}</option>
+                  ))}
+                </select>
               </div>
 
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Rutas del CEDIS</p>
