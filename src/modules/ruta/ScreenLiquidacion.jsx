@@ -38,6 +38,7 @@ export default function ScreenLiquidacion() {
   const [backendSource, setBackendSource] = useState(false) // true if data from backend
   const [submitting, setSubmitting] = useState(false)
   const [warningOpen, setWarningOpen] = useState(null) // { collected, expected }
+  const [paymentBreakdown, setPaymentBreakdown] = useState({})
   const toast = useToast()
 
   useEffect(() => { loadData() }, [])
@@ -57,6 +58,7 @@ export default function ScreenLiquidacion() {
           setBackendSource(true)
           const d = liq.data
           const vm = buildLiquidacionViewModel(d)
+          setPaymentBreakdown(vm.paymentBreakdown || {})
           setCashExpected(vm.cashExpected.toString())
           setCashCollected(vm.cashCollected ? vm.cashCollected.toString() : '')
           setCreditExpected(vm.creditExpected.toString())
@@ -74,6 +76,7 @@ export default function ScreenLiquidacion() {
             setTransferExpected(saved.transferExpected?.toString() || '')
             setTransferCollected(saved.transferCollected?.toString() || '')
             setNotes(saved.notes || '')
+            setPaymentBreakdown(saved.paymentBreakdown || {})
           }
         }
       }
@@ -151,7 +154,7 @@ export default function ScreenLiquidacion() {
         cashExpected: cashExp, cashCollected: cashCol,
         creditExpected: creditExp, creditCollected: creditCol,
         transferExpected: transferExp, transferCollected: transferCol,
-        cashDiff, creditDiff, transferDiff, totalDiff, notes,
+        cashDiff, creditDiff, transferDiff, totalDiff, notes, paymentBreakdown,
       }
       saveLiquidacionLocal(plan.id, snapshot)
       saveCierreState(plan.id, { liquidacionDone: true, liquidacionAt: new Date().toISOString() })
@@ -335,6 +338,8 @@ export default function ScreenLiquidacion() {
               )}
             </div>
 
+            <PaymentBreakdown breakdown={paymentBreakdown} typo={typo} />
+
             {/* Notes — required if difference */}
             {hasDifference && (
               <div style={{ marginBottom: 16 }}>
@@ -496,6 +501,76 @@ function DiffBadge({ label, value, typo }) {
       <span style={{ fontSize: 13, fontWeight: 700, color }}>
         {value > 0 ? '+' : ''}{fmtMoney(value)}
       </span>
+    </div>
+  )
+}
+
+function PaymentBreakdown({ breakdown, typo }) {
+  const sections = [
+    ['cash', 'Efectivo'],
+    ['credit', 'Credito'],
+    ['transfer', 'Transferencia'],
+  ]
+    .map(([key, label]) => ({ key, label, data: breakdown?.[key] || {} }))
+    .filter(({ data }) => Number(data.amount_total || 0) > 0 || Number(data.order_count || 0) > 0)
+
+  if (sections.length === 0) return null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+      <p style={{ ...typo.overline, color: TOKENS.colors.textLow, margin: '4px 0 0' }}>DESGLOSE DE VENTAS</p>
+      {sections.map(({ key, label, data }) => (
+        <div key={key} style={{
+          padding: 12, borderRadius: TOKENS.radius.lg,
+          background: TOKENS.colors.surfaceSoft,
+          border: `1px solid ${TOKENS.colors.border}`,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+            <div>
+              <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, fontWeight: 700 }}>{label}</p>
+              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>
+                {Number(data.order_count || 0)} ordenes · {Number(data.unit_total || 0).toLocaleString('es-MX')} unidades
+              </p>
+            </div>
+            <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, fontWeight: 700 }}>
+              {fmtMoney(data.amount_total || 0)}
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(data.orders || []).map((order) => (
+              <div key={order.order_id || order.name} style={{
+                padding: 8, borderRadius: TOKENS.radius.md,
+                background: 'rgba(255,255,255,0.035)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 700 }}>
+                    {order.name}
+                  </p>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 700 }}>
+                    {fmtMoney(order.amount_total || 0)}
+                  </p>
+                </div>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '2px 0 6px', fontSize: 10 }}>
+                  {order.partner_name || 'Cliente'} · {Number(order.unit_total || 0).toLocaleString('es-MX')} unidades
+                </p>
+                {(order.lines || []).map((line) => (
+                  <div key={line.line_id || `${order.name}-${line.product_id}`} style={{
+                    display: 'flex', justifyContent: 'space-between', gap: 8,
+                    paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>
+                      {line.product_name || 'Producto'}
+                    </span>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10, whiteSpace: 'nowrap' }}>
+                      {Number(line.quantity || 0).toLocaleString('es-MX')} u
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

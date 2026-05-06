@@ -16,6 +16,14 @@ test('buildLiquidacionViewModel uses expected buckets and only defaults physical
       transfer: { count: 0, total: 0 },
     },
     total_expected: 7468,
+    payment_breakdown: {
+      cash: {
+        order_count: 1,
+        unit_total: 26,
+        amount_total: 598,
+        orders: [{ name: 'S14615', unit_total: 26, amount_total: 598, lines: [] }],
+      },
+    },
   })
 
   assert.equal(view.cashExpected, 598)
@@ -27,6 +35,8 @@ test('buildLiquidacionViewModel uses expected buckets and only defaults physical
   assert.equal(view.totalExpected, 7468)
   assert.equal(view.totalCollected, 6870)
   assert.equal(view.totalDiff, -598)
+  assert.equal(view.paymentBreakdown.cash.order_count, 1)
+  assert.equal(view.paymentBreakdown.cash.orders[0].name, 'S14615')
 })
 
 test('buildLiquidacionViewModel falls back total_expected to cash expected when buckets are absent', () => {

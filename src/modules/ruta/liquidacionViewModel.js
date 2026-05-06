@@ -36,5 +36,6 @@ export function buildLiquidacionViewModel(data = {}, overrides = {}) {
     totalExpected,
     totalCollected,
     totalDiff: totalCollected - totalExpected,
+    paymentBreakdown: data.payment_breakdown || {},
   }
 }
