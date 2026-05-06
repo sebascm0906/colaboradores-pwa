@@ -10,6 +10,12 @@ function toM2oName(value, fallback = '') {
   return String(fallback || '')
 }
 
+function toNumberList(values) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => Number(value || 0))
+    .filter(Boolean)
+}
+
 export function getTomorrowDateString(baseDate = new Date()) {
   const d = new Date(baseDate)
   d.setDate(d.getDate() + 1)
@@ -59,5 +65,80 @@ export function buildRouteForecastPayload({ routeId, planId, dateTarget, lines }
         channel: l.channel || 'Van',
         qty: Number(l.qty),
       })),
+  }
+}
+
+export function getDefaultTimeWindow() {
+  return { id: null, key: 'any', label: 'Cualquier hora' }
+}
+
+export function buildRoutePlanCriteriaPayload({
+  routeId,
+  dateTarget,
+  polygonId,
+  subpolygonId,
+  channelIds,
+  visitDays,
+  timeWindowId,
+}) {
+  return {
+    route_id: Number(routeId || 0),
+    date_target: dateTarget,
+    polygon_id: Number(polygonId || 0),
+    subpolygon_id: subpolygonId ? Number(subpolygonId) : null,
+    channel_ids: toNumberList(channelIds),
+    visit_days: Array.isArray(visitDays) ? visitDays.filter(Boolean) : [],
+    time_window_id: timeWindowId ? Number(timeWindowId) : null,
+  }
+}
+
+export function normalizeActiveRoutePlan(row = {}) {
+  return {
+    id: Number(row.id || 0),
+    name: row.name || '',
+    route_id: toM2oId(row.route_id),
+    route_name: toM2oName(row.route_id),
+    driver_id: toM2oId(row.driver_employee_id),
+    driver_name: toM2oName(row.driver_employee_id),
+    state: row.state || '',
+    stops_total: Number(row.stops_total || 0),
+  }
+}
+
+export function normalizeCustomerSearchResult(row = {}) {
+  return {
+    id: Number(row.id || 0),
+    name: row.name || '',
+    address: row.street || row.contact_address || '',
+    channels: (Array.isArray(row.channel_ids) ? row.channel_ids : [])
+      .map((item) => Array.isArray(item) ? item[1] : String(item || ''))
+      .filter(Boolean),
+    visit_days: Array.isArray(row.visit_days) ? row.visit_days : [],
+    time_window: toM2oName(row.time_window_id),
+    latitude: Number(row.latitude || row.partner_latitude || 0) || null,
+    longitude: Number(row.longitude || row.partner_longitude || 0) || null,
+  }
+}
+
+export function getSupervisorRouteErrorMessage(error = {}) {
+  const code = error.code || error?.data?.code
+  const messages = {
+    polygon_required: 'Selecciona un poligono para generar la ruta.',
+    polygon_not_found: 'No se encontro el poligono o no pertenece a tu CEDIS.',
+    subpolygon_outside_polygon: 'El subpoligono no pertenece al poligono seleccionado.',
+    no_customers_found: 'No hay clientes para los filtros seleccionados. Avisa al administrador que revise poligonos y datos de clientes.',
+    missing_customer_geo: 'El cliente no tiene ubicacion geografica suficiente.',
+    customer_already_in_plan: 'El cliente ya esta en este plan diario.',
+    plan_not_editable: 'Este plan ya no permite agregar clientes.',
+  }
+  return messages[code] || error.message || error.error || 'No se pudo completar la operacion.'
+}
+
+export function buildPolygonMarkerStyle({ hasPolygon = true, polygonColor = '#2f80ed', subpolygonLetter = '' } = {}) {
+  return {
+    background: hasPolygon ? polygonColor : '#000000',
+    color: '#ffffff',
+    label: subpolygonLetter || '',
+    size: 18,
   }
 }
