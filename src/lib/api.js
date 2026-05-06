@@ -1324,15 +1324,8 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-admin/requisition-cancel' && method === 'POST') {
     const id = Number(body?.id || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    await createUpdate({
-      model: 'purchase.order',
-      method: 'update',
-      ids: [id],
-      dict: { state: 'cancel' },
-      sudo: 1,
-      app: 'pwa_colaboradores',
-    })
-    return { ok: true, data: { id, state: 'cancel' } }
+    // Delegamos al controller para que valide estado y ejecute button_cancel() correcto.
+    return odooJson('/pwa-admin/requisition-cancel', { id })
   }
 
   // ── Requisition create (purchase.order draft) ───────────────────────────
@@ -1418,13 +1411,20 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-admin/requisition-approve' && method === 'POST') {
     const id = Number(body?.id || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    return odooJson('/pwa-admin/requisition-approve', { id })
+    return odooJson('/pwa-admin/requisition-approve', {
+      id,
+      employee_id: getSession().employee_id || undefined,
+    })
   }
 
   if (cleanPath === '/pwa-admin/requisition-reject' && method === 'POST') {
     const id = Number(body?.id || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    return odooJson('/pwa-admin/requisition-reject', { id, reason: body?.reason || '' })
+    return odooJson('/pwa-admin/requisition-reject', {
+      id,
+      reason: body?.reason || '',
+      employee_id: getSession().employee_id || undefined,
+    })
   }
 
   // ── Sale cancel ─────────────────────────────────────────────────────────
