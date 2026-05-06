@@ -104,10 +104,17 @@ export default function ScreenAceptarCarga() {
 
       // Éxito confirmado: reflejamos load_sealed real desde el backend.
       const data = res?.data || {}
+      setPlan(prev => prev
+        ? {
+            ...prev,
+            state: data.state || 'in_progress',
+            load_sealed: data.load_sealed === true ? true : prev.load_sealed,
+          }
+        : prev)
       setLoad(prev => prev
         ? {
             ...prev,
-            state: data.state || prev.state,
+            state: data.state || 'in_progress',
             load_sealed: data.load_sealed === true ? true : prev.load_sealed,
             load_sealed_at: data.load_sealed_at || prev.load_sealed_at,
             load_sealed_by: data.load_sealed_by || prev.load_sealed_by,
