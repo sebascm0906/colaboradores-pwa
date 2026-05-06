@@ -80,15 +80,19 @@ Flujo:
 
 Reglas visuales:
 
-- Al seleccionar un poligono, los puntos de clientes dentro del poligono deben resaltarse en verde fosfo.
-- Al crear subpoligonos, los clientes dentro de cada subpoligono deben conservar el verde fosfo y mostrar una letra dentro del punto.
-- El primer subpoligono usa letra `A`, el segundo `B`, y asi sucesivamente.
+- Cada poligono debe tener un color propio para distinguirlo de otros poligonos.
+- El color debe ser visible sobre el mapa y mantener buen contraste con la letra de subpoligono.
+- Los clientes sin poligono asignado deben mostrarse en negro.
+- Los marcadores de clientes deben ser mas grandes que los puntos actuales para que se puedan leer en campo y en escritorio.
+- Al seleccionar un poligono, los puntos de clientes dentro del poligono deben resaltarse con el color de ese poligono.
+- Al crear subpoligonos, los clientes dentro de cada subpoligono deben conservar el color del poligono padre y mostrar una letra dentro del marcador.
+- El primer subpoligono del poligono seleccionado usa letra `A`, el segundo `B`, y asi sucesivamente.
 - La letra identifica el subpoligono en el mapa, no sustituye su nombre.
 - La leyenda del mapa debe actualizarse dinamicamente segun los subpoligonos visibles:
   - `A - Nombre del subpoligono`
   - `B - Nombre del subpoligono`
 - Si se cambia el nombre del subpoligono, la leyenda se actualiza.
-- Los clientes dentro del poligono padre pero fuera de subpoligonos quedan verdes sin letra.
+- Los clientes dentro del poligono padre pero fuera de subpoligonos quedan con el color del poligono y sin letra.
 - Los clientes fuera del poligono seleccionado quedan con estilo neutro o atenuado.
 
 La PWA no debe inferir pertenencia con reglas distintas a Odoo. Puede hacer previsualizacion en el mapa para experiencia de usuario, pero el guardado y la validacion final deben confirmarse en backend.
@@ -297,7 +301,7 @@ Esto permite que el flujo diario avance de `draft` a `in_progress` inmediatament
 - Actualizar `ScreenAceptarCarga.jsx` para reflejar `plan.state = in_progress` tras `acceptLoad`.
 - Agregar accion de archivar ruta en pantalla administrativa o modulo definido para administradores.
 - Actualizar el disenador de poligonos para permitir dibujo de subpoligonos sin pedir dia, canal ni ventana.
-- Agregar puntos de clientes mas llamativos, letras por subpoligono y leyenda dinamica en el mapa.
+- Agregar marcadores de clientes mas grandes, colores por poligono, negro para clientes sin poligono, letras por subpoligono y leyenda dinamica en el mapa.
 
 ## Cambios Odoo necesarios
 
@@ -340,8 +344,9 @@ QA Odoo/PWA:
 10. Agregar manualmente un cliente a un plan activo; verificar que aparece como stop en la app del chofer.
 11. Intentar agregar un cliente duplicado; verificar error o respuesta idempotente.
 12. Crear subpoligono desde el disenador; verificar que no pide dia, canal ni ventana.
-13. Seleccionar poligono en el mapa; verificar clientes verde fosfo.
-14. Crear dos subpoligonos; verificar letras `A` y `B` en clientes y leyenda dinamica con nombres.
+13. Seleccionar poligono en el mapa; verificar clientes con color propio del poligono y marcadores mas grandes.
+14. Verificar que clientes sin poligono se muestran en negro.
+15. Crear dos subpoligonos; verificar letras `A` y `B` en clientes y leyenda dinamica con nombres.
 
 ## Preguntas abiertas
 
