@@ -20,6 +20,7 @@ import {
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
 import { normalizeOdooPickingId } from '../modules/entregas/ptTransferGuards.js'
+import { readWithOptionalFieldFallback } from '../modules/admin/requisitionReadFallback.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -1141,11 +1142,20 @@ async function directAdmin(method, path, body) {
     if (dateFrom) domain.push(['date_order', '>=', dateFrom])
     if (dateTo) domain.push(['date_order', '<=', `${dateTo} 23:59:59`])
     const offset = Number(query.get('offset') || 0)
-    // picking_ids: necesario para derivar receipt_state cuando el backend aún no
-    // expone los campos computados del controlador requisition-receipt-detail.
-    const BASE_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'picking_ids']
-    const result = await readModelSorted('purchase.order', {
-      fields: BASE_FIELDS,
+    // Algunas instalaciones de Odoo restringen campos no esenciales.
+    // Cuando eso pasa, degradamos con retries quitando solo grupos opcionales.
+    const REQUIRED_FIELDS = ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'currency_id', 'company_id', 'origin', 'order_line']
+    const OPTIONAL_FIELD_GROUPS = [
+      ['notes'],
+      ['picking_ids'],
+    ]
+    const APPROVAL_FIELDS = ['pwa_approval_state', 'pwa_approval_reason', 'pwa_approved_by_id', 'pwa_approved_at']
+    const { result } = await readWithOptionalFieldFallback(readModelSorted, 'purchase.order', {
+      requiredFields: REQUIRED_FIELDS,
+      optionalFieldGroups: [
+        ...OPTIONAL_FIELD_GROUPS,
+        APPROVAL_FIELDS,
+      ],
       domain,
       sort_column: 'date_order',
       sort_desc: true,
@@ -1198,10 +1208,10 @@ async function directAdmin(method, path, body) {
         origin: row.origin || '',
         notes: row.notes || '',
         line_count: Array.isArray(row.order_line) ? row.order_line.length : 0,
-        approval_state: 'none',
-        approval_reason: null,
-        approved_by: null,
-        approved_at: null,
+        approval_state: row.pwa_approval_state || 'none',
+        approval_reason: row.pwa_approval_reason || null,
+        approved_by: row.pwa_approved_by_id?.[1] || null,
+        approved_at: row.pwa_approved_at || null,
         // Receipt fields — preferimos lo que mande Odoo; si no, derivamos del picking.
         receipt_state: row.receipt_state || derivedReceiptState,
         qty_received_total: Number(row.qty_received_total || 0),
@@ -1218,8 +1228,12 @@ async function directAdmin(method, path, body) {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const id = Number(query.get('id') || 0)
     if (!id) return { ok: false, error: 'id requerido' }
-    const headerResult = await readModel('purchase.order', {
-      fields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'notes', 'order_line', 'picking_ids'],
+    const { result: headerResult } = await readWithOptionalFieldFallback(readModel, 'purchase.order', {
+      requiredFields: ['id', 'name', 'partner_id', 'state', 'date_order', 'amount_total', 'amount_untaxed', 'currency_id', 'company_id', 'origin', 'order_line'],
+      optionalFieldGroups: [
+        ['notes'],
+        ['picking_ids'],
+      ],
       domain: [['id', '=', id]],
       limit: 1,
       sudo: 1,
@@ -1249,8 +1263,12 @@ async function directAdmin(method, path, body) {
     const lineIds = Array.isArray(header.order_line) ? header.order_line : []
     let lines = []
     if (lineIds.length) {
-      const linesResult = await readModel('purchase.order.line', {
-        fields: ['id', 'name', 'product_id', 'product_qty', 'price_unit', 'price_subtotal', 'product_uom', 'analytic_distribution'],
+      const { result: linesResult } = await readWithOptionalFieldFallback(readModel, 'purchase.order.line', {
+        requiredFields: ['id', 'name', 'product_id', 'product_qty', 'price_unit', 'price_subtotal'],
+        optionalFieldGroups: [
+          ['product_uom'],
+          ['analytic_distribution'],
+        ],
         domain: [['id', 'in', lineIds]],
         limit: 0,
         sudo: 1,
