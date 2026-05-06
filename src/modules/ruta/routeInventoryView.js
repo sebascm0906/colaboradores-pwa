@@ -50,7 +50,9 @@ function reconciliationTotals(reconciliation) {
  * backend proxy when relation expansion is not allowed.
  */
 export function buildInventoryView(reconciliation, loadLines) {
-  const reconciliationLines = Array.isArray(reconciliation?.line_ids) ? reconciliation.line_ids : []
+  const reconciliationLines = Array.isArray(reconciliation?.line_ids)
+    ? reconciliation.line_ids.filter((line) => line && typeof line === 'object')
+    : []
   if (reconciliation) {
     return {
       source: 'reconciliation',

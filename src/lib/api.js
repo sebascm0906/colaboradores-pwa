@@ -3992,9 +3992,7 @@ async function directRuta(method, path, body) {
         'qty_returned',
         'qty_scrap',
         'qty_difference',
-        'total_expected',
-        'total_received',
-        'difference',
+        'line_ids',
       ],
       domain: [['route_plan_id', '=', routePlanId]],
       sort_column: 'id',
@@ -4003,7 +4001,31 @@ async function directRuta(method, path, body) {
       sudo: 1,
     })
     const row = pickFirstResponse(result)
-    return row || null
+    if (!row) return null
+    const lineIds = Array.isArray(row.line_ids)
+      ? row.line_ids.map((id) => Number(id || 0)).filter(Boolean)
+      : []
+    if (lineIds.length > 0) {
+      const lineResult = await readModelSorted('gf.dispatch.reconciliation.line', {
+        fields: [
+          'id',
+          'reconciliation_id',
+          'product_id',
+          'qty_loaded',
+          'qty_delivered',
+          'qty_returned',
+          'qty_scrap',
+          'qty_difference',
+        ],
+        domain: [['id', 'in', lineIds]],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 500,
+        sudo: 1,
+      })
+      row.line_ids = pickListResponse(lineResult)
+    }
+    return row
   }
 
   if (cleanPath === '/pwa-ruta/accept-load' && method === 'POST') {
