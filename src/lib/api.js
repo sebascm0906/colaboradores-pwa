@@ -19,6 +19,7 @@ import {
   collectRouteEmployeeIds,
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
+import { normalizeOdooPickingId } from '../modules/entregas/ptTransferGuards.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
 // Mantiene n8n como fallback, pero resuelve primero los endpoints que ya viven
@@ -4903,13 +4904,13 @@ async function directAlmacenPT(method, path, body) {
     })
   }
   if (cleanPath === '/pwa-pt/accept-transfer' && method === 'POST') {
-    const pickingId = Number(body?.picking_id)
+    const pickingId = normalizeOdooPickingId(body?.picking_id)
     console.info('[PT ACCEPT][BFF] incoming request', {
       raw_picking_id: body?.picking_id,
       parsed_picking_id: pickingId,
-      is_finite: Number.isFinite(pickingId),
+      valid_odoo_id: Boolean(pickingId),
     })
-    if (!Number.isFinite(pickingId) || pickingId === 0) return { ok: false, error: 'picking_id requerido' }
+    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID real de Odoo' }
     const response = await odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
       picking_id: pickingId,
     })
@@ -4917,9 +4918,9 @@ async function directAlmacenPT(method, path, body) {
     return response
   }
   if (cleanPath === '/pwa-pt/reject-transfer' && method === 'POST') {
-    const pickingId = Number(body?.picking_id)
+    const pickingId = normalizeOdooPickingId(body?.picking_id)
     const reason = (body?.reason || '').trim()
-    if (!Number.isFinite(pickingId) || pickingId === 0) return { ok: false, error: 'picking_id requerido' }
+    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID real de Odoo' }
     if (!reason) return { ok: false, error: 'reason requerido' }
     return odooJson('/gf/logistics/api/employee/pt_transfer/reject', {
       picking_id: pickingId,

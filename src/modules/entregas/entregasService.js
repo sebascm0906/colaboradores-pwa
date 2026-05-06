@@ -31,6 +31,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api } from '../../lib/api.js'
+import { normalizeOdooPickingId } from './ptTransferGuards.js'
 
 // ── STEP STATUS CONSTANTS ───────────────────────────────────────────────────
 
@@ -152,8 +153,12 @@ export async function getPendingTransfers(warehouseId) {
  * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
 export async function acceptTransfer(pickingId) {
-  console.info('[PT ACCEPT] service sending', { pickingId })
-  return api('POST', '/pwa-pt/accept-transfer', { picking_id: pickingId })
+  const odooPickingId = normalizeOdooPickingId(pickingId)
+  console.info('[PT ACCEPT] service sending', { pickingId, odooPickingId })
+  if (!odooPickingId) {
+    return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.' }
+  }
+  return api('POST', '/pwa-pt/accept-transfer', { picking_id: odooPickingId })
 }
 
 /**
@@ -164,7 +169,11 @@ export async function acceptTransfer(pickingId) {
  * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
 export async function rejectTransfer(pickingId, reason) {
-  return api('POST', '/pwa-pt/reject-transfer', { picking_id: pickingId, reason })
+  const odooPickingId = normalizeOdooPickingId(pickingId)
+  if (!odooPickingId) {
+    return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.' }
+  }
+  return api('POST', '/pwa-pt/reject-transfer', { picking_id: odooPickingId, reason })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

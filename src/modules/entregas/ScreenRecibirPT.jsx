@@ -3,6 +3,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingTransfers, acceptTransfer, rejectTransfer } from './entregasService'
+import { normalizeOdooPickingId } from './ptTransferGuards'
 import { getEntregasDestination, resolveLocalTransferByPicking } from '../almacen-pt/ptService'
 import { ScreenShell, EmptyState } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
@@ -85,9 +86,12 @@ export default function ScreenRecibirPT() {
   }
 
   async function handleAccept(picking) {
-    const pickingId = picking?.id
+    const pickingId = normalizeOdooPickingId(picking?.id)
     console.log('[PT ACCEPT] click', { pickingId, picking })
-    if (!pickingId && pickingId !== 0) return
+    if (!pickingId) {
+      showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.', 'error')
+      return
+    }
     setActionStates((s) => ({ ...s, [pickingId]: 'accepting' }))
     try {
       console.log('[PT ACCEPT] sending request', { pickingId })
@@ -127,7 +131,11 @@ export default function ScreenRecibirPT() {
     if (!dialog || dialog.type !== 'reject') return
     const reason = rejectReason.trim()
     if (!reason) return
-    const pickingId = dialog.picking.id
+    const pickingId = normalizeOdooPickingId(dialog.picking.id)
+    if (!pickingId) {
+      showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.', 'error')
+      return
+    }
     closeDialog()
     setActionStates((s) => ({ ...s, [pickingId]: 'rejecting' }))
     try {
