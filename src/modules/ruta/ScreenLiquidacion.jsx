@@ -10,6 +10,7 @@ import { useToast } from '../../components/Toast'
 import { safeNumber } from '../../lib/safeNumber'
 import { getMyRoutePlan, confirmLiquidacion } from './api'
 import { logScreenError } from '../shared/logScreenError'
+import { buildLiquidacionViewModel } from './liquidacionViewModel'
 import {
   fetchLiquidacion,
   saveLiquidacionLocal,
@@ -55,14 +56,13 @@ export default function ScreenLiquidacion() {
         if (liq.source === 'backend' && liq.data) {
           setBackendSource(true)
           const d = liq.data
-          const payments = d.payments || {}
-          // Backend: {cash: {count, total}, credit: {count, total}, transfer: {count, total}}
-          setCashExpected((payments.cash?.total || 0).toString())
-          setCashCollected((payments.cash?.total || 0).toString())
-          setCreditExpected((payments.credit?.total || 0).toString())
-          setCreditCollected((payments.credit?.total || 0).toString())
-          setTransferExpected((payments.transfer?.total || 0).toString())
-          setTransferCollected((payments.transfer?.total || 0).toString())
+          const vm = buildLiquidacionViewModel(d)
+          setCashExpected(vm.cashExpected.toString())
+          setCashCollected(vm.cashCollected ? vm.cashCollected.toString() : '')
+          setCreditExpected(vm.creditExpected.toString())
+          setCreditCollected(vm.creditCollected.toString())
+          setTransferExpected(vm.transferExpected.toString())
+          setTransferCollected(vm.transferCollected.toString())
         } else {
           // Fallback: localStorage
           const saved = getLiquidacionLocal(p.id)
@@ -95,7 +95,7 @@ export default function ScreenLiquidacion() {
   const totalDiff = totalCollected - totalExpected
 
   const hasDifference = Math.abs(totalDiff) > 0.01
-  const canConfirm = (cashExp > 0 || creditExp > 0 || cashCol > 0 || creditCol > 0)
+  const canConfirm = totalExpected > 0 || totalCollected > 0
 
   /**
    * Confirmación en 2 pasos contra backend real:
@@ -115,7 +115,7 @@ export default function ScreenLiquidacion() {
     setSubmitting(true)
     const ENDPOINT = '/gf/logistics/api/employee/liquidacion/confirm'
     try {
-      const res = await confirmLiquidacion(plan.id, { notes, force })
+      const res = await confirmLiquidacion(plan.id, { notes, force, cashCollected: cashCol })
       const payload = res?.data ?? res ?? {}
 
       // Si backend warning, abrimos modal de override
@@ -279,8 +279,8 @@ export default function ScreenLiquidacion() {
             {/* Cash section */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8 }}>EFECTIVO</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <MoneyInput label="Esperado" value={cashExpected} onChange={setCashExpected} typo={typo} />
-              <MoneyInput label="Cobrado" value={cashCollected} onChange={setCashCollected} typo={typo} />
+              <MoneyInput label="Esperado" value={cashExpected} typo={typo} readOnly />
+              <MoneyInput label="Trae" value={cashCollected} onChange={setCashCollected} typo={typo} />
             </div>
             {Math.abs(cashDiff) > 0.01 && (
               <DiffBadge label="Diferencia efectivo" value={cashDiff} typo={typo} />
@@ -289,8 +289,8 @@ export default function ScreenLiquidacion() {
             {/* Credit section */}
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8, marginTop: 16 }}>CREDITO</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <MoneyInput label="Esperado" value={creditExpected} onChange={setCreditExpected} typo={typo} />
-              <MoneyInput label="Cobrado" value={creditCollected} onChange={setCreditCollected} typo={typo} />
+              <MoneyInput label="Esperado" value={creditExpected} typo={typo} readOnly />
+              <MoneyInput label="Sistema" value={creditCollected} typo={typo} readOnly />
             </div>
             {Math.abs(creditDiff) > 0.01 && (
               <DiffBadge label="Diferencia credito" value={creditDiff} typo={typo} />
@@ -301,8 +301,8 @@ export default function ScreenLiquidacion() {
               <>
                 <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 8, marginTop: 16 }}>TRANSFERENCIA</p>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                  <MoneyInput label="Esperado" value={transferExpected} onChange={setTransferExpected} typo={typo} />
-                  <MoneyInput label="Cobrado" value={transferCollected} onChange={setTransferCollected} typo={typo} />
+                  <MoneyInput label="Esperado" value={transferExpected} typo={typo} readOnly />
+                  <MoneyInput label="Sistema" value={transferCollected} typo={typo} readOnly />
                 </div>
                 {Math.abs(transferDiff) > 0.01 && (
                   <DiffBadge label="Diferencia transferencia" value={transferDiff} typo={typo} />
@@ -458,7 +458,7 @@ export default function ScreenLiquidacion() {
   )
 }
 
-function MoneyInput({ label, value, onChange, typo }) {
+function MoneyInput({ label, value, onChange, typo, readOnly = false }) {
   return (
     <div style={{ flex: 1 }}>
       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 10 }}>{label}</p>
@@ -468,12 +468,15 @@ function MoneyInput({ label, value, onChange, typo }) {
           type="number"
           inputMode="decimal"
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => onChange?.(e.target.value)}
           placeholder="0.00"
+          readOnly={readOnly}
           style={{
             width: '100%', padding: '10px 10px 10px 24px', borderRadius: TOKENS.radius.md,
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+            background: readOnly ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${TOKENS.colors.border}`,
             color: 'white', fontSize: 15, fontWeight: 600, outline: 'none',
+            opacity: readOnly ? 0.85 : 1,
           }}
         />
       </div>

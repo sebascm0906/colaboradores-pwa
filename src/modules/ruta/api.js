@@ -290,11 +290,12 @@ export function closeRoute(planId, departureKm, arrivalKm) {
  *  data: { total_collected, total_expected, ... } } para que la UI pida override.
  *  Llamar de nuevo con `force=true` para persistir pese a diferencia.
  *  Endpoint real: POST /gf/logistics/api/employee/liquidacion/confirm */
-export function confirmLiquidacion(planId, { notes = '', force = false } = {}) {
+export function confirmLiquidacion(planId, { notes = '', force = false, cashCollected = null } = {}) {
   return api('POST', '/gf/logistics/api/employee/liquidacion/confirm', {
     plan_id: Number(planId),
     notes:   String(notes || '').trim(),
     force:   Boolean(force),
+    cash_collected: cashCollected,
   })
 }
 
