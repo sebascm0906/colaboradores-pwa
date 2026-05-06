@@ -20,15 +20,15 @@ import {
   createScrap,
   saveBagReconciliation as apiSaveBagReconciliation,
   closeShift as apiCloseShift,
-} from './api'
-import { getSession } from '../../lib/api'
-import { computePackingCoherence } from '../shared/packingCoherence'
-import { getMaterialIssues } from '../almacen-pt/materialsService'
-import { buildRolitoPackedByMaterial, getRolitoRelationId } from './rolitoBagMath'
+} from './api.js'
+import { getSession } from '../../lib/api.js'
+import { computePackingCoherence } from '../shared/packingCoherence.js'
+import { getMaterialIssues } from '../almacen-pt/materialsService.js'
+import { buildRolitoPackedByMaterial, getRolitoRelationId } from './rolitoBagMath.js'
 import {
   DEFAULT_EXPECTED_DEFROST_MIN,
   DEFAULT_EXPECTED_FREEZE_MIN,
-} from './cycleTiming'
+} from './cycleTiming.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 

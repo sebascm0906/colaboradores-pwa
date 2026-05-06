@@ -1,6 +1,6 @@
 // ─── API Producción — Llamadas a n8n webhooks ──────────────────────────────
-import { api } from '../../lib/api'
-import { buildChecklistPath } from './checklistContext'
+import { api } from '../../lib/api.js'
+import { buildChecklistPath } from './checklistContext.js'
 
 // ── Turno ────────────────────────────────────────────────────────────────────
 
