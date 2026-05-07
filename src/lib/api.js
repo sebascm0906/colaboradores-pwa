@@ -4047,7 +4047,7 @@ async function directRuta(method, path, body) {
     const hasOriginalLoadPicking = () => rawLoadPickings.some((picking) => (
       String(picking.origin || '').includes(`${row.name || ''}/LOAD`)
     ))
-    if (!rawLoadPickings.length || !hasOriginalLoadPicking()) {
+    if ((planLoadPickingId || row.load_sealed === true) && (!rawLoadPickings.length || !hasOriginalLoadPicking())) {
       const routeId = row.route_id?.[0] || row.route_id || 0
       let routeLocationId = 0
       if (routeId) {
