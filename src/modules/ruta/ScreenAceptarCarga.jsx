@@ -18,6 +18,7 @@ export default function ScreenAceptarCarga() {
   const [pendingLoads, setPendingLoads] = useState([])
   const [selectedLoadId, setSelectedLoadId] = useState(null)
   const [lines, setLines] = useState([])
+  const [linesByPicking, setLinesByPicking] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requiresChecklist, setRequiresChecklist] = useState(false)
@@ -36,6 +37,7 @@ export default function ScreenAceptarCarga() {
       setPlan(p)
       setError('')
       setLines([])
+      setLinesByPicking({})
 
       if (!p?.id) {
         setLoad(null)
@@ -67,12 +69,17 @@ export default function ScreenAceptarCarga() {
         }
       }
 
-      if (nextSelected?.picking_id) {
-        const ll = await getLoadLines(nextSelected.picking_id).catch((err) => {
-          logScreenError('ScreenAceptarCarga', 'getLoadLines', err)
-          return []
-        })
-        setLines(ll || [])
+      if (nextCards.length > 0) {
+        const entries = await Promise.all(nextCards.map(async (card) => {
+          const ll = await getLoadLines(card.picking_id).catch((err) => {
+            logScreenError('ScreenAceptarCarga', 'getLoadLines', err)
+            return []
+          })
+          return [card.picking_id, ll || []]
+        }))
+        const byPicking = Object.fromEntries(entries)
+        setLinesByPicking(byPicking)
+        setLines(nextSelected?.picking_id ? (byPicking[nextSelected.picking_id] || []) : [])
       }
     } catch (e) {
       logScreenError('ScreenAceptarCarga', 'fetchData', e)
@@ -89,10 +96,15 @@ export default function ScreenAceptarCarga() {
   async function handleSelectLoad(loadCard) {
     if (!loadCard?.picking_id) return
     setSelectedLoadId(loadCard.picking_id)
+    if (linesByPicking[loadCard.picking_id]) {
+      setLines(linesByPicking[loadCard.picking_id])
+      return
+    }
     const ll = await getLoadLines(loadCard.picking_id).catch((err) => {
       logScreenError('ScreenAceptarCarga', 'getLoadLines.select', err)
       return []
     })
+    setLinesByPicking((prev) => ({ ...prev, [loadCard.picking_id]: ll || [] }))
     setLines(ll || [])
   }
 
@@ -121,6 +133,18 @@ export default function ScreenAceptarCarga() {
           setRequiresChecklist(true)
           setChecklistState(res?.data?.checklist_state || null)
           setError(res?.message || 'Antes de aceptar la carga, debes completar el checklist de unidad.')
+          return
+        }
+        const message = String(res?.message || res?.error || '')
+        const alreadyAccepted = code === 'load_already_accepted' || message.toLowerCase().includes('ya fue aceptado')
+        if (alreadyAccepted) {
+          setLoadCards((prev) => prev.map((card) => (
+            card.picking_id === selectedLoad.picking_id
+              ? { ...card, accepted: true, gf_route_load_accepted: true }
+              : card
+          )))
+          setPendingLoads((prev) => prev.filter((card) => card.picking_id !== selectedLoad.picking_id))
+          setError('')
           return
         }
 
@@ -157,7 +181,10 @@ export default function ScreenAceptarCarga() {
   const hasPendingLoad = pendingLoads.length > 0
   const isAccepted = !hasPendingLoad && loadCards.length > 0 && loadCards.every((card) => card.accepted === true)
   const acceptLabel = selectedLoad?.isRefill ? 'Confirmar Recarga' : 'Confirmar Recepcion'
-  const products = lines.length > 0 ? lines : (load?.products || load?.lines || [])
+  const selectedProducts = selectedLoad?.picking_id
+    ? (linesByPicking[selectedLoad.picking_id] || lines || [])
+    : []
+  const products = selectedProducts.length > 0 ? selectedProducts : (load?.products || load?.lines || [])
 
   return (
     <div style={{ minHeight: '100dvh', background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
