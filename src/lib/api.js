@@ -4013,7 +4013,7 @@ async function directRuta(method, path, body) {
     const routePlanId = Number(query.get('route_plan_id') || 0)
     if (!routePlanId) return null
     const result = await readModelSorted('gf.route.plan', {
-      fields: ['id', 'load_picking_id', 'load_sealed', 'state', 'stops_total', 'stops_done', 'name'],
+      fields: ['id', 'date', 'route_id', 'load_picking_id', 'load_sealed', 'state', 'stops_total', 'stops_done', 'name'],
       domain: [['id', '=', routePlanId]],
       limit: 1,
       sudo: 1,
@@ -4021,17 +4021,18 @@ async function directRuta(method, path, body) {
     const row = pickFirstResponse(result)
     if (!row) return null
     const planLoadPickingId = row.load_picking_id?.[0] || 0
+    const baseLoadPickingFields = [
+      'id',
+      'name',
+      'state',
+      'origin',
+      'scheduled_date',
+      'create_date',
+      'gf_route_plan_id',
+      'location_dest_id',
+    ]
     const { result: loadPickingsResult } = await readWithOptionalFieldFallback(readModelSorted, 'stock.picking', {
-      requiredFields: [
-        'id',
-        'name',
-        'state',
-        'origin',
-        'scheduled_date',
-        'create_date',
-        'gf_route_plan_id',
-        'location_dest_id',
-      ],
+      requiredFields: baseLoadPickingFields,
       optionalFieldGroups: [
         ['gf_route_load_accepted'],
         ['gf_route_load_kind'],
@@ -4042,7 +4043,66 @@ async function directRuta(method, path, body) {
       limit: 50,
       sudo: 1,
     })
-    const rawLoadPickings = pickListResponse(loadPickingsResult)
+    let rawLoadPickings = pickListResponse(loadPickingsResult)
+    const hasOriginalLoadPicking = () => rawLoadPickings.some((picking) => (
+      String(picking.origin || '').includes(`${row.name || ''}/LOAD`)
+    ))
+    if (!rawLoadPickings.length || !hasOriginalLoadPicking()) {
+      const routeId = row.route_id?.[0] || row.route_id || 0
+      let routeLocationId = 0
+      if (routeId) {
+        const routeRows = pickListResponse(await readModelSorted('gf.route', {
+          fields: ['id', 'location_en_ruta_id'],
+          domain: [['id', '=', routeId]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: 1,
+          sudo: 1,
+        }))
+        routeLocationId = routeRows[0]?.location_en_ruta_id?.[0] || routeRows[0]?.location_en_ruta_id || 0
+      }
+      if (routeLocationId) {
+        const planDate = String(row.date || '').slice(0, 10)
+        const fallbackDomain = [
+          ['location_dest_id', '=', routeLocationId],
+          ['state', '!=', 'cancel'],
+        ]
+        if (/^\d{4}-\d{2}-\d{2}$/.test(planDate)) {
+          const [year, month, day] = planDate.split('-').map(Number)
+          const nextDay = new Date(Date.UTC(year, month - 1, day + 2))
+          const pad = (value) => String(value).padStart(2, '0')
+          const endDate = `${nextDay.getUTCFullYear()}-${pad(nextDay.getUTCMonth() + 1)}-${pad(nextDay.getUTCDate())}`
+          fallbackDomain.push(['create_date', '>=', `${planDate} 00:00:00`])
+          fallbackDomain.push(['create_date', '<', `${endDate} 00:00:00`])
+        }
+        const { result: fallbackPickingsResult } = await readWithOptionalFieldFallback(readModelSorted, 'stock.picking', {
+          requiredFields: baseLoadPickingFields,
+          optionalFieldGroups: [
+            ['gf_route_load_accepted'],
+            ['gf_route_load_kind'],
+          ],
+          domain: fallbackDomain,
+          sort_column: 'scheduled_date',
+          sort_desc: false,
+          limit: 100,
+          sudo: 1,
+        })
+        const fallbackPickings = pickListResponse(fallbackPickingsResult).filter((picking) => {
+          const pickingPlanId = picking.gf_route_plan_id?.[0] || picking.gf_route_plan_id || 0
+          const pickingId = Number(picking.id || 0)
+          const origin = String(picking.origin || '')
+          return Number(pickingPlanId) === routePlanId
+            || pickingId === Number(planLoadPickingId || 0)
+            || (row.name && origin.includes(`${row.name}/LOAD`))
+        })
+        const byId = new Map()
+        for (const picking of [...rawLoadPickings, ...fallbackPickings]) {
+          const pickingId = Number(picking.id || 0)
+          if (pickingId) byId.set(pickingId, { ...byId.get(pickingId), ...picking })
+        }
+        rawLoadPickings = Array.from(byId.values())
+      }
+    }
     const originalLoadPicking = rawLoadPickings.find((picking) => (
       String(picking.origin || '').includes(`${row.name || ''}/LOAD`)
     ))
@@ -6413,6 +6473,85 @@ async function directEntregas(method, path, body) {
     if (!lines.length) return { ok: false, error: 'lines requerido', message: 'lines requerido' }
     const empId = Number(session.employee_id || getEmployeeId() || 0) || 0
     const whId2 = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+
+    const pad = (n) => String(n).padStart(2, '0')
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    let routePlanBefore = null
+    let routeBefore = null
+    let initialPickingIdBefore = 0
+    let shouldPreserveInitialLoad = false
+
+    if (driverEmployeeId && whId2 && mobileLocationId) {
+      const routeRows = pickListResponse(await readModelSorted('gf.route', {
+        fields: ['id', 'warehouse_dispatch_id', 'location_en_ruta_id', 'salesperson_employee_id', 'driver_employee_id', 'assistant_employee_id'],
+        domain: [
+          ['warehouse_dispatch_id', '=', whId2],
+          ['location_en_ruta_id', '=', mobileLocationId],
+        ],
+        sort_column: 'id',
+        sort_desc: false,
+        limit: 20,
+        sudo: 1,
+      }))
+      routeBefore = routeRows.find((route) => {
+        const employeeRefs = [
+          route.salesperson_employee_id,
+          route.driver_employee_id,
+          route.assistant_employee_id,
+        ]
+        return employeeRefs.some((ref) => Number(ref?.[0] || ref || 0) === driverEmployeeId)
+      }) || null
+      if (!routeBefore) {
+        return {
+          ok: false,
+          error: 'La unidad seleccionada no pertenece a ese repartidor o CEDIS.',
+          message: 'La unidad seleccionada no pertenece a ese repartidor o CEDIS.',
+          code: 'route_employee_warehouse_mismatch',
+        }
+      }
+
+      const planRows = pickListResponse(await readModelSorted('gf.route.plan', {
+        fields: ['id', 'name', 'load_picking_id', 'load_sealed', 'route_id', 'state'],
+        domain: [
+          ['date', '=', todayStr],
+          ['route_id', '=', Number(routeBefore.id || 0)],
+          ['state', 'in', ['published', 'in_progress', 'closed', 'reconciled']],
+        ],
+        sort_column: 'id',
+        sort_desc: true,
+        limit: 1,
+        sudo: 1,
+      }))
+      routePlanBefore = planRows[0] || null
+      const routePlanIdBefore = Number(routePlanBefore?.id || 0)
+      if (routePlanIdBefore) {
+        const existingPickings = pickListResponse(await readModelSorted('stock.picking', {
+          fields: ['id', 'state', 'origin', 'gf_route_load_kind'],
+          domain: [['gf_route_plan_id', '=', routePlanIdBefore], ['state', '!=', 'cancel']],
+          sort_column: 'scheduled_date',
+          sort_desc: false,
+          limit: 50,
+          sudo: 1,
+        }))
+        const originalPicking = existingPickings.find((picking) => (
+          routePlanBefore?.name && String(picking.origin || '').includes(`${routePlanBefore.name}/LOAD`)
+        ))
+        const doneInitialPicking = existingPickings.find((picking) => (
+          picking.state === 'done'
+          && (picking.gf_route_load_kind === 'initial' || !picking.gf_route_load_kind)
+        ))
+        initialPickingIdBefore = Number(
+          originalPicking?.id
+          || doneInitialPicking?.id
+          || routePlanBefore?.load_picking_id?.[0]
+          || routePlanBefore?.load_picking_id
+          || 0
+        )
+        shouldPreserveInitialLoad = routePlanBefore?.load_sealed === true || Boolean(initialPickingIdBefore)
+      }
+    }
+
     const meta = { warehouse_id: whId2 || undefined }
     if (empId) meta.employee_id = empId
     const data = { mobile_location_id: mobileLocationId, lines }
@@ -6420,7 +6559,43 @@ async function directEntregas(method, path, body) {
     const envelope = await odooJson('/gf/salesops/warehouse/van_load/create_execute', { meta, data })
     const status = String(envelope?.status || '').toLowerCase()
     const userMessage = envelope?.user_message || envelope?.message || ''
-    if (status === 'ok') return { ok: true, message: userMessage || 'Carga pendiente de aceptación', data: envelope?.data || {} }
+    if (status === 'ok') {
+      const envData = envelope?.data || {}
+      const createdPickingIds = [
+        envData.picking_id,
+        envData.stock_picking_id,
+        ...(Array.isArray(envData.picking_ids) ? envData.picking_ids : []),
+        ...(Array.isArray(envData.rows) ? envData.rows.map((row) => row?.picking_id || row?.id) : []),
+      ].map((id) => Number(id || 0)).filter((id) => id > 0)
+      const routePlanIdBefore = Number(routePlanBefore?.id || 0)
+
+      if (shouldPreserveInitialLoad && routePlanIdBefore && createdPickingIds.length) {
+        await createUpdate({
+          model: 'stock.picking',
+          method: 'update',
+          ids: createdPickingIds,
+          dict: {
+            gf_route_plan_id: routePlanIdBefore,
+            gf_route_id: Number(routeBefore?.id || 0) || undefined,
+            gf_route_load_kind: 'refill',
+          },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        })
+        if (initialPickingIdBefore) {
+          await createUpdate({
+            model: 'gf.route.plan',
+            method: 'update',
+            ids: [routePlanIdBefore],
+            dict: { load_picking_id: initialPickingIdBefore },
+            sudo: 1,
+            app: 'pwa_colaboradores',
+          })
+        }
+      }
+
+      return { ok: true, message: userMessage || 'Carga pendiente de aceptación', data: envData }
+    }
     return { ok: false, error: userMessage || 'Error al ejecutar carga', message: userMessage || 'Error al ejecutar carga', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
   }
 
