@@ -31,7 +31,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api } from '../../lib/api.js'
-import { normalizeOdooPickingId } from './ptTransferGuards.js'
+import { getPtTransferActionTarget, normalizePtTransferActionId } from './ptTransferGuards.js'
 
 // ── STEP STATUS CONSTANTS ───────────────────────────────────────────────────
 
@@ -155,14 +155,13 @@ export async function getPendingTransfers(warehouseId) {
 export async function acceptTransfer(pickingId) {
   const target = typeof pickingId === 'object' && pickingId
     ? pickingId
-    : { picking_id: pickingId }
-  const odooPickingId = normalizeOdooPickingId(target.picking_id)
-  const pickingName = String(target.picking_name || '').trim()
-  console.info('[PT ACCEPT] service sending', { pickingId, odooPickingId, pickingName })
-  if (!odooPickingId && !pickingName) {
-    return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.' }
+    : getPtTransferActionTarget({ picking_id: pickingId, id: pickingId })
+  const transferActionId = normalizePtTransferActionId(target.action_id ?? target.picking_id)
+  console.info('[PT ACCEPT] service sending', { pickingId, transferActionId, target })
+  if (!transferActionId) {
+    return { ok: false, error: 'La transferencia no tiene un id valido para aceptar.' }
   }
-  return api('POST', '/pwa-pt/accept-transfer', { picking_id: odooPickingId, picking_name: pickingName })
+  return api('POST', '/pwa-pt/accept-transfer', { picking_id: transferActionId })
 }
 
 /**
@@ -175,13 +174,12 @@ export async function acceptTransfer(pickingId) {
 export async function rejectTransfer(pickingId, reason) {
   const target = typeof pickingId === 'object' && pickingId
     ? pickingId
-    : { picking_id: pickingId }
-  const odooPickingId = normalizeOdooPickingId(target.picking_id)
-  const pickingName = String(target.picking_name || '').trim()
-  if (!odooPickingId && !pickingName) {
-    return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.' }
+    : getPtTransferActionTarget({ picking_id: pickingId, id: pickingId })
+  const transferActionId = normalizePtTransferActionId(target.action_id ?? target.picking_id)
+  if (!transferActionId) {
+    return { ok: false, error: 'La transferencia no tiene un id valido para rechazar.' }
   }
-  return api('POST', '/pwa-pt/reject-transfer', { picking_id: odooPickingId, picking_name: pickingName, reason })
+  return api('POST', '/pwa-pt/reject-transfer', { picking_id: transferActionId, reason })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

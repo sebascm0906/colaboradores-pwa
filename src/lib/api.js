@@ -19,7 +19,10 @@ import {
   collectRouteEmployeeIds,
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
-import { normalizeOdooPickingId } from '../modules/entregas/ptTransferGuards.js'
+import {
+  normalizeOdooPickingId,
+  normalizePtTransferActionId,
+} from '../modules/entregas/ptTransferGuards.js'
 import { readWithOptionalFieldFallback } from '../modules/admin/requisitionReadFallback.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
@@ -74,14 +77,14 @@ function getSalesOpsToken() {
   return session.gf_salesops_token
     || session.salesops_api_token
     || session.x_gf_token
-    || import.meta.env.VITE_GF_SALESOPS_TOKEN
+    || import.meta?.env?.VITE_GF_SALESOPS_TOKEN
     || ''
 }
 
 function getSalesOpsTokenMeta() {
   const session = getSession()
   const sessionToken = session.gf_salesops_token || session.salesops_api_token || session.x_gf_token || ''
-  const envToken = import.meta.env.VITE_GF_SALESOPS_TOKEN || ''
+  const envToken = import.meta?.env?.VITE_GF_SALESOPS_TOKEN || ''
   const token = sessionToken || envToken || ''
   return {
     token,
@@ -391,6 +394,58 @@ async function odooJson(path, params = {}) {
   }
 
   return json?.result !== undefined ? json.result : json
+}
+
+function buildSalesOpsMeta(prefix, { warehouseId } = {}) {
+  const session = getSession()
+  const employeeId = Number(session.employee_id || getEmployeeId() || 0) || 0
+  const sessionWarehouseId = Number(session.warehouse_id || warehouseId || getWarehouseId() || 0) || 0
+  const requestId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? `${prefix}-${crypto.randomUUID()}`
+    : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+
+  const meta = {
+    warehouse_id: sessionWarehouseId || undefined,
+    request_id: requestId,
+    idempotency_key: requestId,
+  }
+  if (employeeId) {
+    meta.employee_id = employeeId
+  } else {
+    const fallbackRef = String(session.employee_ref || session.barcode || session.work_phone || '')
+    if (fallbackRef) meta.employee_ref = fallbackRef
+  }
+  return meta
+}
+
+function unwrapSalesOpsEnvelope(envelope, {
+  successMessage = 'Operacion procesada',
+  errorMessage = 'Error al procesar la operacion',
+} = {}) {
+  const status = String(envelope?.status || '').toLowerCase()
+  const code = envelope?.code || (status === 'busy' ? 'LOCKED' : (status === 'ok' ? 'OK' : 'UNKNOWN'))
+  const userMessage = envelope?.user_message || envelope?.message || ''
+  const data = envelope?.data || {}
+  const meta = envelope?.meta || {}
+
+  if (status === 'ok') {
+    return {
+      ok: true,
+      message: userMessage || successMessage,
+      code,
+      data,
+      meta,
+    }
+  }
+
+  return {
+    ok: false,
+    error: userMessage || errorMessage,
+    message: userMessage || errorMessage,
+    code,
+    data,
+    meta,
+  }
 }
 
 async function odooHttp(method, path, query = {}, body) {
@@ -4984,34 +5039,28 @@ async function directAlmacenPT(method, path, body) {
     }
   }
   if (cleanPath === '/pwa-pt/accept-transfer' && method === 'POST') {
-    const resolved = await resolvePtTransferPickingId()
-    const pickingId = resolved.id
+    const pickingId = normalizePtTransferActionId(body?.picking_id)
     console.info('[PT ACCEPT][BFF] incoming request', {
       raw_picking_id: body?.picking_id,
       picking_name: body?.picking_name,
       parsed_picking_id: pickingId,
-      valid_odoo_id: Boolean(pickingId),
-      resolved,
+      valid_transfer_action_id: Boolean(pickingId),
     })
-    if (!pickingId) return { ok: false, error: 'No se encontro el stock.picking real para esta transferencia.' }
-    const response = await odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
-      picking_id: pickingId,
+    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID de transferencia valido' }
+    const envelope = await odooJson('/gf/salesops/warehouse/receive_pt/accept', {
+      meta: buildSalesOpsMeta('pwa-pt-accept-transfer', { warehouseId }),
+      data: { picking_id: pickingId },
     })
-    console.info('[PT ACCEPT][BFF] response', response)
-    return response
+    console.info('[PT ACCEPT][BFF] response', envelope)
+    return unwrapSalesOpsEnvelope(envelope, {
+      successMessage: 'Transferencia aceptada',
+      errorMessage: 'Error al aceptar transferencia',
+    })
   }
   if (cleanPath === '/pwa-pt/reject-transfer' && method === 'POST') {
-    const resolved = await resolvePtTransferPickingId()
-    const pickingId = resolved.id
+    const pickingId = normalizePtTransferActionId(body?.picking_id)
     const reason = (body?.reason || '').trim()
-    console.info('[PT REJECT][BFF] incoming request', {
-      raw_picking_id: body?.picking_id,
-      picking_name: body?.picking_name,
-      parsed_picking_id: pickingId,
-      valid_odoo_id: Boolean(pickingId),
-      resolved,
-    })
-    if (!pickingId) return { ok: false, error: 'No se encontro el stock.picking real para esta transferencia.' }
+    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID de transferencia valido' }
     if (!reason) return { ok: false, error: 'reason requerido' }
     return odooJson('/gf/logistics/api/employee/pt_transfer/reject', {
       picking_id: pickingId,

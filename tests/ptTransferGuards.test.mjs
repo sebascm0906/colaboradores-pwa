@@ -5,7 +5,9 @@ import {
   getPtTransferActionId,
   getPtTransferActionTarget,
   isOdooPickingId,
+  isPtTransferActionId,
   normalizeOdooPickingId,
+  normalizePtTransferActionId,
 } from '../src/modules/entregas/ptTransferGuards.js'
 
 test('isOdooPickingId only accepts positive integer ids', () => {
@@ -24,23 +26,42 @@ test('normalizeOdooPickingId returns null for local or invalid ids', () => {
   assert.equal(normalizeOdooPickingId(null), null)
 })
 
-test('getPtTransferActionId does not use transfer_id as stock picking id', () => {
+test('isPtTransferActionId accepts both real pickings and pending PTT ids', () => {
+  assert.equal(isPtTransferActionId(34), true)
+  assert.equal(isPtTransferActionId('34'), true)
+  assert.equal(isPtTransferActionId(-34), true)
+  assert.equal(isPtTransferActionId('-34'), true)
+  assert.equal(isPtTransferActionId(0), false)
+  assert.equal(isPtTransferActionId('abc'), false)
+})
+
+test('normalizePtTransferActionId keeps signed integer ids and rejects zero/invalid values', () => {
+  assert.equal(normalizePtTransferActionId(34), 34)
+  assert.equal(normalizePtTransferActionId('34'), 34)
+  assert.equal(normalizePtTransferActionId(-34), -34)
+  assert.equal(normalizePtTransferActionId('-34'), -34)
+  assert.equal(normalizePtTransferActionId(0), null)
+  assert.equal(normalizePtTransferActionId(null), null)
+})
+
+test('getPtTransferActionId returns signed action ids for pending PTT transfers', () => {
   assert.equal(getPtTransferActionId({
     id: -36,
     picking_id: -36,
     transfer_id: 36,
     name: 'PTT/00036',
-  }), null)
+  }), -36)
 })
 
-test('getPtTransferActionTarget falls back to picking name for temporary negative ids', () => {
+test('getPtTransferActionTarget keeps the signed action id and real picking fallback separate', () => {
   assert.deepEqual(getPtTransferActionTarget({
     id: -36,
     picking_id: -36,
     transfer_id: 36,
     name: 'PTT/00036',
   }), {
+    action_id: -36,
     picking_id: null,
-    picking_name: 'PTT/00036',
+    picking_name: '',
   })
 })

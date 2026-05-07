@@ -78,19 +78,22 @@ export default function ScreenRecibirPT() {
 
   /** Mapea errores del backend a mensaje amigable; si menciona stock, usa el copy fijo. */
   function friendlyError(raw) {
-    const m = String(raw || '').toLowerCase()
+    const text = typeof raw === 'string'
+      ? raw
+      : raw?.error_message || raw?.message || raw?.error || ''
+    const m = String(text || '').toLowerCase()
     if (m.includes('stock') || m.includes('insuficien') || m.includes('disponib')) {
       return 'No hay stock suficiente en Planta para validar'
     }
-    return raw || 'Error al procesar transferencia'
+    return text || 'Error al procesar transferencia'
   }
 
   async function handleAccept(picking) {
     const target = getPtTransferActionTarget(picking)
-    const actionKey = target.picking_id || target.picking_name
+    const actionKey = target.action_id || target.picking_id || target.picking_name || picking?.id
     console.log('[PT ACCEPT] click', { target, picking })
-    if (!actionKey) {
-      showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.', 'error')
+    if (!target.action_id) {
+      showToast('La transferencia no tiene un id valido para aceptar.', 'error')
       return
     }
     setActionStates((s) => ({ ...s, [actionKey]: 'accepting' }))
@@ -99,11 +102,24 @@ export default function ScreenRecibirPT() {
       const res = await acceptTransfer(target)
       console.log('[PT ACCEPT] response', res)
       if (res && res.ok === false) {
-        showToast(`Error: ${friendlyError(res.error || res.message)}`, 'error')
+        showToast(`Error: ${friendlyError(res.data || res.error || res.message)}`, 'error')
+        await loadData()
         return
       }
       if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'accepted')
-      showToast('Transferencia aceptada y picking validado')
+      const transferState = String(res?.data?.transfer_state || '').toLowerCase()
+      const retryAfterSeconds = Number(res?.data?.retry_after || 0) || 0
+      if (transferState === 'processing' || retryAfterSeconds > 0) {
+        showToast(res?.message || 'Transferencia enviada a proceso')
+        await loadData()
+        if (retryAfterSeconds > 0) {
+          window.setTimeout(() => {
+            loadData().catch(() => {})
+          }, retryAfterSeconds * 1000)
+        }
+        return
+      }
+      showToast(res?.message || 'Transferencia aceptada y picking validado')
       await loadData()
     } catch (e) {
       console.log('[PT ACCEPT] error', {
@@ -112,7 +128,7 @@ export default function ScreenRecibirPT() {
         error: e,
       })
       if (e.message === 'no_session') return
-      showToast(`Error: ${friendlyError(e?.message)}`, 'error')
+      showToast(`Error: ${friendlyError(e)}`, 'error')
     } finally {
       setActionStates((s) => { const n = { ...s }; delete n[actionKey]; return n })
     }
@@ -133,9 +149,9 @@ export default function ScreenRecibirPT() {
     const reason = rejectReason.trim()
     if (!reason) return
     const target = getPtTransferActionTarget(dialog.picking)
-    const actionKey = target.picking_id || target.picking_name
-    if (!actionKey) {
-      showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.', 'error')
+    const actionKey = target.action_id || target.picking_id || target.picking_name || dialog?.picking?.id
+    if (!target.action_id) {
+      showToast('La transferencia no tiene un id valido para rechazar.', 'error')
       return
     }
     closeDialog()
@@ -143,15 +159,16 @@ export default function ScreenRecibirPT() {
     try {
       const res = await rejectTransfer(target, reason)
       if (res && res.ok === false) {
-        showToast(`Error: ${friendlyError(res.error || res.message)}`, 'error')
+        showToast(`Error: ${friendlyError(res.data || res.error || res.message)}`, 'error')
+        await loadData()
         return
       }
       if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'rejected')
-      showToast('Transferencia rechazada')
+      showToast(res?.message || 'Transferencia rechazada')
       await loadData()
     } catch (e) {
       if (e.message === 'no_session') return
-      showToast(`Error: ${friendlyError(e?.message)}`, 'error')
+      showToast(`Error: ${friendlyError(e)}`, 'error')
     } finally {
       setActionStates((s) => { const n = { ...s }; delete n[actionKey]; return n })
     }
