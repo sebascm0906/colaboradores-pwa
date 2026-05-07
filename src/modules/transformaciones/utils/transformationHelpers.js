@@ -36,14 +36,25 @@ export function normalizeTransformationRecipe(recipe = {}) {
   const active = typeof recipe.active === 'boolean'
     ? recipe.active
     : Boolean(recipe.is_complete) && !Boolean(recipe.is_blocked)
+  const inputOptions = Array.isArray(recipe.input_product_options) && recipe.input_product_options.length
+    ? recipe.input_product_options
+    : (inputProduct?.product_id ? [inputProduct] : [])
 
   return {
     ...recipe,
     active,
     label: recipe.label || recipe.name || recipe.recipe_code || 'Receta',
     block_reason: recipe.blocked_reason || recipe.block_reason || '',
-    input_product_options: recipe.input_product_options
-      || (inputProduct?.product_id ? [inputProduct] : []),
+    input_product_options: inputOptions.map((option) => ({
+      ...option,
+      product_id: Number(option?.product_id || 0),
+      recipe_code: option?.recipe_code || recipe.recipe_code || '',
+      output_qty_units_per_input_unit: Number(
+        option?.output_qty_units_per_input_unit
+        ?? option?.expected_output_qty_units_per_input_unit
+        ?? 0,
+      ) || 0,
+    })),
     output_product_id: recipe.output_product_id || outputProduct?.product_id || 0,
   }
 }
@@ -64,10 +75,28 @@ export function getVisibleRecipes(recipes = []) {
     .filter((recipe) => recipe.active)
 }
 
-export function validateTransformationDraft(draft = {}) {
+export function findTransformationInputOption(recipe = {}, inputProductId) {
+  const normalized = normalizeTransformationRecipe(recipe)
+  const targetId = Number(inputProductId || 0)
+  if (!targetId) return null
+  return normalized.input_product_options.find((option) => Number(option.product_id || 0) === targetId) || null
+}
+
+export function suggestTransformationOutputQty(recipe = {}, inputProductId, inputQtyUnits) {
+  const option = findTransformationInputOption(recipe, inputProductId)
+  const qty = Number(inputQtyUnits || 0)
+  const ratio = Number(option?.output_qty_units_per_input_unit || 0)
+  if (!option || qty <= 0 || ratio <= 0) return 0
+  return qty * ratio
+}
+
+export function validateTransformationDraft(draft = {}, recipe = null) {
   const errors = {}
   if (!draft.recipe_code) errors.recipe_code = 'Selecciona una receta'
   if (!Number(draft.input_product_id || 0)) errors.input_product_id = 'Selecciona el producto de entrada'
+  if (recipe && draft.input_product_id && !findTransformationInputOption(recipe, draft.input_product_id)) {
+    errors.input_product_id = 'Selecciona un producto de entrada valido para esta receta'
+  }
   if (Number(draft.input_qty_units || 0) <= 0) errors.input_qty_units = 'Captura barras utilizadas'
   if (Number(draft.output_qty_units || 0) <= 0) errors.output_qty_units = 'Captura salida producida'
   return errors
@@ -78,6 +107,7 @@ export function buildTransformationPayload({
   employeeId,
   roleScope,
   recipeCode,
+  resolvedRecipeCode,
   inputProductId,
   inputQtyUnits,
   outputQtyUnits,
@@ -87,7 +117,7 @@ export function buildTransformationPayload({
     warehouse_id: Number(warehouseId || 0),
     employee_id: Number(employeeId || 0),
     role_scope: roleScope,
-    recipe_code: recipeCode,
+    recipe_code: resolvedRecipeCode || recipeCode,
     input_product_id: Number(inputProductId || 0),
     input_qty_units: Number(inputQtyUnits || 0),
     output_qty_units: Number(outputQtyUnits || 0),

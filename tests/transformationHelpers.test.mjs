@@ -3,11 +3,13 @@ import assert from 'node:assert/strict'
 
 import {
   buildTransformationPayload,
+  findTransformationInputOption,
   getRoleScopeConfig,
   getVisibleRecipes,
   normalizeTransformationRecipe,
   normalizeTransformationSummary,
   resolveTransformationWarehouseId,
+  suggestTransformationOutputQty,
   validateTransformationDraft,
 } from '../src/modules/transformaciones/utils/transformationHelpers.js'
 
@@ -37,7 +39,10 @@ test('normalizeTransformationRecipe adapts backend recipe payload to frontend sh
   const recipe = normalizeTransformationRecipe({
     recipe_code: 'molido_chico',
     name: 'Molido chico',
-    input_product: { product_id: 725, name: 'Barra grande' },
+    input_product_options: [
+      { product_id: 725, name: 'Barra grande', recipe_code: 'MCH_GRANDE', output_qty_units_per_input_unit: 2 },
+      { product_id: 726, name: 'Barra chica', recipe_code: 'MCH_CHICA', output_qty_units_per_input_unit: 2 },
+    ],
     output_product: { product_id: 900, name: 'Molido chico' },
     is_complete: true,
     is_blocked: false,
@@ -45,7 +50,7 @@ test('normalizeTransformationRecipe adapts backend recipe payload to frontend sh
 
   assert.equal(recipe.active, true)
   assert.equal(recipe.label, 'Molido chico')
-  assert.deepEqual(recipe.input_product_options, [{ product_id: 725, name: 'Barra grande' }])
+  assert.equal(recipe.input_product_options[0].recipe_code, 'MCH_GRANDE')
   assert.equal(recipe.output_product_id, 900)
 })
 
@@ -83,12 +88,41 @@ test('validateTransformationDraft requires recipe, input product, and positive q
   assert.equal(errors.output_qty_units, 'Captura salida producida')
 })
 
+test('findTransformationInputOption resolves the selected product variant from grouped recipes', () => {
+  const recipe = normalizeTransformationRecipe({
+    recipe_code: 'MCH',
+    name: 'Molido Chico',
+    input_product_options: [
+      { product_id: 724, name: 'Barra grande', recipe_code: 'MCH_G', output_qty_units_per_input_unit: 2 },
+      { product_id: 725, name: 'Barra chica', recipe_code: 'MCH_C', output_qty_units_per_input_unit: 2 },
+    ],
+  })
+
+  const option = findTransformationInputOption(recipe, 725)
+
+  assert.equal(option.recipe_code, 'MCH_C')
+  assert.equal(option.name, 'Barra chica')
+})
+
+test('suggestTransformationOutputQty uses the selected recipe variant ratio', () => {
+  const recipe = normalizeTransformationRecipe({
+    recipe_code: 'KB13',
+    name: 'Kold Barrita 13kg',
+    input_product_options: [
+      { product_id: 724, name: 'Barra grande', recipe_code: 'KB13', output_qty_units_per_input_unit: 5 },
+    ],
+  })
+
+  assert.equal(suggestTransformationOutputQty(recipe, 724, 3), 15)
+})
+
 test('buildTransformationPayload normalizes integers and trims notes', () => {
   const payload = buildTransformationPayload({
     warehouseId: 76,
     employeeId: 11,
     roleScope: 'pt',
     recipeCode: 'molido_chico',
+    resolvedRecipeCode: 'molido_chico_alt',
     inputProductId: '725',
     inputQtyUnits: '2',
     outputQtyUnits: '3',
@@ -99,7 +133,7 @@ test('buildTransformationPayload normalizes integers and trims notes', () => {
     warehouse_id: 76,
     employee_id: 11,
     role_scope: 'pt',
-    recipe_code: 'molido_chico',
+    recipe_code: 'molido_chico_alt',
     input_product_id: 725,
     input_qty_units: 2,
     output_qty_units: 3,

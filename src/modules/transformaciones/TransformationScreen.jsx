@@ -10,10 +10,12 @@ import TransformationHistoryList from './components/TransformationHistoryList'
 import TransformationSummaryCard from './components/TransformationSummaryCard'
 import {
   buildTransformationPayload,
+  findTransformationInputOption,
   getRoleScopeConfig,
   getVisibleRecipes,
   normalizeTransformationRecipe,
   resolveTransformationWarehouseId,
+  suggestTransformationOutputQty,
   validateTransformationDraft,
 } from './utils/transformationHelpers'
 
@@ -48,11 +50,17 @@ export default function TransformationScreen({ roleScope }) {
   const normalizedRecipes = recipes.map((recipe) => normalizeTransformationRecipe(recipe))
   const visibleRecipes = getVisibleRecipes(normalizedRecipes)
   const blockedRecipes = normalizedRecipes.filter((recipe) => !recipe.active)
+  const selectedRecipe = visibleRecipes.find((recipe) => recipe.recipe_code === draft.recipe_code) || null
+  const selectedInputOption = findTransformationInputOption(selectedRecipe, draft.input_product_id)
+  const suggestedOutputQty = suggestTransformationOutputQty(selectedRecipe, draft.input_product_id, draft.input_qty_units)
 
   function updateDraft(field, value) {
     setDraft((current) => {
       const next = { ...current, [field]: value }
-      if (field === 'recipe_code') next.input_product_id = ''
+      if (field === 'recipe_code') {
+        next.input_product_id = ''
+        next.output_qty_units = ''
+      }
       return next
     })
     setErrors((current) => ({ ...current, [field]: '' }))
@@ -60,7 +68,7 @@ export default function TransformationScreen({ roleScope }) {
   }
 
   async function handleSubmit() {
-    const validationErrors = validateTransformationDraft(draft)
+    const validationErrors = validateTransformationDraft(draft, selectedRecipe)
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length) return
 
@@ -72,6 +80,7 @@ export default function TransformationScreen({ roleScope }) {
         employeeId,
         roleScope,
         recipeCode: draft.recipe_code,
+        resolvedRecipeCode: selectedInputOption?.recipe_code,
         inputProductId: draft.input_product_id,
         inputQtyUnits: draft.input_qty_units,
         outputQtyUnits: draft.output_qty_units,
@@ -177,11 +186,13 @@ export default function TransformationScreen({ roleScope }) {
           sw={sw}
           roleConfig={roleConfig}
           recipes={visibleRecipes}
+          selectedRecipe={selectedRecipe}
           draft={draft}
           errors={errors}
           onChange={updateDraft}
           onSubmit={handleSubmit}
           saving={saving || catalogLoading}
+          suggestedOutputQty={suggestedOutputQty}
         />
 
         <div style={{ marginTop: 18 }}>
