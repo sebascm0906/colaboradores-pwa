@@ -4056,7 +4056,7 @@ async function directRuta(method, path, body) {
 
     const loadPickings = rawLoadPickings.map((picking) => {
       const pickingId = Number(picking.id || 0)
-      const accepted = picking.gf_route_load_accepted === true || picking.state === 'done'
+      const accepted = picking.gf_route_load_accepted === true
       const fieldKind = picking.gf_route_load_kind || ''
       const loadKind = pickingId === initialPickingId
         ? 'initial'

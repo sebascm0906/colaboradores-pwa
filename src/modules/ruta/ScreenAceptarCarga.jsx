@@ -41,12 +41,13 @@ function buildLoadState(plan, load) {
   }
 
   if (initialPickingId && !cardsById.has(initialPickingId)) {
+    const fallbackIsRefill = load?.load_sealed === true
     cardsById.set(initialPickingId, normalizeLoadCard({
       picking_id: initialPickingId,
-      name: 'Carga inicial',
-      state: load?.load_sealed ? 'done' : 'assigned',
-      accepted: load?.load_sealed === true,
-      load_kind: 'initial',
+      name: fallbackIsRefill ? 'Recarga pendiente' : 'Carga inicial',
+      state: 'assigned',
+      accepted: false,
+      load_kind: fallbackIsRefill ? 'refill' : 'initial',
     }, initialPickingId))
   }
 
@@ -56,9 +57,10 @@ function buildLoadState(plan, load) {
   }
 
   const loadCards = Array.from(cardsById.values()).filter(Boolean)
+  const pendingStates = new Set(['confirmed', 'assigned', 'waiting', 'partially_available'])
   const pendingLoads = rawPending.length > 0
     ? rawPending.map((raw) => normalizeLoadCard(raw, initialPickingId)).filter(Boolean)
-    : loadCards.filter((card) => card.state === 'assigned' && card.accepted !== true)
+    : loadCards.filter((card) => pendingStates.has(card.state) && card.accepted !== true)
 
   return { loadCards, pendingLoads }
 }
@@ -285,6 +287,13 @@ export default function ScreenAceptarCarga() {
                     {loadCards.map((card) => {
                       const selected = card.picking_id === selectedLoadId
                       const pending = pendingLoads.some((pendingCard) => pendingCard.picking_id === card.picking_id)
+                      const stateLabel = card.accepted
+                        ? 'Aceptada'
+                        : pending
+                          ? 'Pendiente'
+                          : card.state === 'done'
+                            ? 'Ejecutada'
+                            : 'Asignada'
                       return (
                         <button
                           key={card.picking_id}
@@ -315,12 +324,12 @@ export default function ScreenAceptarCarga() {
                             borderRadius: TOKENS.radius.pill,
                             fontSize: 11,
                             fontWeight: 700,
-                            color: pending ? TOKENS.colors.warning : TOKENS.colors.success,
-                            background: pending ? 'rgba(245,158,11,0.10)' : 'rgba(34,197,94,0.10)',
-                            border: `1px solid ${pending ? 'rgba(245,158,11,0.25)' : 'rgba(34,197,94,0.25)'}`,
+                            color: card.accepted ? TOKENS.colors.success : (pending ? TOKENS.colors.warning : TOKENS.colors.textMuted),
+                            background: card.accepted ? 'rgba(34,197,94,0.10)' : (pending ? 'rgba(245,158,11,0.10)' : 'rgba(148,163,184,0.10)'),
+                            border: `1px solid ${card.accepted ? 'rgba(34,197,94,0.25)' : (pending ? 'rgba(245,158,11,0.25)' : 'rgba(148,163,184,0.20)')}`,
                             flexShrink: 0,
                           }}>
-                            {pending ? 'Pendiente' : 'Aceptada'}
+                            {stateLabel}
                           </span>
                         </button>
                       )
