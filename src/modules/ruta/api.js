@@ -173,8 +173,26 @@ export function getMyLoad(routePlanId) {
  *  IMPORTANTE: el consumer DEBE validar `res.ok === true || res.success === true`
  *  antes de marcar éxito. HTTP 200 no es suficiente.
  */
-export function acceptLoad(routePlanId) {
-  return api('POST', '/pwa-ruta/accept-load', { route_plan_id: routePlanId })
+export function acceptLoad(routePlanId, pickingId = null) {
+  const payload = {
+    route_plan_id: Number(routePlanId),
+    plan_id: Number(routePlanId),
+  }
+  if (pickingId) payload.picking_id = Number(pickingId)
+  return api('POST', '/pwa-ruta/accept-load', payload)
+}
+
+/** Aceptar/confirmar una recarga especifica.
+ *
+ *  Endpoint: POST /pwa-ruta/accept-refill
+ *  Body: { plan_id, route_plan_id, picking_id }
+ */
+export function acceptRefill(routePlanId, pickingId) {
+  return api('POST', '/pwa-ruta/accept-refill', {
+    plan_id: Number(routePlanId),
+    route_plan_id: Number(routePlanId),
+    picking_id: Number(pickingId),
+  })
 }
 
 // ── Incidencias ──────────────────────────────────────────────────────────────
