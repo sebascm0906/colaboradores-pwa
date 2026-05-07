@@ -1,9 +1,67 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan, getMyLoad, acceptLoad, getLoadLines } from './api'
+import { getMyRoutePlan, getMyLoad, acceptLoad, acceptRefill, getLoadLines } from './api'
 import { logScreenError } from '../shared/logScreenError'
+
+function getPickingId(value) {
+  if (Array.isArray(value)) return Number(value[0] || 0)
+  return Number(value || 0)
+}
+
+function normalizeLoadCard(raw, initialPickingId) {
+  const pickingId = getPickingId(raw?.picking_id || raw?.id || raw?.load_picking_id)
+  if (!pickingId) return null
+  const accepted = raw?.accepted === true || raw?.gf_route_load_accepted === true
+  const loadKind = raw?.load_kind || raw?.gf_route_load_kind || (pickingId === initialPickingId ? 'initial' : 'refill')
+  return {
+    ...raw,
+    id: pickingId,
+    picking_id: pickingId,
+    name: raw?.name || raw?.picking_name || `Picking ${pickingId}`,
+    state: raw?.state || raw?.picking_state || '',
+    accepted,
+    gf_route_load_accepted: accepted,
+    load_kind: loadKind,
+    isRefill: loadKind === 'refill' || pickingId !== initialPickingId,
+    scheduled_date: raw?.scheduled_date || raw?.create_date || '',
+  }
+}
+
+function buildLoadState(plan, load) {
+  const initialPickingId = getPickingId(load?.load_picking_id || plan?.load_picking_id)
+  const rawCards = Array.isArray(load?.load_pickings) ? load.load_pickings : []
+  const rawPending = Array.isArray(load?.pending_loads) ? load.pending_loads : []
+  const cardsById = new Map()
+
+  for (const raw of rawCards) {
+    const card = normalizeLoadCard(raw, initialPickingId)
+    if (card) cardsById.set(card.picking_id, card)
+  }
+
+  if (initialPickingId && !cardsById.has(initialPickingId)) {
+    cardsById.set(initialPickingId, normalizeLoadCard({
+      picking_id: initialPickingId,
+      name: 'Carga inicial',
+      state: load?.load_sealed ? 'done' : 'assigned',
+      accepted: load?.load_sealed === true,
+      load_kind: 'initial',
+    }, initialPickingId))
+  }
+
+  for (const raw of rawPending) {
+    const card = normalizeLoadCard(raw, initialPickingId)
+    if (card) cardsById.set(card.picking_id, { ...cardsById.get(card.picking_id), ...card, accepted: false })
+  }
+
+  const loadCards = Array.from(cardsById.values()).filter(Boolean)
+  const pendingLoads = rawPending.length > 0
+    ? rawPending.map((raw) => normalizeLoadCard(raw, initialPickingId)).filter(Boolean)
+    : loadCards.filter((card) => card.state === 'assigned' && card.accepted !== true)
+
+  return { loadCards, pendingLoads }
+}
 
 export default function ScreenAceptarCarga() {
   const { session } = useSession()
@@ -13,14 +71,13 @@ export default function ScreenAceptarCarga() {
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState(null)
   const [load, setLoad] = useState(null)
+  const [loadCards, setLoadCards] = useState([])
+  const [pendingLoads, setPendingLoads] = useState([])
+  const [selectedLoadId, setSelectedLoadId] = useState(null)
   const [lines, setLines] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requiresChecklist, setRequiresChecklist] = useState(false)
-  // checklist_state viene del backend cuando code=vehicle_checklist_required.
-  // Valores esperados: 'missing' | 'draft' | 'in_progress' | null.
-  // Lo usamos sólo para escoger el texto del CTA; el screen /ruta/checklist
-  // sigue siendo la fuente de verdad y se encarga de crear/inicializar.
   const [checklistState, setChecklistState] = useState(null)
 
   useEffect(() => {
@@ -29,54 +86,93 @@ export default function ScreenAceptarCarga() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const p = await getMyRoutePlan(session?.employee_id)
-        setPlan(p)
-        if (p?.id) {
-          // Si getMyLoad lanza, NO degradamos a "Sin carga" silenciosa —
-          // mostramos error real. Antes el catch silencioso hacía que un
-          // 404 backend pareciera "no hay carga asignada hoy".
-          let l = null
-          try {
-            l = await getMyLoad(p.id)
-          } catch (e) {
-            logScreenError('ScreenAceptarCarga', 'getMyLoad', e)
-            setError('No se pudo cargar la información de tu carga. Reintenta o reporta a soporte.')
-          }
-          setLoad(l)
-          if (l?.load_picking_id) {
-            const ll = await getLoadLines(l.load_picking_id).catch((err) => {
-              logScreenError('ScreenAceptarCarga', 'getLoadLines', err)
-              return []
-            })
-            setLines(ll || [])
-          }
-        }
-      } catch (e) {
-        logScreenError('ScreenAceptarCarga', 'fetchData', e)
-        setError('No se pudo cargar tu plan de ruta. Reintenta o reporta a soporte.')
+  const refreshData = useCallback(async ({ keepLoading = false } = {}) => {
+    if (!keepLoading) setLoading(true)
+    try {
+      const p = await getMyRoutePlan(session?.employee_id)
+      setPlan(p)
+      setError('')
+      setLines([])
+
+      if (!p?.id) {
+        setLoad(null)
+        setLoadCards([])
+        setPendingLoads([])
+        setSelectedLoadId(null)
+        return
       }
-      finally { setLoading(false) }
+
+      let l = null
+      try {
+        l = await getMyLoad(p.id)
+      } catch (e) {
+        logScreenError('ScreenAceptarCarga', 'getMyLoad', e)
+        setError('No se pudo cargar la informacion de tu carga. Reintenta o reporta a soporte.')
+      }
+
+      const { loadCards: nextCards, pendingLoads: nextPending } = buildLoadState(p, l)
+      const nextSelected = nextPending[0] || nextCards[0] || null
+
+      setLoad(l)
+      setLoadCards(nextCards)
+      setPendingLoads(nextPending)
+      setSelectedLoadId(nextSelected?.picking_id || null)
+
+      if (import.meta.env.DEV) {
+        for (const refill of nextPending.filter((card) => card.isRefill)) {
+          console.info(`[PWA-Security] Refill detected for Plan ID: ${p.id}, Picking ID: ${refill.picking_id}`)
+        }
+      }
+
+      if (nextSelected?.picking_id) {
+        const ll = await getLoadLines(nextSelected.picking_id).catch((err) => {
+          logScreenError('ScreenAceptarCarga', 'getLoadLines', err)
+          return []
+        })
+        setLines(ll || [])
+      }
+    } catch (e) {
+      logScreenError('ScreenAceptarCarga', 'fetchData', e)
+      setError('No se pudo cargar tu plan de ruta. Reintenta o reporta a soporte.')
+    } finally {
+      setLoading(false)
     }
-    fetchData()
-  }, [])
+  }, [session?.employee_id])
+
+  useEffect(() => {
+    refreshData()
+  }, [refreshData])
+
+  async function handleSelectLoad(loadCard) {
+    if (!loadCard?.picking_id) return
+    setSelectedLoadId(loadCard.picking_id)
+    const ll = await getLoadLines(loadCard.picking_id).catch((err) => {
+      logScreenError('ScreenAceptarCarga', 'getLoadLines.select', err)
+      return []
+    })
+    setLines(ll || [])
+  }
 
   async function handleAccept() {
-    if (!plan?.id || submitting) return
+    if (!session?.employee_id) {
+      setError('Sesion no activa. Vuelve a iniciar sesion para aceptar la carga.')
+      return
+    }
+
+    const selectedLoad = loadCards.find((card) => card.picking_id === selectedLoadId) || pendingLoads[0] || null
+    if (!plan?.id || submitting || !selectedLoad?.picking_id) return
+
     setSubmitting(true)
     setError('')
     setRequiresChecklist(false)
     setChecklistState(null)
     try {
-      const res = await acceptLoad(plan.id)
+      const res = selectedLoad.isRefill
+        ? await acceptRefill(plan.id, selectedLoad.picking_id)
+        : await acceptLoad(plan.id, selectedLoad.picking_id)
       const ok = res?.ok === true || res?.success === true
 
       if (!ok) {
-        // Caso especial: backend pide completar el checklist de unidad antes
-        // de aceptar carga. Sebastián fix ba9de46 → el code llega en data.code
-        // (también aceptamos res.code como fallback por si el backend evoluciona).
         const code = res?.data?.code || res?.code || null
         if (code === 'vehicle_checklist_required') {
           setRequiresChecklist(true)
@@ -85,13 +181,10 @@ export default function ScreenAceptarCarga() {
           return
         }
 
-        // Backend respondió HTTP 200 pero con ok:false (acceso, validación,
-        // endpoint no deployado que devuelve shape vacío, etc.).
-        // NO marcamos load_sealed en falso; mostramos el message del backend
-        // si vino, sino mensaje genérico.
-        const err = new Error(`accept-load no confirmó la aceptación`)
+        const err = new Error('accept-load no confirmo la aceptacion')
         err.context = {
           plan_id: plan.id,
+          picking_id: selectedLoad.picking_id,
           employee_id: session?.employee_id,
           code,
           status: res?.status ?? res?.case ?? null,
@@ -102,30 +195,13 @@ export default function ScreenAceptarCarga() {
         return
       }
 
-      // Éxito confirmado: reflejamos load_sealed real desde el backend.
-      const data = res?.data || {}
-      setPlan(prev => prev
-        ? {
-            ...prev,
-            state: data.state || 'in_progress',
-            load_sealed: data.load_sealed === true ? true : prev.load_sealed,
-          }
-        : prev)
-      setLoad(prev => prev
-        ? {
-            ...prev,
-            state: data.state || 'in_progress',
-            load_sealed: data.load_sealed === true ? true : prev.load_sealed,
-            load_sealed_at: data.load_sealed_at || prev.load_sealed_at,
-            load_sealed_by: data.load_sealed_by || prev.load_sealed_by,
-          }
-        : prev)
+      await refreshData({ keepLoading: true })
     } catch (e) {
-      // Network error, 404, 5xx, JSON parse error.
       e.context = {
         plan_id: plan.id,
+        picking_id: selectedLoad.picking_id,
         employee_id: session?.employee_id,
-        endpoint: '/pwa-ruta/accept-load',
+        endpoint: selectedLoad.isRefill ? '/pwa-ruta/accept-refill' : '/pwa-ruta/accept-load',
       }
       logScreenError('ScreenAceptarCarga', 'acceptLoad.networkError', e)
       setError('No se pudo aceptar la carga. Intenta de nuevo o reporta a soporte.')
@@ -134,17 +210,16 @@ export default function ScreenAceptarCarga() {
     }
   }
 
-  // load_sealed es la fuente de verdad — viene del backend en getMyLoad y se
-  // actualiza solo cuando handleAccept confirma con res.ok === true.
-  const isAccepted = load?.load_sealed === true
+  const selectedLoad = loadCards.find((card) => card.picking_id === selectedLoadId) || null
+  const hasPendingLoad = pendingLoads.length > 0
+  const isAccepted = !hasPendingLoad && loadCards.length > 0 && loadCards.every((card) => card.accepted === true)
+  const acceptLabel = selectedLoad?.isRefill ? 'Confirmar Recarga' : 'Confirmar Recepcion'
   const products = lines.length > 0 ? lines : (load?.products || load?.lines || [])
 
   return (
     <div style={{ minHeight: '100dvh', background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap'); * { font-family: 'DM Sans', sans-serif; box-sizing: border-box; } button { border: none; background: none; cursor: pointer; } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 16px' }}>
-
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
           <button onClick={() => navigate('/ruta')} style={{ width: 38, height: 38, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
@@ -183,32 +258,76 @@ export default function ScreenAceptarCarga() {
                   }}
                 >
                   {checklistState === 'missing'
-                    ? 'Realizar inspección de unidad'
+                    ? 'Realizar inspeccion de unidad'
                     : (checklistState === 'draft' || checklistState === 'in_progress')
-                      ? 'Continuar inspección de unidad'
+                      ? 'Continuar inspeccion de unidad'
                       : 'Ir a checklist de unidad'}
                 </button>
               </div>
             )}
 
-            {load && products.length > 0 ? (
+            {loadCards.length > 0 || products.length > 0 ? (
               <>
-                {/* Status badge */}
-                <div style={{
-                  display: 'flex', justifyContent: 'center', marginBottom: 16,
-                }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
                   <span style={{
                     padding: '6px 16px', borderRadius: TOKENS.radius.pill,
                     fontSize: 12, fontWeight: 700,
-                    background: isAccepted ? 'rgba(34,197,94,0.12)' : 'rgba(245,158,11,0.12)',
-                    color: isAccepted ? TOKENS.colors.success : TOKENS.colors.warning,
-                    border: `1px solid ${isAccepted ? 'rgba(34,197,94,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                    background: hasPendingLoad ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.12)',
+                    color: hasPendingLoad ? TOKENS.colors.warning : TOKENS.colors.success,
+                    border: `1px solid ${hasPendingLoad ? 'rgba(245,158,11,0.3)' : 'rgba(34,197,94,0.3)'}`,
                   }}>
-                    {isAccepted ? 'Carga aceptada' : 'Pendiente de aceptar'}
+                    {hasPendingLoad ? `${pendingLoads.length} carga(s) pendiente(s)` : (isAccepted ? 'Cargas aceptadas' : 'Carga asignada')}
                   </span>
                 </div>
 
-                {/* Product list */}
+                {loadCards.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                    {loadCards.map((card) => {
+                      const selected = card.picking_id === selectedLoadId
+                      const pending = pendingLoads.some((pendingCard) => pendingCard.picking_id === card.picking_id)
+                      return (
+                        <button
+                          key={card.picking_id}
+                          onClick={() => handleSelectLoad(card)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 14px',
+                            borderRadius: TOKENS.radius.lg,
+                            background: selected ? 'rgba(43,143,224,0.14)' : TOKENS.glass.panel,
+                            border: `1px solid ${selected ? 'rgba(43,143,224,0.55)' : TOKENS.colors.border}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>
+                              {card.isRefill ? 'Recarga' : 'Carga inicial'} - {card.name}
+                            </p>
+                            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                              {card.scheduled_date || 'Sin hora registrada'}
+                            </p>
+                          </div>
+                          <span style={{
+                            marginLeft: 12,
+                            padding: '4px 10px',
+                            borderRadius: TOKENS.radius.pill,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: pending ? TOKENS.colors.warning : TOKENS.colors.success,
+                            background: pending ? 'rgba(245,158,11,0.10)' : 'rgba(34,197,94,0.10)',
+                            border: `1px solid ${pending ? 'rgba(245,158,11,0.25)' : 'rgba(34,197,94,0.25)'}`,
+                            flexShrink: 0,
+                          }}>
+                            {pending ? 'Pendiente' : 'Aceptada'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {products.map((p, i) => (
                     <div key={p.id || i} style={{
@@ -227,23 +346,22 @@ export default function ScreenAceptarCarga() {
                   ))}
                 </div>
 
-                {/* Accept button */}
-                {!isAccepted && (
+                {hasPendingLoad && (
                   <div style={{ padding: '24px 0 32px' }}>
                     <button
                       onClick={handleAccept}
-                      disabled={submitting}
+                      disabled={submitting || !selectedLoad || selectedLoad.accepted === true}
                       style={{
                         width: '100%', padding: '14px',
                         borderRadius: TOKENS.radius.lg,
                         background: 'linear-gradient(90deg, #15803d, #22c55e)',
                         color: 'white', fontSize: 15, fontWeight: 600,
-                        opacity: submitting ? 0.6 : 1,
+                        opacity: submitting || !selectedLoad || selectedLoad.accepted === true ? 0.6 : 1,
                         boxShadow: '0 10px 24px rgba(34,197,94,0.25)',
                         transition: `opacity ${TOKENS.motion.fast}`,
                       }}
                     >
-                      {submitting ? 'Aceptando...' : 'Aceptar Carga'}
+                      {submitting ? 'Aceptando...' : acceptLabel}
                     </button>
                   </div>
                 )}

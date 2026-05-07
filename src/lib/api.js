@@ -4020,13 +4020,62 @@ async function directRuta(method, path, body) {
     })
     const row = pickFirstResponse(result)
     if (!row) return null
+    const initialPickingId = row.load_picking_id?.[0] || 0
+    const { result: loadPickingsResult } = await readWithOptionalFieldFallback(readModelSorted, 'stock.picking', {
+      requiredFields: [
+        'id',
+        'name',
+        'state',
+        'origin',
+        'scheduled_date',
+        'create_date',
+        'gf_route_plan_id',
+        'location_dest_id',
+      ],
+      optionalFieldGroups: [
+        ['gf_route_load_accepted'],
+        ['gf_route_load_kind'],
+      ],
+      domain: [['gf_route_plan_id', '=', routePlanId], ['state', '!=', 'cancel']],
+      sort_column: 'scheduled_date',
+      sort_desc: false,
+      limit: 50,
+      sudo: 1,
+    })
+    const loadPickings = pickListResponse(loadPickingsResult).map((picking) => {
+      const pickingId = Number(picking.id || 0)
+      const accepted = picking.gf_route_load_accepted === true || (row.load_sealed === true && pickingId === initialPickingId)
+      const loadKind = picking.gf_route_load_kind || (pickingId === initialPickingId ? 'initial' : 'refill')
+      return {
+        id: pickingId,
+        picking_id: pickingId,
+        name: picking.name || `Picking ${pickingId}`,
+        state: picking.state || '',
+        origin: picking.origin || '',
+        scheduled_date: picking.scheduled_date || '',
+        create_date: picking.create_date || '',
+        location_dest_id: picking.location_dest_id?.[0] || picking.location_dest_id || 0,
+        location_dest_name: picking.location_dest_id?.[1] || '',
+        gf_route_load_accepted: accepted,
+        accepted,
+        gf_route_load_kind: loadKind,
+        load_kind: loadKind,
+      }
+    })
+    const pendingLoads = loadPickings.filter((picking) => (
+      picking.state === 'assigned' && picking.accepted !== true
+    ))
     return {
       id: row.id,
-      load_picking_id: row.load_picking_id?.[0] || 0,
+      load_picking_id: initialPickingId,
       load_sealed: row.load_sealed === true,
       state: row.state,
       stops_total: Number(row.stops_total || 0),
       stops_done: Number(row.stops_done || 0),
+      load_pickings: loadPickings,
+      pending_loads: pendingLoads,
+      has_pending_load: pendingLoads.length > 0,
+      pending_load_count: pendingLoads.length,
       products: row.products || [],
       lines: row.lines || [],
     }
@@ -4109,9 +4158,11 @@ async function directRuta(method, path, body) {
     return row
   }
 
-  if (cleanPath === '/pwa-ruta/accept-load' && method === 'POST') {
-    return odooJson('/pwa-ruta/accept-load', {
+  if ((cleanPath === '/pwa-ruta/accept-load' || cleanPath === '/pwa-ruta/accept-refill') && method === 'POST') {
+    return odooJson(cleanPath, {
+      plan_id: Number(body?.plan_id || body?.route_plan_id || 0),
       route_plan_id: Number(body?.route_plan_id || body?.plan_id || 0),
+      picking_id: Number(body?.picking_id || body?.load_picking_id || 0) || undefined,
     })
   }
 
