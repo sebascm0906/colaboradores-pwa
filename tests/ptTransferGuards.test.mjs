@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   getPtTransferActionId,
+  getPtTransferActionTarget,
   isOdooPickingId,
   normalizeOdooPickingId,
 } from '../src/modules/entregas/ptTransferGuards.js'
@@ -23,11 +24,23 @@ test('normalizeOdooPickingId returns null for local or invalid ids', () => {
   assert.equal(normalizeOdooPickingId(null), null)
 })
 
-test('getPtTransferActionId uses transfer_id when pending payload has temporary negative ids', () => {
+test('getPtTransferActionId does not use transfer_id as stock picking id', () => {
   assert.equal(getPtTransferActionId({
     id: -36,
     picking_id: -36,
     transfer_id: 36,
     name: 'PTT/00036',
-  }), 36)
+  }), null)
+})
+
+test('getPtTransferActionTarget falls back to picking name for temporary negative ids', () => {
+  assert.deepEqual(getPtTransferActionTarget({
+    id: -36,
+    picking_id: -36,
+    transfer_id: 36,
+    name: 'PTT/00036',
+  }), {
+    picking_id: null,
+    picking_name: 'PTT/00036',
+  })
 })

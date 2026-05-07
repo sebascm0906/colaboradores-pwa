@@ -4951,14 +4951,49 @@ async function directAlmacenPT(method, path, body) {
       warehouse_id: warehouseId,
     })
   }
+  async function resolvePtTransferPickingId() {
+    const directId = normalizeOdooPickingId(body?.picking_id)
+    if (directId) return { id: directId, source: 'picking_id' }
+
+    const pickingName = String(body?.picking_name || body?.name || '').trim()
+    if (!pickingName) return { id: null, source: 'missing' }
+
+    const rows = pickListResponse(await readModelSorted('stock.picking', {
+      fields: ['id', 'name', 'state', 'picking_type_code', 'picking_type_id', 'location_id', 'location_dest_id'],
+      domain: [['name', '=', pickingName]],
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 10,
+      sudo: 1,
+    }))
+    const preferred = rows.find((row) => ['internal', 'incoming'].includes(String(row.picking_type_code || '')))
+      || rows[0]
+    return {
+      id: normalizeOdooPickingId(preferred?.id),
+      source: 'picking_name',
+      name: pickingName,
+      candidates: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        state: row.state,
+        picking_type_code: row.picking_type_code,
+        picking_type: row.picking_type_id?.[1] || '',
+        location: row.location_id?.[1] || '',
+        location_dest: row.location_dest_id?.[1] || '',
+      })),
+    }
+  }
   if (cleanPath === '/pwa-pt/accept-transfer' && method === 'POST') {
-    const pickingId = normalizeOdooPickingId(body?.picking_id)
+    const resolved = await resolvePtTransferPickingId()
+    const pickingId = resolved.id
     console.info('[PT ACCEPT][BFF] incoming request', {
       raw_picking_id: body?.picking_id,
+      picking_name: body?.picking_name,
       parsed_picking_id: pickingId,
       valid_odoo_id: Boolean(pickingId),
+      resolved,
     })
-    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID real de Odoo' }
+    if (!pickingId) return { ok: false, error: 'No se encontro el stock.picking real para esta transferencia.' }
     const response = await odooJson('/gf/logistics/api/employee/pt_transfer/accept', {
       picking_id: pickingId,
     })
@@ -4966,9 +5001,17 @@ async function directAlmacenPT(method, path, body) {
     return response
   }
   if (cleanPath === '/pwa-pt/reject-transfer' && method === 'POST') {
-    const pickingId = normalizeOdooPickingId(body?.picking_id)
+    const resolved = await resolvePtTransferPickingId()
+    const pickingId = resolved.id
     const reason = (body?.reason || '').trim()
-    if (!pickingId) return { ok: false, error: 'picking_id debe ser un ID real de Odoo' }
+    console.info('[PT REJECT][BFF] incoming request', {
+      raw_picking_id: body?.picking_id,
+      picking_name: body?.picking_name,
+      parsed_picking_id: pickingId,
+      valid_odoo_id: Boolean(pickingId),
+      resolved,
+    })
+    if (!pickingId) return { ok: false, error: 'No se encontro el stock.picking real para esta transferencia.' }
     if (!reason) return { ok: false, error: 'reason requerido' }
     return odooJson('/gf/logistics/api/employee/pt_transfer/reject', {
       picking_id: pickingId,

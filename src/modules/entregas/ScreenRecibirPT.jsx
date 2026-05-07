@@ -3,7 +3,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { getPendingTransfers, acceptTransfer, rejectTransfer } from './entregasService'
-import { getPtTransferActionId } from './ptTransferGuards'
+import { getPtTransferActionTarget } from './ptTransferGuards'
 import { getEntregasDestination, resolveLocalTransferByPicking } from '../almacen-pt/ptService'
 import { ScreenShell, EmptyState } from './components'
 import SessionErrorState from '../../components/SessionErrorState'
@@ -86,34 +86,35 @@ export default function ScreenRecibirPT() {
   }
 
   async function handleAccept(picking) {
-    const pickingId = getPtTransferActionId(picking)
-    console.log('[PT ACCEPT] click', { pickingId, picking })
-    if (!pickingId) {
+    const target = getPtTransferActionTarget(picking)
+    const actionKey = target.picking_id || target.picking_name
+    console.log('[PT ACCEPT] click', { target, picking })
+    if (!actionKey) {
       showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.', 'error')
       return
     }
-    setActionStates((s) => ({ ...s, [pickingId]: 'accepting' }))
+    setActionStates((s) => ({ ...s, [actionKey]: 'accepting' }))
     try {
-      console.log('[PT ACCEPT] sending request', { pickingId })
-      const res = await acceptTransfer(pickingId)
+      console.log('[PT ACCEPT] sending request', target)
+      const res = await acceptTransfer(target)
       console.log('[PT ACCEPT] response', res)
       if (res && res.ok === false) {
-        showToast(`Error: ${friendlyError(res.error)}`, 'error')
+        showToast(`Error: ${friendlyError(res.error || res.message)}`, 'error')
         return
       }
-      resolveLocalTransferByPicking(pickingId, 'accepted')
+      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'accepted')
       showToast('Transferencia aceptada y picking validado')
       await loadData()
     } catch (e) {
       console.log('[PT ACCEPT] error', {
-        pickingId,
+        target,
         message: e?.message,
         error: e,
       })
       if (e.message === 'no_session') return
       showToast(`Error: ${friendlyError(e?.message)}`, 'error')
     } finally {
-      setActionStates((s) => { const n = { ...s }; delete n[pickingId]; return n })
+      setActionStates((s) => { const n = { ...s }; delete n[actionKey]; return n })
     }
   }
 
@@ -131,27 +132,28 @@ export default function ScreenRecibirPT() {
     if (!dialog || dialog.type !== 'reject') return
     const reason = rejectReason.trim()
     if (!reason) return
-    const pickingId = getPtTransferActionId(dialog.picking)
-    if (!pickingId) {
+    const target = getPtTransferActionTarget(dialog.picking)
+    const actionKey = target.picking_id || target.picking_name
+    if (!actionKey) {
       showToast('La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.', 'error')
       return
     }
     closeDialog()
-    setActionStates((s) => ({ ...s, [pickingId]: 'rejecting' }))
+    setActionStates((s) => ({ ...s, [actionKey]: 'rejecting' }))
     try {
-      const res = await rejectTransfer(pickingId, reason)
+      const res = await rejectTransfer(target, reason)
       if (res && res.ok === false) {
-        showToast(`Error: ${friendlyError(res.error)}`, 'error')
+        showToast(`Error: ${friendlyError(res.error || res.message)}`, 'error')
         return
       }
-      resolveLocalTransferByPicking(pickingId, 'rejected')
+      if (target.picking_id) resolveLocalTransferByPicking(target.picking_id, 'rejected')
       showToast('Transferencia rechazada')
       await loadData()
     } catch (e) {
       if (e.message === 'no_session') return
       showToast(`Error: ${friendlyError(e?.message)}`, 'error')
     } finally {
-      setActionStates((s) => { const n = { ...s }; delete n[pickingId]; return n })
+      setActionStates((s) => { const n = { ...s }; delete n[actionKey]; return n })
     }
   }
 
@@ -209,8 +211,9 @@ export default function ScreenRecibirPT() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {transfers.map((picking) => {
-            const actionId = getPtTransferActionId(picking) || picking.id
-            const state = actionStates[actionId]
+            const target = getPtTransferActionTarget(picking)
+            const actionKey = target.picking_id || target.picking_name || picking.id
+            const state = actionStates[actionKey]
             const isBusy = !!state
             const moves = Array.isArray(picking.moves) ? picking.moves : []
             return (

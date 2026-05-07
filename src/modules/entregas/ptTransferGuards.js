@@ -15,6 +15,13 @@ export function getPtTransferActionId(transfer) {
     || normalizeOdooPickingId(transfer.stock_picking_id)
     || normalizeOdooPickingId(transfer.odoo_picking_id)
     || normalizeOdooPickingId(transfer.backend_id)
-    || normalizeOdooPickingId(transfer.transfer_id)
     || normalizeOdooPickingId(transfer.id)
+}
+
+export function getPtTransferActionTarget(transfer) {
+  const pickingId = getPtTransferActionId(transfer)
+  return {
+    picking_id: pickingId,
+    picking_name: pickingId ? '' : String(transfer?.picking_name || transfer?.name || '').trim(),
+  }
 }

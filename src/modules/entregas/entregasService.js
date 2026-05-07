@@ -153,12 +153,16 @@ export async function getPendingTransfers(warehouseId) {
  * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
 export async function acceptTransfer(pickingId) {
-  const odooPickingId = normalizeOdooPickingId(pickingId)
-  console.info('[PT ACCEPT] service sending', { pickingId, odooPickingId })
-  if (!odooPickingId) {
+  const target = typeof pickingId === 'object' && pickingId
+    ? pickingId
+    : { picking_id: pickingId }
+  const odooPickingId = normalizeOdooPickingId(target.picking_id)
+  const pickingName = String(target.picking_name || '').trim()
+  console.info('[PT ACCEPT] service sending', { pickingId, odooPickingId, pickingName })
+  if (!odooPickingId && !pickingName) {
     return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de aceptar.' }
   }
-  return api('POST', '/pwa-pt/accept-transfer', { picking_id: odooPickingId })
+  return api('POST', '/pwa-pt/accept-transfer', { picking_id: odooPickingId, picking_name: pickingName })
 }
 
 /**
@@ -169,11 +173,15 @@ export async function acceptTransfer(pickingId) {
  * @returns {Promise<{ok:boolean, error?:string, picking_id?:number, state?:string}>}
  */
 export async function rejectTransfer(pickingId, reason) {
-  const odooPickingId = normalizeOdooPickingId(pickingId)
-  if (!odooPickingId) {
+  const target = typeof pickingId === 'object' && pickingId
+    ? pickingId
+    : { picking_id: pickingId }
+  const odooPickingId = normalizeOdooPickingId(target.picking_id)
+  const pickingName = String(target.picking_name || '').trim()
+  if (!odooPickingId && !pickingName) {
     return { ok: false, error: 'La transferencia aun no tiene picking real en Odoo. Recarga antes de rechazar.' }
   }
-  return api('POST', '/pwa-pt/reject-transfer', { picking_id: odooPickingId, reason })
+  return api('POST', '/pwa-pt/reject-transfer', { picking_id: odooPickingId, picking_name: pickingName, reason })
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
