@@ -6,6 +6,40 @@ import { getMyRoutePlan, getMyLoad, acceptLoad, acceptRefill, getLoadLines } fro
 import { buildLoadState } from './loadState'
 import { logScreenError } from '../shared/logScreenError'
 
+function getLineKey(line) {
+  if (Array.isArray(line?.product_id)) return `id:${line.product_id[0]}`
+  if (line?.product_id) return `id:${line.product_id}`
+  return `name:${line?.product_name || line?.name || ''}`
+}
+
+function getLineName(line) {
+  if (line?.product_name || line?.name) return line.product_name || line.name
+  if (Array.isArray(line?.product_id)) return line.product_id[1] || `Producto ${line.product_id[0]}`
+  return 'Producto'
+}
+
+function getLineQty(line) {
+  return Number(line?.quantity ?? line?.qty ?? 0) || 0
+}
+
+function aggregateLines(groups) {
+  const totals = new Map()
+  for (const group of groups) {
+    for (const line of group.lines || []) {
+      const key = getLineKey(line)
+      const current = totals.get(key) || {
+        key,
+        product_name: getLineName(line),
+        uom: line?.uom || '',
+        quantity: 0,
+      }
+      current.quantity += getLineQty(line)
+      totals.set(key, current)
+    }
+  }
+  return Array.from(totals.values()).filter((line) => line.quantity > 0)
+}
+
 export default function ScreenAceptarCarga() {
   const { session } = useSession()
   const navigate = useNavigate()
@@ -185,6 +219,13 @@ export default function ScreenAceptarCarga() {
     ? (linesByPicking[selectedLoad.picking_id] || lines || [])
     : []
   const products = selectedProducts.length > 0 ? selectedProducts : (load?.products || load?.lines || [])
+  const loadLineGroups = loadCards.map((card) => ({
+    card,
+    lines: linesByPicking[card.picking_id] || [],
+  }))
+  const hasGroupedLines = loadLineGroups.some((group) => group.lines.length > 0)
+  const combinedProducts = loadLineGroups.length > 1 ? aggregateLines(loadLineGroups) : []
+  const showSeparatedLines = loadCards.length > 1 && hasGroupedLines
 
   return (
     <div style={{ minHeight: '100dvh', background: `linear-gradient(160deg, ${TOKENS.colors.bg0} 0%, ${TOKENS.colors.bg1} 50%, ${TOKENS.colors.bg2} 100%)`, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -305,23 +346,94 @@ export default function ScreenAceptarCarga() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {products.map((p, i) => (
-                    <div key={p.id || i} style={{
-                      padding: '12px 16px', borderRadius: TOKENS.radius.lg,
-                      background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>{p.product_name || p.name}</p>
-                        {p.uom && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{p.uom}</p>}
+                {showSeparatedLines ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {loadLineGroups.map(({ card, lines: cardLines }) => (
+                      <section key={card.picking_id}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontWeight: 700 }}>
+                            {card.isRefill ? 'Recarga' : 'Carga inicial'} - {card.name}
+                          </p>
+                          <span style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: 0 }}>
+                            {cardLines.length} prod.
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {cardLines.length > 0 ? cardLines.map((p, i) => (
+                            <div key={p.id || `${card.picking_id}-${i}`} style={{
+                              padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>{getLineName(p)}</p>
+                                {p.uom && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{p.uom}</p>}
+                              </div>
+                              <span style={{ ...typo.h2, color: TOKENS.colors.text, marginLeft: 12 }}>
+                                {getLineQty(p)}
+                              </span>
+                            </div>
+                          )) : (
+                            <div style={{
+                              padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                              background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                            }}>
+                              <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>Sin desglose registrado</p>
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    ))}
+
+                    {combinedProducts.length > 0 && (
+                      <section style={{ paddingTop: 2 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontWeight: 700 }}>
+                            Total combinado
+                          </p>
+                          <span style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: 0 }}>
+                            {combinedProducts.length} prod.
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {combinedProducts.map((p) => (
+                            <div key={p.key} style={{
+                              padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                              background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.22)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>{p.product_name}</p>
+                                {p.uom && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{p.uom}</p>}
+                              </div>
+                              <span style={{ ...typo.h2, color: TOKENS.colors.text, marginLeft: 12 }}>
+                                {p.quantity}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {products.map((p, i) => (
+                      <div key={p.id || i} style={{
+                        padding: '12px 16px', borderRadius: TOKENS.radius.lg,
+                        background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ ...typo.body, color: TOKENS.colors.textSoft, margin: 0 }}>{getLineName(p)}</p>
+                          {p.uom && <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>{p.uom}</p>}
+                        </div>
+                        <span style={{ ...typo.h2, color: TOKENS.colors.text, marginLeft: 12 }}>
+                          {getLineQty(p)}
+                        </span>
                       </div>
-                      <span style={{ ...typo.h2, color: TOKENS.colors.text, marginLeft: 12 }}>
-                        {p.quantity ?? p.qty}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
 
                 {hasPendingLoad && (
                   <div style={{ padding: '24px 0 32px' }}>
