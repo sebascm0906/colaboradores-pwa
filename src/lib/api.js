@@ -3857,19 +3857,12 @@ async function directRuta(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
 
-  if (cleanPath === '/pwa-ruta/my-plan' && method === 'GET') {
-    const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
-    if (!empId) return null
-    // BLD-20260427-P0-MY-PLAN-TODAY: la pantalla de aceptación de carga de
-    // jefe_ruta debe operar sobre el plan de HOY. Sin filtro de fecha el
-    // sort por date desc devolvía un plan futuro (mañana) cuando existían
-    // ambos, dejando "Sin carga asignada" para Manuel y bloqueando la
-    // aceptación de la carga real del día. Filtrar por today_str hace que
-    // un plan futuro no contamine la operación de hoy. Si no hay plan de
-    // hoy, devuelve null intencionalmente (no fallback a mañana).
+  if (cleanPath === '/pwa-ruta/my-plans' && (method === 'GET' || method === 'POST')) {
+    const empId = Number(body?.employee_id || query.get('employee_id') || getEmployeeId() || 0)
+    if (!empId) return []
     const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const todayStr = body?.date || query.get('date') || `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
     const result = await readModelSorted('gf.route.plan', {
       fields: [
         'id',
@@ -3877,6 +3870,7 @@ async function directRuta(method, path, body) {
         'date',
         'route_id',
         'generation_mode',
+        'shift_type',
         'state',
         'driver_employee_id',
         'salesperson_employee_id',
@@ -3901,7 +3895,60 @@ async function directRuta(method, path, body) {
         ['driver_employee_id', '=', empId],
         ['salesperson_employee_id', '=', empId],
       ],
-      sort_column: 'date',
+      sort_column: 'id',
+      sort_desc: true,
+      limit: 20,
+      sudo: 1,
+    })
+    return pickListResponse(result).filter((plan) => plan?.state !== 'cancel')
+  }
+
+  if (cleanPath === '/pwa-ruta/my-plan' && method === 'GET') {
+    const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
+    if (!empId) return null
+    // BLD-20260427-P0-MY-PLAN-TODAY: la pantalla de aceptación de carga de
+    // jefe_ruta debe operar sobre el plan de HOY. Sin filtro de fecha el
+    // sort por date desc devolvía un plan futuro (mañana) cuando existían
+    // ambos, dejando "Sin carga asignada" para Manuel y bloqueando la
+    // aceptación de la carga real del día. Filtrar por today_str hace que
+    // un plan futuro no contamine la operación de hoy. Si no hay plan de
+    // hoy, devuelve null intencionalmente (no fallback a mañana).
+    const today = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const result = await readModelSorted('gf.route.plan', {
+      fields: [
+        'id',
+        'name',
+        'date',
+        'route_id',
+        'generation_mode',
+        'shift_type',
+        'state',
+        'driver_employee_id',
+        'salesperson_employee_id',
+        'departure_time_target',
+        'departure_time_real',
+        'stops_total',
+        'stops_done',
+        'load_picking_id',
+        'load_sealed',
+        'bridge_key',
+        'reconciliation_id',
+        'departure_km',
+        'arrival_km',
+        'corte_validated',
+        'corte_validated_at',
+        'closure_time',
+      ],
+      domain: [
+        '&',
+        ['date', '=', todayStr],
+        '|',
+        ['driver_employee_id', '=', empId],
+        ['salesperson_employee_id', '=', empId],
+      ],
+      sort_column: 'id',
       sort_desc: true,
       limit: 1,
       sudo: 1,
@@ -4117,6 +4164,12 @@ async function directRuta(method, path, body) {
     })
   }
 
+  if (cleanPath === '/pwa-ruta/start-route' && method === 'POST') {
+    return odooJson('/pwa-ruta/start-route', {
+      plan_id: Number(body?.plan_id || body?.route_plan_id || 0),
+    })
+  }
+
   // ── Sprint 5: Liquidación confirm con force (guía §4) ─────────────────────
   // Endpoint real del backend: /gf/logistics/api/employee/liquidacion/confirm
   // Alias backend: /pwa-ruta/liquidacion-confirm (mismo handler, igual contrato).
@@ -4140,12 +4193,6 @@ async function directRuta(method, path, body) {
   // con result.ok === false (p.ej. "No tienes acceso a este plan.").
   // El consumer (ScreenAceptarCarga) debe validar res.ok === true ||
   // res.success === true; cualquier otra forma es fallo y NO marca aceptado.
-  if (cleanPath === '/pwa-ruta/accept-load' && method === 'POST') {
-    return odooJson('/pwa-ruta/accept-load', {
-      route_plan_id: Number(body?.route_plan_id || body?.plan_id || 0),
-    })
-  }
-
   // ── Validar corte (contrato Sebastián 2026-04-25) ─────────────────────────
   // Endpoint real: POST /pwa-ruta/validate-corte
   // Alias backend: POST /pwa-ruta/corte-confirm (mismo handler).
@@ -6700,11 +6747,17 @@ async function directSupervisorVentas(method, path, body) {
           domain: [['route_id', 'in', routeIds], ['date', '=', dateTarget]],
           sort_column: 'id',
           sort_desc: false,
-          limit: routeIds.length,
+          limit: Math.max(routeIds.length * 5, 50),
           sudo: 1,
         }))
       : []
-    const planByRouteId = new Map(planRows.map((plan) => [Number(plan.route_id?.[0] || plan.route_id || 0), plan]))
+    const plansByRouteId = new Map()
+    for (const plan of planRows) {
+      const routeId = Number(plan.route_id?.[0] || plan.route_id || 0)
+      if (!routeId) continue
+      if (!plansByRouteId.has(routeId)) plansByRouteId.set(routeId, [])
+      plansByRouteId.get(routeId).push(plan)
+    }
 
     const forecastHasRoutePlan = await modelHasField('gf.saleops.forecast', 'route_plan_id')
     const forecastHasRoute = await modelHasField('gf.saleops.forecast', 'route_id')
@@ -6738,13 +6791,14 @@ async function directSupervisorVentas(method, path, body) {
       if (routeId && !forecastByRouteId.has(routeId)) forecastByRouteId.set(routeId, forecast)
     }
 
-    return assignedRoutes.map(({ route, employeeRef }) => {
+    return assignedRoutes.flatMap(({ route, employeeRef }) => {
       const routeId = Number(route.id || 0)
-      const plan = planByRouteId.get(routeId) || null
-      const forecast = plan?.id
-        ? forecastByPlanId.get(Number(plan.id)) || forecastByRouteId.get(routeId) || null
-        : forecastByRouteId.get(routeId) || null
-      return {
+      const routePlans = plansByRouteId.get(routeId) || [null]
+      return routePlans.map((plan) => {
+        const forecast = plan?.id
+          ? forecastByPlanId.get(Number(plan.id)) || forecastByRouteId.get(routeId) || null
+          : forecastByRouteId.get(routeId) || null
+        return {
         route_id: routeId,
         route_name: route.name || '',
         warehouse_id: route.warehouse_dispatch_id?.[0] || warehouseId,
@@ -6762,6 +6816,7 @@ async function directSupervisorVentas(method, path, body) {
         load_sealed: plan?.load_sealed === true,
         date_target: dateTarget,
       }
+      })
     })
   }
 
@@ -6790,6 +6845,10 @@ async function directSupervisorVentas(method, path, body) {
     const supervisorEmpId = Number(getEmployeeId() || 0) || 0
     const routeId = Number(body?.route_id || 0)
     const dateTarget = body?.date_target || ''
+    const forceCreate = body?.force_create === true || String(body?.force_create || '').toLowerCase() === 'true'
+    const shiftType = ['morning', 'afternoon', 'extra'].includes(String(body?.shift_type || ''))
+      ? String(body.shift_type)
+      : ''
 
     if (!warehouseId) {
       throw new ApiError('Tu usuario no tiene CEDIS asignado.', { status: 400, code: 'missing_warehouse_id' })
@@ -6821,6 +6880,8 @@ async function directSupervisorVentas(method, path, body) {
         data: {
           route_id: routeId,
           date_target: dateTarget,
+          force_create: forceCreate,
+          shift_type: shiftType || undefined,
         },
       })
 
@@ -6837,11 +6898,24 @@ async function directSupervisorVentas(method, path, body) {
     // ── Fallback: buscar plan existente o crear uno nuevo vía ORM ────────────
     try {
       const existingPlans = pickListResponse(await readModelSorted('gf.route.plan', {
-        fields: ['id', 'name', 'state', 'route_id', 'date'],
+        fields: ['id', 'name', 'state', 'route_id', 'date', 'shift_type'],
         domain: [['route_id', '=', routeId], ['date', '=', dateTarget]],
-        sort_column: 'id', sort_desc: false, limit: 1, sudo: 1,
+        sort_column: 'id', sort_desc: false, limit: 20, sudo: 1,
       }))
-      if (existingPlans.length) {
+      if (existingPlans.length && !forceCreate) {
+        if (existingPlans.length > 1) {
+          return {
+            ok: false,
+            error: 'Hay mas de un plan para esta ruta/fecha. Selecciona un plan existente o envia force_create para crear otro viaje.',
+            code: 'ambiguous_route_plan',
+            plans: existingPlans.map((plan) => ({
+              plan_id: Number(plan.id),
+              plan_name: plan.name || '',
+              state: plan.state || '',
+              shift_type: plan.shift_type || '',
+            })),
+          }
+        }
         const p = existingPlans[0]
         return { ok: true, plan_id: Number(p.id), plan_name: p.name || '', state: p.state || 'draft' }
       }
@@ -6850,10 +6924,12 @@ async function directSupervisorVentas(method, path, body) {
       const planHasDate = await modelHasField('gf.route.plan', 'date')
       const planHasDateTarget = await modelHasField('gf.route.plan', 'date_target')
       const planHasWarehouse = await modelHasField('gf.route.plan', 'warehouse_id')
+      const planHasShiftType = await modelHasField('gf.route.plan', 'shift_type')
       const dateFieldName = planHasDate ? 'date' : (planHasDateTarget ? 'date_target' : 'date')
 
       const createDict = { route_id: routeId, [dateFieldName]: dateTarget }
       if (planHasWarehouse && warehouseId) createDict.warehouse_id = warehouseId
+      if (planHasShiftType && shiftType) createDict.shift_type = shiftType
 
       const created = await createUpdate({
         model: 'gf.route.plan',

@@ -25,10 +25,12 @@ import {
   getTargetProgress,
   getKmData,
   getCierreState,
+  selectRoutePlan,
   PLAN_STATES,
   fmtNum,
   fmtPct,
 } from './routeControlService'
+import { routePlanDisplayName } from './activeRoutePlan'
 
 export default function ScreenMiRutaV2() {
   const { session } = useSession()
@@ -37,6 +39,8 @@ export default function ScreenMiRutaV2() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState(null)
+  const [plans, setPlans] = useState([])
+  const [needsPlanSelection, setNeedsPlanSelection] = useState(false)
   const [target, setTarget] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [checklistDone, setChecklistDone] = useState(false)
@@ -50,6 +54,8 @@ export default function ScreenMiRutaV2() {
     try {
       const summary = await getRouteDaySummary(session?.employee_id)
       setPlan(summary.plan)
+      setPlans(summary.plans || [])
+      setNeedsPlanSelection(summary.needsPlanSelection || false)
       setTarget(summary.target)
       setIncidents(summary.incidents)
       setChecklistDone(summary.checklistDone || false)
@@ -74,6 +80,11 @@ export default function ScreenMiRutaV2() {
   const progressPct = getProgressPct(plan)
   const targetProgress = getTargetProgress(target)
   const planState = PLAN_STATES[plan?.state] || PLAN_STATES.draft
+
+  function handleSelectPlan(planId) {
+    selectRoutePlan(session?.employee_id, planId)
+    loadData()
+  }
 
   // Quick actions that are always available
   const QUICK_ACTIONS = [
@@ -141,6 +152,26 @@ export default function ScreenMiRutaV2() {
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
             <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : needsPlanSelection ? (
+          <div style={{ marginTop: 24 }}>
+            <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 6px' }}>Selecciona el viaje</p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 16px' }}>Hay mas de un plan disponible para hoy.</p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {plans.map((candidate) => {
+                const candidateId = Number(candidate.id || candidate.plan_id || 0)
+                const state = PLAN_STATES[candidate.state] || PLAN_STATES.draft
+                return (
+                  <button key={candidateId} onClick={() => handleSelectPlan(candidateId)} style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700 }}>{routePlanDisplayName(candidate)}</span>
+                      <span style={{ ...typo.caption, color: state.color, flexShrink: 0 }}>{state.label}</span>
+                    </div>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>{candidate.route || candidate.route_id?.[1] || ''}</p>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>

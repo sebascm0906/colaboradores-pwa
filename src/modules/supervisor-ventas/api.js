@@ -60,10 +60,12 @@ export function getRouteTemplatesForPlanning(dateTarget) {
 }
 
 /** Crear o reutilizar el plan diario de una ruta para la fecha objetivo */
-export function ensureDailyRoutePlan(routeId, dateTarget) {
+export function ensureDailyRoutePlan(routeId, dateTarget, options = {}) {
   return api('POST', '/pwa-supv/route-plan-ensure', {
     route_id: Number(routeId || 0),
     date_target: dateTarget,
+    force_create: options.force_create === true,
+    shift_type: options.shift_type,
   })
 }
 

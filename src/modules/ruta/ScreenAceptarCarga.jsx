@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan, getMyLoad, acceptLoad, acceptRefill, getLoadLines } from './api'
+import { getMyRoutePlans, getMyLoad, acceptLoad, acceptRefill, getLoadLines } from './api'
+import { chooseRoutePlan, routePlanDisplayName, setStoredActiveRoutePlanId } from './activeRoutePlan'
 import { logScreenError } from '../shared/logScreenError'
 
 function getPickingId(value) {
@@ -70,6 +71,8 @@ export default function ScreenAceptarCarga() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState(null)
+  const [plans, setPlans] = useState([])
+  const [needsPlanSelection, setNeedsPlanSelection] = useState(false)
   const [load, setLoad] = useState(null)
   const [loadCards, setLoadCards] = useState([])
   const [pendingLoads, setPendingLoads] = useState([])
@@ -89,7 +92,10 @@ export default function ScreenAceptarCarga() {
   const refreshData = useCallback(async ({ keepLoading = false } = {}) => {
     if (!keepLoading) setLoading(true)
     try {
-      const p = await getMyRoutePlan(session?.employee_id)
+      const nextPlans = await getMyRoutePlans(session?.employee_id)
+      const p = chooseRoutePlan(nextPlans, session?.employee_id)
+      setPlans(nextPlans)
+      setNeedsPlanSelection(nextPlans.length > 1 && !p)
       setPlan(p)
       setError('')
       setLines([])
@@ -151,6 +157,11 @@ export default function ScreenAceptarCarga() {
       return []
     })
     setLines(ll || [])
+  }
+
+  function handleSelectPlan(planId) {
+    setStoredActiveRoutePlanId(session?.employee_id, planId)
+    refreshData()
   }
 
   async function handleAccept() {
@@ -266,7 +277,23 @@ export default function ScreenAceptarCarga() {
               </div>
             )}
 
-            {loadCards.length > 0 || products.length > 0 ? (
+            {needsPlanSelection ? (
+              <div style={{ marginTop: 24 }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.text, margin: '0 0 6px', fontWeight: 700 }}>Selecciona el viaje</p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 16px' }}>Hay mas de un plan disponible para hoy.</p>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {plans.map((candidate) => {
+                    const candidateId = Number(candidate.id || candidate.plan_id || 0)
+                    return (
+                      <button key={candidateId} onClick={() => handleSelectPlan(candidateId)} style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'left' }}>
+                        <span style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700 }}>{routePlanDisplayName(candidate)}</span>
+                        <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>{candidate.route || candidate.route_id?.[1] || candidate.state || ''}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : loadCards.length > 0 || products.length > 0 ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
                   <span style={{

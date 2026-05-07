@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
-import { getMyRoutePlan, getMyTarget, getMyIncidents } from './api'
+import { getMyRoutePlans, getMyTarget, getMyIncidents } from './api'
+import { chooseRoutePlan, routePlanDisplayName, setStoredActiveRoutePlanId } from './activeRoutePlan'
 import { logScreenError } from '../shared/logScreenError'
 import {
   getProgressPct,
@@ -25,6 +26,8 @@ export default function ScreenControlRuta() {
   const typo = useMemo(() => getTypo(sw), [sw])
   const [loading, setLoading] = useState(true)
   const [plan, setPlan] = useState(null)
+  const [plans, setPlans] = useState([])
+  const [needsPlanSelection, setNeedsPlanSelection] = useState(false)
   const [target, setTarget] = useState(null)
   const [incidents, setIncidents] = useState([])
 
@@ -34,14 +37,18 @@ export default function ScreenControlRuta() {
     setLoading(true)
     try {
       const [p, t, inc] = await Promise.allSettled([
-        getMyRoutePlan(session?.employee_id),
+        getMyRoutePlans(session?.employee_id),
         getMyTarget(session?.employee_id),
         getMyIncidents(session?.employee_id),
       ])
-      if (p.status === 'rejected') logScreenError('ScreenControlRuta', 'getMyRoutePlan', p.reason)
+      if (p.status === 'rejected') logScreenError('ScreenControlRuta', 'getMyRoutePlans', p.reason)
       if (t.status === 'rejected') logScreenError('ScreenControlRuta', 'getMyTarget', t.reason)
       if (inc.status === 'rejected') logScreenError('ScreenControlRuta', 'getMyIncidents', inc.reason)
-      setPlan(p.status === 'fulfilled' ? p.value : null)
+      const nextPlans = p.status === 'fulfilled' && Array.isArray(p.value) ? p.value : []
+      const nextPlan = chooseRoutePlan(nextPlans, session?.employee_id)
+      setPlans(nextPlans)
+      setNeedsPlanSelection(nextPlans.length > 1 && !nextPlan)
+      setPlan(nextPlan)
       setTarget(t.status === 'fulfilled' ? t.value : null)
       setIncidents(inc.status === 'fulfilled' && Array.isArray(inc.value) ? inc.value : [])
     } catch (e) { logScreenError('ScreenControlRuta', 'loadData', e) }
@@ -55,6 +62,11 @@ export default function ScreenControlRuta() {
 
   // Parse stops from plan if available
   const stops = plan?.stop_ids || plan?.stops || []
+
+  function handleSelectPlan(planId) {
+    setStoredActiveRoutePlanId(session?.employee_id, planId)
+    loadData()
+  }
 
   // Time tracking
   const departureTime = plan?.departure_time_real
@@ -115,6 +127,26 @@ export default function ScreenControlRuta() {
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
             <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          </div>
+        ) : needsPlanSelection ? (
+          <div style={{ marginTop: 24 }}>
+            <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '0 0 6px' }}>Selecciona el viaje</p>
+            <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 16px' }}>Hay mas de un plan disponible para hoy.</p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {plans.map((candidate) => {
+                const candidateId = Number(candidate.id || candidate.plan_id || 0)
+                const state = PLAN_STATES[candidate.state] || PLAN_STATES.draft
+                return (
+                  <button key={candidateId} onClick={() => handleSelectPlan(candidateId)} style={{ padding: 14, borderRadius: TOKENS.radius.md, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <span style={{ ...typo.body, color: TOKENS.colors.text, fontWeight: 700 }}>{routePlanDisplayName(candidate)}</span>
+                      <span style={{ ...typo.caption, color: state.color, flexShrink: 0 }}>{state.label}</span>
+                    </div>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '6px 0 0' }}>{candidate.route || candidate.route_id?.[1] || ''}</p>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         ) : !plan ? (
           <div style={{ marginTop: 40, padding: 24, borderRadius: TOKENS.radius.xl, background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`, textAlign: 'center' }}>

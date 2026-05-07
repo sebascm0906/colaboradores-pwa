@@ -8,7 +8,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import {
-  getMyRoutePlan,
+  getMyRoutePlans,
   getMyTarget,
   getMyIncidents,
   getMyLoad,
@@ -19,6 +19,7 @@ import {
   getLiquidation,
   closeRoute,
 } from './api'
+import { chooseRoutePlan, setStoredActiveRoutePlanId } from './activeRoutePlan'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Constants
@@ -62,15 +63,17 @@ export const FLOW_STEPS = [
  * Uses existing LIVE endpoints.
  */
 export async function getRouteDaySummary(employeeId) {
-  const [planResult, targetResult, incidentsResult] = await Promise.allSettled([
-    getMyRoutePlan(employeeId),
+  const [plansResult, targetResult, incidentsResult] = await Promise.allSettled([
+    getMyRoutePlans(employeeId),
     getMyTarget(employeeId),
     getMyIncidents(employeeId),
   ])
 
-  const plan = planResult.status === 'fulfilled' ? planResult.value : null
+  const plans = plansResult.status === 'fulfilled' && Array.isArray(plansResult.value) ? plansResult.value : []
+  const plan = chooseRoutePlan(plans, employeeId)
   const target = targetResult.status === 'fulfilled' ? targetResult.value : null
   const incidents = incidentsResult.status === 'fulfilled' ? incidentsResult.value : []
+  const needsPlanSelection = plans.length > 1 && !plan
 
   // Load checklist status, reconciliation, and load lines in parallel
   let reconciliation = null
@@ -113,12 +116,18 @@ export async function getRouteDaySummary(employeeId) {
 
   return {
     plan,
+    plans,
+    needsPlanSelection,
     target,
     incidents: Array.isArray(incidents) ? incidents : [],
     reconciliation,
     loadLines,
     checklistDone,
   }
+}
+
+export function selectRoutePlan(employeeId, planId) {
+  setStoredActiveRoutePlanId(employeeId, planId)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
