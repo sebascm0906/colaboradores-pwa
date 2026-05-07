@@ -21,6 +21,10 @@ export function getRoleScopeConfig(roleScope) {
   return ROLE_SCOPE_CONFIG[roleScope] || ROLE_SCOPE_CONFIG.pt
 }
 
+function isRecipeLike(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 export function resolveTransformationWarehouseId(session = {}, roleScope) {
   return Number(
     session?.warehouse_id
@@ -31,31 +35,32 @@ export function resolveTransformationWarehouseId(session = {}, roleScope) {
 }
 
 export function normalizeTransformationRecipe(recipe = {}) {
-  const inputProduct = recipe.input_product || null
-  const outputProduct = recipe.output_product || null
-  const active = typeof recipe.active === 'boolean'
-    ? recipe.active
-    : Boolean(recipe.is_complete) && !Boolean(recipe.is_blocked)
-  const inputOptions = Array.isArray(recipe.input_product_options) && recipe.input_product_options.length
-    ? recipe.input_product_options
+  const source = isRecipeLike(recipe) ? recipe : {}
+  const inputProduct = source.input_product || null
+  const outputProduct = source.output_product || null
+  const active = typeof source.active === 'boolean'
+    ? source.active
+    : Boolean(source.is_complete) && !Boolean(source.is_blocked)
+  const inputOptions = Array.isArray(source.input_product_options) && source.input_product_options.length
+    ? source.input_product_options
     : (inputProduct?.product_id ? [inputProduct] : [])
 
   return {
-    ...recipe,
+    ...source,
     active,
-    label: recipe.label || recipe.name || recipe.recipe_code || 'Receta',
-    block_reason: recipe.blocked_reason || recipe.block_reason || '',
+    label: source.label || source.name || source.recipe_code || 'Receta',
+    block_reason: source.blocked_reason || source.block_reason || '',
     input_product_options: inputOptions.map((option) => ({
       ...option,
       product_id: Number(option?.product_id || 0),
-      recipe_code: option?.recipe_code || recipe.recipe_code || '',
+      recipe_code: option?.recipe_code || source.recipe_code || '',
       output_qty_units_per_input_unit: Number(
         option?.output_qty_units_per_input_unit
         ?? option?.expected_output_qty_units_per_input_unit
         ?? 0,
       ) || 0,
     })),
-    output_product_id: recipe.output_product_id || outputProduct?.product_id || 0,
+    output_product_id: source.output_product_id || outputProduct?.product_id || 0,
   }
 }
 
@@ -71,6 +76,7 @@ export function normalizeTransformationSummary(summary = {}) {
 
 export function getVisibleRecipes(recipes = []) {
   return (Array.isArray(recipes) ? recipes : [])
+    .filter((recipe) => isRecipeLike(recipe))
     .map((recipe) => normalizeTransformationRecipe(recipe))
     .filter((recipe) => recipe.active)
 }

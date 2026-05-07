@@ -29,6 +29,7 @@ test('getRoleScopeConfig returns Entregas-specific labels and routes', () => {
 test('getVisibleRecipes hides blocked recipes and preserves active ones', () => {
   const recipes = getVisibleRecipes([
     { recipe_code: 'molido_chico', active: true, label: 'Molido chico' },
+    null,
     { recipe_code: 'barra_chica_embolsada', active: false, label: 'Barra chica embolsada' },
   ])
 
@@ -52,6 +53,15 @@ test('normalizeTransformationRecipe adapts backend recipe payload to frontend sh
   assert.equal(recipe.label, 'Molido chico')
   assert.equal(recipe.input_product_options[0].recipe_code, 'MCH_GRANDE')
   assert.equal(recipe.output_product_id, 900)
+})
+
+test('normalizeTransformationRecipe tolerates null recipes from the API', () => {
+  const recipe = normalizeTransformationRecipe(null)
+
+  assert.equal(recipe.active, false)
+  assert.equal(recipe.label, 'Receta')
+  assert.deepEqual(recipe.input_product_options, [])
+  assert.equal(recipe.output_product_id, 0)
 })
 
 test('normalizeTransformationSummary derives actual output from output_qty_units', () => {
