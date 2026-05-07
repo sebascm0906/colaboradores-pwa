@@ -4082,6 +4082,7 @@ async function directRuta(method, path, body) {
     ))
     return {
       id: row.id,
+      name: row.name || '',
       load_picking_id: initialPickingId,
       load_sealed: row.load_sealed === true,
       state: row.state,

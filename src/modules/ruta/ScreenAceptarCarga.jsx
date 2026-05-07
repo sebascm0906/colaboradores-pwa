@@ -3,67 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyRoutePlan, getMyLoad, acceptLoad, acceptRefill, getLoadLines } from './api'
+import { buildLoadState } from './loadState'
 import { logScreenError } from '../shared/logScreenError'
-
-function getPickingId(value) {
-  if (Array.isArray(value)) return Number(value[0] || 0)
-  return Number(value || 0)
-}
-
-function normalizeLoadCard(raw, initialPickingId) {
-  const pickingId = getPickingId(raw?.picking_id || raw?.id || raw?.load_picking_id)
-  if (!pickingId) return null
-  const accepted = raw?.accepted === true || raw?.gf_route_load_accepted === true
-  const loadKind = raw?.load_kind || raw?.gf_route_load_kind || (pickingId === initialPickingId ? 'initial' : 'refill')
-  return {
-    ...raw,
-    id: pickingId,
-    picking_id: pickingId,
-    name: raw?.name || raw?.picking_name || `Picking ${pickingId}`,
-    state: raw?.state || raw?.picking_state || '',
-    accepted,
-    gf_route_load_accepted: accepted,
-    load_kind: loadKind,
-    isRefill: loadKind === 'refill' || pickingId !== initialPickingId,
-    scheduled_date: raw?.scheduled_date || raw?.create_date || '',
-  }
-}
-
-function buildLoadState(plan, load) {
-  const initialPickingId = getPickingId(load?.load_picking_id || plan?.load_picking_id)
-  const rawCards = Array.isArray(load?.load_pickings) ? load.load_pickings : []
-  const rawPending = Array.isArray(load?.pending_loads) ? load.pending_loads : []
-  const cardsById = new Map()
-
-  for (const raw of rawCards) {
-    const card = normalizeLoadCard(raw, initialPickingId)
-    if (card) cardsById.set(card.picking_id, card)
-  }
-
-  if (initialPickingId && !cardsById.has(initialPickingId)) {
-    const fallbackIsRefill = load?.load_sealed === true
-    cardsById.set(initialPickingId, normalizeLoadCard({
-      picking_id: initialPickingId,
-      name: fallbackIsRefill ? 'Recarga pendiente' : 'Carga inicial',
-      state: 'assigned',
-      accepted: false,
-      load_kind: fallbackIsRefill ? 'refill' : 'initial',
-    }, initialPickingId))
-  }
-
-  for (const raw of rawPending) {
-    const card = normalizeLoadCard(raw, initialPickingId)
-    if (card) cardsById.set(card.picking_id, { ...cardsById.get(card.picking_id), ...card, accepted: false })
-  }
-
-  const loadCards = Array.from(cardsById.values()).filter(Boolean)
-  const pendingStates = new Set(['confirmed', 'assigned', 'waiting', 'partially_available'])
-  const pendingLoads = rawPending.length > 0
-    ? rawPending.map((raw) => normalizeLoadCard(raw, initialPickingId)).filter(Boolean)
-    : loadCards.filter((card) => pendingStates.has(card.state) && card.accepted !== true)
-
-  return { loadCards, pendingLoads }
-}
 
 export default function ScreenAceptarCarga() {
   const { session } = useSession()
