@@ -1492,8 +1492,6 @@ async function directAdmin(method, path, body) {
       ids: [id],
       dict: {
         state: 'cancel',
-        // Opcional: dejar razón en nota interna si el campo existe
-        note: body?.reason ? `Cancelado PWA: ${body.reason}` : undefined,
       },
       sudo: 1,
       app: 'pwa_colaboradores',
@@ -3896,7 +3894,7 @@ async function directProduction(method, path, body) {
     if (!incidentId) return { success: false, error: 'incident_id requerido' }
     const result = await createUpdate({
       model: 'gf.production.incident',
-      method: 'write',
+      method: 'update',
       ids: [incidentId],
       dict: {
         state: 'resolved',
@@ -7383,7 +7381,7 @@ async function directSupervisorVentas(method, path, body) {
     const lineCommands = [[5, 0, 0], ...lines.map((l) => [0, 0, l])]
     await createUpdate({
       model: 'gf.saleops.forecast',
-      method: 'write',
+      method: 'update',
       ids: [forecastId],
       dict: { line_ids: lineCommands },
       sudo: 1,
