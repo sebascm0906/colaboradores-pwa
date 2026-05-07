@@ -4020,7 +4020,7 @@ async function directRuta(method, path, body) {
     })
     const row = pickFirstResponse(result)
     if (!row) return null
-    const initialPickingId = row.load_picking_id?.[0] || 0
+    const planLoadPickingId = row.load_picking_id?.[0] || 0
     const { result: loadPickingsResult } = await readWithOptionalFieldFallback(readModelSorted, 'stock.picking', {
       requiredFields: [
         'id',
@@ -4042,10 +4042,25 @@ async function directRuta(method, path, body) {
       limit: 50,
       sudo: 1,
     })
-    const loadPickings = pickListResponse(loadPickingsResult).map((picking) => {
+    const rawLoadPickings = pickListResponse(loadPickingsResult)
+    const originalLoadPicking = rawLoadPickings.find((picking) => (
+      String(picking.origin || '').includes(`${row.name || ''}/LOAD`)
+    ))
+    const doneInitialPicking = rawLoadPickings.find((picking) => (
+      picking.state === 'done'
+      && (picking.gf_route_load_kind === 'initial' || !picking.gf_route_load_kind)
+    ))
+    const initialPickingId = Number(originalLoadPicking?.id || doneInitialPicking?.id || planLoadPickingId || 0)
+    const hasMultipleLoadPickings = rawLoadPickings.length > 1
+    const pendingStates = new Set(['confirmed', 'assigned', 'waiting', 'partially_available'])
+
+    const loadPickings = rawLoadPickings.map((picking) => {
       const pickingId = Number(picking.id || 0)
-      const accepted = picking.gf_route_load_accepted === true || (row.load_sealed === true && pickingId === initialPickingId)
-      const loadKind = picking.gf_route_load_kind || (pickingId === initialPickingId ? 'initial' : 'refill')
+      const accepted = picking.gf_route_load_accepted === true || picking.state === 'done'
+      const fieldKind = picking.gf_route_load_kind || ''
+      const loadKind = pickingId === initialPickingId
+        ? 'initial'
+        : (fieldKind === 'refill' || hasMultipleLoadPickings ? 'refill' : (fieldKind || 'initial'))
       return {
         id: pickingId,
         picking_id: pickingId,
@@ -4063,7 +4078,7 @@ async function directRuta(method, path, body) {
       }
     })
     const pendingLoads = loadPickings.filter((picking) => (
-      picking.state === 'assigned' && picking.accepted !== true
+      pendingStates.has(picking.state) && picking.accepted !== true
     ))
     return {
       id: row.id,
