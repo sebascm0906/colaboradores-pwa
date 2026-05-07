@@ -4090,10 +4090,8 @@ async function directRuta(method, path, body) {
         const fallbackPickings = pickListResponse(fallbackPickingsResult).filter((picking) => {
           const pickingPlanId = picking.gf_route_plan_id?.[0] || picking.gf_route_plan_id || 0
           const pickingId = Number(picking.id || 0)
-          const origin = String(picking.origin || '')
           return Number(pickingPlanId) === routePlanId
             || pickingId === Number(planLoadPickingId || 0)
-            || (row.name && origin.includes(`${row.name}/LOAD`))
         })
         const byId = new Map()
         for (const picking of [...rawLoadPickings, ...fallbackPickings]) {
