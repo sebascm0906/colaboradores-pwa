@@ -22,8 +22,9 @@ import {
   buildRoutePlanCriteriaPayload,
   buildRouteForecastPayload,
   getDefaultTimeWindow,
+  getPlanningDateBounds,
   getSupervisorRouteErrorMessage,
-  getTomorrowDateString,
+  isFuturePlanningDate,
   normalizeRoutePlanningRow,
 } from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
@@ -215,7 +216,8 @@ export default function ScreenPronostico() {
   const [subpolygons, setSubpolygons] = useState([])
   const [planningChannels, setPlanningChannels] = useState([])
   const [timeWindows, setTimeWindows] = useState([])
-  const [dateTarget] = useState(() => getTomorrowDateString())
+  const [planningDateBounds] = useState(() => getPlanningDateBounds())
+  const [dateTarget, setDateTarget] = useState(() => planningDateBounds.defaultDate)
   const [lines, setLines] = useState([{ product_id: '', channel: 'Van', qty: '' }])
   const [selectedRouteId, setSelectedRouteId] = useState(null)
   const [selectedPolygonId, setSelectedPolygonId] = useState('')
@@ -456,6 +458,19 @@ export default function ScreenPronostico() {
       : [...prev, dayId])
   }
 
+  function handleDateTargetChange(value) {
+    if (!isFuturePlanningDate(value)) {
+      flashMsg('Selecciona una fecha de manana en adelante', 4000)
+      return
+    }
+    setDateTarget(value)
+    setSelectedRouteId(null)
+    setExpandedForecastId(null)
+    setForecastLinesCache({})
+    setEditingForecastId(null)
+    setMsg(null)
+  }
+
   function buildCurrentPlanCriteria(routeId) {
     return buildRoutePlanCriteriaPayload({
       routeId,
@@ -616,7 +631,7 @@ export default function ScreenPronostico() {
               background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
               boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
             }}>
-              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PLAN DIARIO PARA MANANA</p>
+              <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>PLAN DIARIO PARA FECHA OBJETIVO</p>
 
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14,
@@ -635,7 +650,24 @@ export default function ScreenPronostico() {
                   background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
                 }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Fecha objetivo</p>
-                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 13 }}>{dateTarget}</p>
+                  <input
+                    type="date"
+                    value={dateTarget}
+                    min={planningDateBounds.minDate}
+                    onChange={(event) => handleDateTargetChange(event.target.value)}
+                    style={{
+                      width: '100%',
+                      marginTop: 2,
+                      padding: 0,
+                      background: 'transparent',
+                      border: 'none',
+                      color: TOKENS.colors.text,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      outline: 'none',
+                      colorScheme: 'dark',
+                    }}
+                  />
                 </div>
               </div>
 

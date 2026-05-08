@@ -23,6 +23,19 @@ export function getTomorrowDateString(baseDate = new Date()) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+export function getPlanningDateBounds(baseDate = new Date()) {
+  const minDate = getTomorrowDateString(baseDate)
+  return {
+    defaultDate: minDate,
+    minDate,
+  }
+}
+
+export function isFuturePlanningDate(dateStr, baseDate = new Date()) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))
+    && String(dateStr) >= getTomorrowDateString(baseDate)
+}
+
 export function getRoutePlanningState(row = {}) {
   if (row.blocked) return 'blocked'
   if (row.load_sealed) return 'load_executed'

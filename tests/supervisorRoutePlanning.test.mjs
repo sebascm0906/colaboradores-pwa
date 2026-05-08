@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 
 import {
   getTomorrowDateString,
+  getPlanningDateBounds,
+  isFuturePlanningDate,
   getRoutePlanningState,
   normalizeRoutePlanningRow,
   buildRouteForecastPayload,
@@ -17,6 +19,17 @@ import {
 test('getTomorrowDateString returns local YYYY-MM-DD for the next day', () => {
   const base = new Date(2026, 4, 1, 10, 30, 0)
   assert.equal(getTomorrowDateString(base), '2026-05-02')
+})
+
+test('planning date bounds default to tomorrow and allow later future dates', () => {
+  const base = new Date(2026, 4, 1, 10, 30, 0)
+  assert.deepEqual(getPlanningDateBounds(base), {
+    defaultDate: '2026-05-02',
+    minDate: '2026-05-02',
+  })
+  assert.equal(isFuturePlanningDate('2026-05-01', base), false)
+  assert.equal(isFuturePlanningDate('2026-05-02', base), true)
+  assert.equal(isFuturePlanningDate('2026-05-15', base), true)
 })
 
 test('getRoutePlanningState maps route lifecycle to card states', () => {
