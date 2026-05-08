@@ -547,45 +547,21 @@ async function createUpdate(payload) {
   return result
 }
 
-async function resolveProductionScrapReasonId(preferredId = 0) {
-  const normalizedPreferredId = Number(preferredId || 0)
-  if (normalizedPreferredId) return normalizedPreferredId
-
-  const result = await readModelSorted('gf.production.scrap.reason', {
-    fields: ['id', 'name', 'sequence', 'active'],
-    domain: [['active', '=', true]],
-    sort_column: 'sequence',
-    sort_desc: false,
-    limit: 50,
-    sudo: 1,
-  })
-  const rows = pickListResponse(result)
-  const normalize = (value) => String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-
-  const damaged = rows.find((row) => {
-    const name = normalize(row.name)
-    return name.includes('roto') || name.includes('danado') || name.includes('deforme')
-  })
-  return Number(damaged?.id || rows[0]?.id || 0)
-}
-
 const IGUALA_BARRA_PT_LOCATION_ID = 1519
 const IGUALA_MERMA_LOCATION_ID = 1173
 const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
 
-function extractCreateUpdateId(result) {
-  return Number(result?.id || result?.res_id || result?.result || result?.data?.id || 0)
-}
-
-async function createBarScrapInventoryMove({
+async function createBarHarvestScrap({
   product = {},
   quantities = {},
   slot = {},
   tank = {},
+  shiftId = 0,
+  operatorId = 0,
+  lineId = 0,
+  machineId = 0,
+  reasonId = 0,
   companyId = 0,
   sourceLocationId = IGUALA_BARRA_PT_LOCATION_ID,
   destLocationId = IGUALA_MERMA_LOCATION_ID,
@@ -599,45 +575,31 @@ async function createBarScrapInventoryMove({
 
   const slotName = String(slot?.name || '').trim() || String(slot?.x_name || '').trim() || 'sin-slot'
   const tankName = String(tank?.display_name || tank?.name || '').trim()
-  const moveResult = await createUpdate({
-    model: 'stock.move',
-    method: 'create',
-    dict: {
-      name: `Merma barra ${slotName} - ${String(product?.product_name || productId).trim()}`,
-      product_id: productId,
-      product_uom_qty: scrapBars,
-      quantity: scrapBars,
-      product_uom: Number(productUomId || UNIT_UOM_ID),
-      location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
-      location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
-      company_id: Number(companyId || getCompanyId() || IGUALA_COMPANY_ID),
-      origin: `MERMA BARRA ${slotName}${tankName ? ` - ${tankName}` : ''}`,
-    },
-    sudo: 1,
-    app: 'pwa_colaboradores',
+  const response = await odooHttp('POST', '/api/production/bar-harvest-scrap', {}, {
+    shift_id: Number(shiftId || 0),
+    product_id: productId,
+    qty_bars: scrapBars,
+    kg: Number(quantities?.scrapKg || 0),
+    reason_id: Number(reasonId || 0) || undefined,
+    line_id: Number(lineId || 0) || undefined,
+    machine_id: Number(machineId || 0) || undefined,
+    operator_id: Number(operatorId || 0) || undefined,
+    slot_id: Number(slot?.id || slot?.slot_id || 0) || undefined,
+    slot_name: slotName,
+    tank_name: tankName || undefined,
+    location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
+    location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
+    company_id: Number(companyId || getCompanyId() || IGUALA_COMPANY_ID),
+    product_uom_id: Number(productUomId || UNIT_UOM_ID),
+    notes: buildBarHarvestScrapNotes({ slot, tank, quantities }),
   })
-  const moveId = extractCreateUpdateId(moveResult)
-  if (!moveId) throw new Error('No se pudo obtener el movimiento de merma creado')
+  if (response?.ok === false) throw new Error(response?.message || response?.error || 'No se pudo registrar la merma de barra')
 
-  const doneResult = await createUpdate({
-    model: 'stock.move',
-    method: 'function',
-    ids: [moveId],
-    function: '_action_done',
-    sudo: 1,
-    app: 'pwa_colaboradores',
-  })
-
+  const data = response?.data || response || {}
   return {
     ok: true,
     skipped: false,
-    data: {
-      move_id: moveId,
-      move: moveResult,
-      done: doneResult,
-      location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
-      location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
-    },
+    data,
   }
 }
 
@@ -3395,55 +3357,35 @@ async function directProduction(method, path, body) {
       },
     })
 
-    const scrapStatus = { ok: true, skipped: true, data: null }
-    if (quantities.scrapBars > 0) {
-      try {
-        const reasonId = await resolveProductionScrapReasonId(body?.scrap_reason_id || body?.reason_id || 0)
-        if (!reasonId) throw new Error('reason_id requerido para merma')
-        const scrapResult = await createUpdate({
-          model: 'gf.production.scrap',
-          method: 'create',
-          dict: {
-            shift_id: shiftId,
-            reason_id: reasonId,
-            line_id: Number(body?.line_id || tank?.line_id || 0) || undefined,
-            machine_id: Number(body?.machine_id || tank?.id || 0) || undefined,
-            operator_id: operatorId || undefined,
-            kg: quantities.scrapKg,
-            notes: buildBarHarvestScrapNotes({ slot, tank, quantities }),
-            scrap_phase: 'production',
-            timestamp: odooNow(),
-          },
-          sudo: 1,
-          app: 'pwa_colaboradores',
-        })
-        scrapStatus.ok = true
-        scrapStatus.skipped = false
-        scrapStatus.data = scrapResult
-      } catch (error) {
-        scrapStatus.ok = false
-        scrapStatus.skipped = false
-        scrapStatus.error = error?.message || 'No se pudo registrar la merma'
-      }
-    }
-
+    const scrapStatus = { ok: true, skipped: quantities.scrapBars <= 0, data: null }
     const scrapInventoryStatus = { ok: true, skipped: quantities.scrapBars <= 0, data: null }
     if (quantities.scrapBars > 0) {
       try {
-        const moveResult = await createBarScrapInventoryMove({
+        const scrapResult = await createBarHarvestScrap({
           product: harvestedProduct,
           quantities,
           slot,
           tank,
+          shiftId,
+          operatorId,
+          lineId: Number(body?.line_id || tank?.line_id || 0),
+          machineId: Number(body?.machine_id || tank?.id || 0),
+          reasonId: Number(body?.scrap_reason_id || body?.reason_id || 0),
           companyId: Number(body?.company_id || getCompanyId() || IGUALA_COMPANY_ID),
           sourceLocationId: Number(body?.scrap_source_location_id || IGUALA_BARRA_PT_LOCATION_ID),
           destLocationId: Number(body?.scrap_dest_location_id || IGUALA_MERMA_LOCATION_ID),
           productUomId: Number(body?.product_uom_id || harvestResult?.uom_id || harvestResult?.data?.uom_id || UNIT_UOM_ID),
         })
+        scrapStatus.ok = true
+        scrapStatus.skipped = false
+        scrapStatus.data = scrapResult.data || scrapResult
         scrapInventoryStatus.ok = true
         scrapInventoryStatus.skipped = false
-        scrapInventoryStatus.data = moveResult.data || moveResult
+        scrapInventoryStatus.data = scrapResult.data || scrapResult
       } catch (error) {
+        scrapStatus.ok = false
+        scrapStatus.skipped = false
+        scrapStatus.error = error?.message || 'No se pudo registrar la merma'
         scrapInventoryStatus.ok = false
         scrapInventoryStatus.skipped = false
         scrapInventoryStatus.error = error?.message || 'No se pudo mover la merma a ME-IGUALA'
