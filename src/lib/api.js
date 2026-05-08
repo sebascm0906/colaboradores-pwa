@@ -3932,6 +3932,7 @@ async function directRuta(method, path, body) {
 
   if (cleanPath === '/pwa-ruta/my-plan' && method === 'GET') {
     const empId = Number(query.get('employee_id') || getEmployeeId() || 0)
+    const planId = Number(query.get('plan_id') || query.get('route_plan_id') || 0)
     if (!empId) return null
     // BLD-20260427-P0-MY-PLAN-TODAY: la pantalla de aceptación de carga de
     // jefe_ruta debe operar sobre el plan de HOY. Sin filtro de fecha el
@@ -3942,7 +3943,26 @@ async function directRuta(method, path, body) {
     // hoy, devuelve null intencionalmente (no fallback a mañana).
     const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const dateRef = query.get('date') || `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const vehicleId = Number(query.get('vehicle_id') || 0)
+    const mobileLocationId = Number(query.get('mobile_location_id') || 0)
+    const domain = planId
+      ? [
+          '&',
+          ['id', '=', planId],
+          '|',
+          ['driver_employee_id', '=', empId],
+          ['salesperson_employee_id', '=', empId],
+        ]
+      : [
+          '&',
+          ['date', '=', dateRef],
+          '|',
+          ['driver_employee_id', '=', empId],
+          ['salesperson_employee_id', '=', empId],
+        ]
+    if (!planId && vehicleId) domain.push(['vehicle_id', '=', vehicleId])
+    if (!planId && mobileLocationId) domain.push(['mobile_location_id', '=', mobileLocationId])
     const result = await readModelSorted('gf.route.plan', {
       fields: [
         'id',
@@ -3953,6 +3973,8 @@ async function directRuta(method, path, body) {
         'state',
         'driver_employee_id',
         'salesperson_employee_id',
+        'vehicle_id',
+        'mobile_location_id',
         'departure_time_target',
         'departure_time_real',
         'stops_total',
@@ -3967,19 +3989,26 @@ async function directRuta(method, path, body) {
         'corte_validated_at',
         'closure_time',
       ],
-      domain: [
-        '&',
-        ['date', '=', todayStr],
-        '|',
-        ['driver_employee_id', '=', empId],
-        ['salesperson_employee_id', '=', empId],
-      ],
+      domain,
       sort_column: 'date',
       sort_desc: true,
-      limit: 1,
+      limit: 2,
       sudo: 1,
     })
-    return pickFirstResponse(result)
+    const rows = Array.isArray(result?.response)
+      ? result.response
+      : Array.isArray(result)
+        ? result
+        : result?.data
+          ? [result.data]
+          : []
+    if (!planId && rows.length > 1) {
+      throw new ApiError('Hay múltiples planes disponibles para esta fecha. Envía plan_id.', {
+        status: 409,
+        code: 'ambiguous_plan',
+      })
+    }
+    return rows.length ? rows[0] : pickFirstResponse(result)
   }
 
   if (cleanPath === '/pwa-ruta/my-target' && method === 'GET') {

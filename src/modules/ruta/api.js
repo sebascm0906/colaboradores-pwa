@@ -1,11 +1,21 @@
 // ─── API Jefe de Ruta — Complemento a KoldField ─────────────────────────────
 import { api } from '../../lib/api'
+import {
+  buildMyRoutePlanPath,
+  normalizeRoutePlanResponse,
+} from './routePlanAssignment'
 
 // ── Plan de ruta ─────────────────────────────────────────────────────────────
 
 /** Plan de ruta del día para el chofer autenticado */
-export function getMyRoutePlan(employeeId) {
-  return api('GET', `/pwa-ruta/my-plan?employee_id=${employeeId}`)
+export async function getMyRoutePlan(employeeId, criteria = {}) {
+  const plan = await api('GET', buildMyRoutePlanPath(employeeId, criteria))
+  return normalizeRoutePlanResponse(plan)
+}
+
+export {
+  buildMyRoutePlanPath,
+  normalizeRoutePlanResponse,
 }
 
 // ── Checklist de unidad (Sebastián 2026-04-25, backend QA 32/32 PASS) ────────
