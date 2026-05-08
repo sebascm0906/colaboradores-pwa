@@ -18,7 +18,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { listSlots, reportIncident, INCIDENT_TYPES } from './barraService'
 import { getMyShift, harvestWithPtReception } from './api'
-import { buildPtReceptionFromHarvest, resolveHarvestShiftId } from './barraHarvestReception'
+import { buildPtReceptionFromHarvest, resolveBarHarvestQuantities, resolveHarvestShiftId } from './barraHarvestReception'
 import { getReadingLocalDateKey, getTodayDateKey } from '../supervision/brineReadings'
 import VoiceInputButton from '../shared/voice/VoiceInputButton'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
@@ -59,6 +59,8 @@ export default function ScreenTanque() {
 
   const [harvestSlot, setHarvestSlot] = useState(null)
   const [harvestTemp, setHarvestTemp] = useState('')
+  const [harvestHasScrap, setHarvestHasScrap] = useState(false)
+  const [harvestScrapBars, setHarvestScrapBars] = useState('')
   const [harvestBusy, setHarvestBusy] = useState(false)
 
   // Voice state (piloto barra 1): scoped al modal de cosecha. Se resetea al
@@ -137,6 +139,8 @@ export default function ScreenTanque() {
     if (!slot || slot.state !== 'ready') return
     setHarvestSlot(slot)
     setHarvestTemp(tank?.brine_temp ? String(tank.brine_temp) : '')
+    setHarvestHasScrap(false)
+    setHarvestScrapBars('')
     setError('')
   }
 
@@ -182,6 +186,11 @@ export default function ScreenTanque() {
     setTimeout(() => setError(''), 3500)
   }
 
+  const activeScrapBars = harvestHasScrap ? harvestScrapBars : 0
+  const harvestQuantities = harvestSlot
+    ? resolveBarHarvestQuantities({ tank, scrapBars: activeScrapBars })
+    : null
+
   function getHarvestWarnings() {
     const warnings = []
     // 1) Temperatura — solo advertir si se capturó y excede umbral
@@ -206,14 +215,25 @@ export default function ScreenTanque() {
         }
       }
     }
+    if (harvestHasScrap) {
+      const quantities = resolveBarHarvestQuantities({ tank, scrapBars: harvestScrapBars })
+      if (!quantities.valid) {
+        warnings.push({ key: 'scrap_invalid', msg: quantities.error, blocking: true })
+      } else if (quantities.scrapBars <= 0) {
+        warnings.push({ key: 'scrap_missing', msg: 'Captura cuántas barras salieron mermadas', blocking: true })
+      } else if (!(quantities.scrapKg > 0)) {
+        warnings.push({ key: 'scrap_kg_missing', msg: 'No se pudo calcular kg de merma. Revisa kg/barra del tanque.', blocking: true })
+      }
+    }
     return warnings
   }
 
   const harvestWarnings = harvestSlot ? getHarvestWarnings() : []
   const ptReceptionPreview = harvestSlot
-    ? buildPtReceptionFromHarvest({ slot: harvestSlot, tank })
+    ? buildPtReceptionFromHarvest({ slot: harvestSlot, tank, scrapBars: activeScrapBars })
     : null
-  const missingReceptionProduct = harvestSlot && !Number(ptReceptionPreview?.product_id || 0)
+  const requiresPtReception = Number(ptReceptionPreview?.qty_reported || 0) > 0
+  const missingReceptionProduct = harvestSlot && requiresPtReception && !Number(ptReceptionPreview?.product_id || 0)
   const hasBlockingWarning = harvestWarnings.some(w => w.blocking)
   const canHarvest = harvestSlot && !hasBlockingWarning && !harvestBusy && !missingReceptionProduct
 
@@ -230,12 +250,18 @@ export default function ScreenTanque() {
         line_type: 'barra',
         product_id: ptReceptionPreview?.product_id || 0,
         source_product_id: ptReceptionPreview?.source_product_id || harvestSlot?.product_id || 0,
-        qty_reported: ptReceptionPreview?.qty_reported || 8,
+        qty_reported: ptReceptionPreview?.qty_reported || 0,
+        scrap_bars: harvestQuantities?.scrapBars || 0,
+        scrap_kg: harvestQuantities?.scrapKg || 0,
+        line_id: tank?.line_id || 0,
+        machine_id: tank?.id || machineId || 0,
       })
 
       if (result?.ok === false && result?.harvest?.ok) {
         setHarvestSlot(null)
         setHarvestTemp('')
+        setHarvestHasScrap(false)
+        setHarvestScrapBars('')
         await load()
         setError(result?.error || 'La canastilla fue cosechada pero la recepcion PT no se pudo generar')
         return
@@ -248,6 +274,7 @@ export default function ScreenTanque() {
           ai_output: harvestVoiceContext.ai_output || {},
           final_output: {
             temperature: parseFloat(harvestTemp) || 0,
+            scrap_bars: harvestQuantities?.scrapBars || 0,
             slot_id: harvestSlot.id,
             slot_name: harvestSlot.name,
             machine_id: machineId,
@@ -260,9 +287,17 @@ export default function ScreenTanque() {
         })
       }
 
-      setSuccess(`Canastilla ${harvestSlot.name} cosechada y recepción PT generada`)
+      const scrapBars = harvestQuantities?.scrapBars || 0
+      const goodBars = harvestQuantities?.goodBars ?? ptReceptionPreview?.qty_reported ?? 0
+      const successBits = [`Canastilla ${harvestSlot.name} cosechada`]
+      if (scrapBars > 0) successBits.push(`${scrapBars} barra${scrapBars === 1 ? '' : 's'} mermada${scrapBars === 1 ? '' : 's'}`)
+      if (goodBars > 0) successBits.push(`recepción PT de ${goodBars} barra${goodBars === 1 ? '' : 's'} generada`)
+      else successBits.push('sin recepción PT')
+      setSuccess(successBits.join(' · '))
       setHarvestSlot(null)
       setHarvestTemp('')
+      setHarvestHasScrap(false)
+      setHarvestScrapBars('')
       setHarvestVoiceContext(null)
       setHarvestVoiceNote('')
       await load()
@@ -659,6 +694,8 @@ export default function ScreenTanque() {
         <Modal onClose={() => {
           if (harvestBusy) return
           setHarvestSlot(null)
+          setHarvestHasScrap(false)
+          setHarvestScrapBars('')
           setHarvestVoiceContext(null)
           setHarvestVoiceNote('')
         }}>
@@ -670,7 +707,7 @@ export default function ScreenTanque() {
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
           }}>
-            <MiniStat label="Barras PT" value={ptReceptionPreview?.qty_reported || '—'} typo={typo} />
+            <MiniStat label="Barras PT" value={ptReceptionPreview?.qty_reported ?? '—'} typo={typo} />
             <MiniStat label="Kg/barra" value={tank?.kg_per_bar || '—'} typo={typo} />
             <MiniStat label="Kg total" value={expectedKgPerBasket || '—'} typo={typo} />
           </div>
@@ -694,7 +731,9 @@ export default function ScreenTanque() {
               Se generará una recepción pendiente para Almacén PT
             </p>
             <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
-              {ptReceptionPreview?.qty_reported || 8} barras del producto cosechado se enviarán al flujo normal de recepción PT.
+              {requiresPtReception
+                ? `${ptReceptionPreview?.qty_reported ?? 0} barras buenas se enviarán al flujo normal de recepción PT.`
+                : 'No se generará recepción PT porque todas las barras se marcaron como merma.'}
             </p>
           </div>
 
@@ -738,6 +777,64 @@ export default function ScreenTanque() {
             />
           </div>
 
+          <div style={{
+            marginTop: 14, padding: 12, borderRadius: TOKENS.radius.md,
+            background: harvestHasScrap ? 'rgba(245,158,11,0.10)' : TOKENS.colors.surface,
+            border: `1px solid ${harvestHasScrap ? 'rgba(245,158,11,0.35)' : TOKENS.colors.border}`,
+          }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              color: harvestHasScrap ? TOKENS.colors.warning : TOKENS.colors.textSoft,
+              fontSize: 14, fontWeight: 700,
+            }}>
+              <input
+                type="checkbox"
+                checked={harvestHasScrap}
+                onChange={e => {
+                  const checked = e.target.checked
+                  setHarvestHasScrap(checked)
+                  setHarvestScrapBars(checked ? (harvestScrapBars || '1') : '')
+                }}
+                disabled={harvestBusy}
+                style={{ width: 18, height: 18, accentColor: TOKENS.colors.warning, flexShrink: 0 }}
+              />
+              Canastilla con merma
+            </label>
+
+            {harvestHasScrap && (
+              <div style={{ marginTop: 12 }}>
+                <label style={{ ...typo.caption, color: TOKENS.colors.textMuted, display: 'block', marginBottom: 6 }}>
+                  Barras mermadas
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max={harvestQuantities?.totalBars || tank?.bars_per_basket || 8}
+                  step="1"
+                  value={harvestScrapBars}
+                  onChange={e => setHarvestScrapBars(e.target.value)}
+                  placeholder="1"
+                  disabled={harvestBusy}
+                  style={{
+                    width: '100%', padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                    background: 'rgba(255,255,255,0.05)', border: `1px solid ${TOKENS.colors.border}`,
+                    color: 'white', fontSize: 18, fontWeight: 700, outline: 'none',
+                  }}
+                />
+                {harvestQuantities?.valid && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '8px 0 0' }}>
+                    Buenas: <span style={{ color: TOKENS.colors.success, fontWeight: 700 }}>{harvestQuantities.goodBars}</span>
+                    {' '}· Mermadas: <span style={{ color: TOKENS.colors.warning, fontWeight: 700 }}>{harvestQuantities.scrapBars}</span>
+                    {harvestQuantities.scrapKg > 0 && (
+                      <> · Merma: <span style={{ color: TOKENS.colors.warning, fontWeight: 700 }}>{harvestQuantities.scrapKg} kg</span></>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Advertencias preflight (backend valida de nuevo al extraer) */}
           {harvestWarnings.length > 0 && (
             <div style={{
@@ -776,7 +873,13 @@ export default function ScreenTanque() {
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button
-              onClick={() => { setHarvestSlot(null); setHarvestVoiceContext(null); setHarvestVoiceNote('') }} disabled={harvestBusy}
+              onClick={() => {
+                setHarvestSlot(null)
+                setHarvestHasScrap(false)
+                setHarvestScrapBars('')
+                setHarvestVoiceContext(null)
+                setHarvestVoiceNote('')
+              }} disabled={harvestBusy}
               style={{
                 flex: 1, padding: '12px', borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,

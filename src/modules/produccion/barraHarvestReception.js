@@ -30,18 +30,89 @@ export function resolveHarvestShiftId({ slot = {}, activeShift = {} } = {}) {
   return Number(activeShift?.id || 0)
 }
 
-export function buildPtReceptionFromHarvest({ slot = {}, tank = {} } = {}) {
+export function resolveBarHarvestQuantities({ tank = {}, scrapBars = 0 } = {}) {
+  const configuredBars = Number(tank?.bars_per_basket || 0)
+  const totalBars = Number.isFinite(configuredBars) && configuredBars > 0
+    ? Math.floor(configuredBars)
+    : 8
+  const kgPerBar = Number(tank?.kg_per_bar || 0)
+  const normalizedScrapBars = Number(scrapBars || 0)
+
+  const invalid = (error) => ({
+    valid: false,
+    error,
+    totalBars,
+    scrapBars: normalizedScrapBars,
+    goodBars: 0,
+    kgPerBar,
+    scrapKg: 0,
+    goodKg: 0,
+  })
+
+  if (!Number.isFinite(normalizedScrapBars) || normalizedScrapBars < 0) {
+    return invalid('Las barras mermadas deben ser 0 o mayor')
+  }
+  if (!Number.isInteger(normalizedScrapBars)) {
+    return invalid('Las barras mermadas deben ser un numero entero')
+  }
+  if (normalizedScrapBars > totalBars) {
+    return invalid(`Las barras mermadas no pueden exceder ${totalBars}`)
+  }
+
+  const goodBars = totalBars - normalizedScrapBars
+  const scrapKg = normalizedScrapBars * kgPerBar
+  const goodKg = goodBars * kgPerBar
+
+  return {
+    valid: true,
+    error: '',
+    totalBars,
+    scrapBars: normalizedScrapBars,
+    goodBars,
+    kgPerBar,
+    scrapKg,
+    goodKg,
+  }
+}
+
+export function buildBarHarvestScrapNotes({ slot = {}, tank = {}, quantities = {} } = {}) {
+  const slotName = String(slot?.name || '').trim() || 'sin canastilla'
+  const tankName = String(tank?.display_name || tank?.name || '').trim() || 'sin tanque'
+  const scrapBars = Number(quantities?.scrapBars || 0)
+  const goodBars = Number(quantities?.goodBars || 0)
+  const totalBars = Number(quantities?.totalBars || 0)
+  const scrapKg = Number(quantities?.scrapKg || 0)
+
+  return [
+    `Cosecha barra ${slotName}`,
+    tankName,
+    `${scrapBars} barras mermadas`,
+    `${goodBars} barras buenas`,
+    totalBars ? `${totalBars} barras totales` : '',
+    scrapKg ? `${scrapKg} kg merma` : '',
+  ].filter(Boolean).join(' · ')
+}
+
+export function buildPtReceptionFromHarvest({ slot = {}, tank = {}, scrapBars = 0 } = {}) {
   const product = resolveHarvestProduct({ slot, tank })
   const slotName = String(slot?.name || '').trim()
   const tankName = String(tank?.display_name || tank?.name || '').trim()
+  const quantities = resolveBarHarvestQuantities({ tank, scrapBars })
+  const qtyReported = quantities.valid ? quantities.goodBars : 0
+  const scrapNote = quantities.valid && quantities.scrapBars > 0
+    ? ` · ${quantities.scrapBars} mermadas`
+    : ''
 
   return {
     product_id: product.product_id,
     product_name: product.product_name,
-    qty_reported: 8,
+    qty_reported: qtyReported,
+    total_bars: quantities.totalBars,
+    scrap_bars: quantities.valid ? quantities.scrapBars : 0,
+    good_bars: qtyReported,
     source_product_id: Number(slot?.product_id || 0),
     source_product_name: String(slot?.product_name || '').trim(),
-    notes: `Cosecha barra ${slotName} · ${tankName}`.trim(),
+    notes: `Cosecha barra ${slotName} · ${tankName}${scrapNote}`.trim(),
   }
 }
 

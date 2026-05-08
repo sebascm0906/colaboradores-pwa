@@ -6,7 +6,9 @@ import {
   withExpectedFreezeField,
 } from '../modules/produccion/cycleTiming.js'
 import {
+  buildBarHarvestScrapNotes,
   buildPtReceptionFromHarvest,
+  resolveBarHarvestQuantities,
   resolvePackedProductFromHarvest,
 } from '../modules/produccion/barraHarvestReception.js'
 import {
@@ -543,6 +545,31 @@ async function createUpdate(payload) {
     if (result.success === false) throw new Error(String(result.message || 'create_update failed'))
   }
   return result
+}
+
+async function resolveProductionScrapReasonId(preferredId = 0) {
+  const normalizedPreferredId = Number(preferredId || 0)
+  if (normalizedPreferredId) return normalizedPreferredId
+
+  const result = await readModelSorted('gf.production.scrap.reason', {
+    fields: ['id', 'name', 'sequence', 'active'],
+    domain: [['active', '=', true]],
+    sort_column: 'sequence',
+    sort_desc: false,
+    limit: 50,
+    sudo: 1,
+  })
+  const rows = pickListResponse(result)
+  const normalize = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  const damaged = rows.find((row) => {
+    const name = normalize(row.name)
+    return name.includes('roto') || name.includes('danado') || name.includes('deforme')
+  })
+  return Number(damaged?.id || rows[0]?.id || 0)
 }
 
 // Format JS Date to Odoo datetime format (UTC): 'YYYY-MM-DD HH:MM:SS'
@@ -3248,15 +3275,25 @@ async function directProduction(method, path, body) {
     const temperature = Number(body?.temperature || 0)
     const slot = body?.slot || {}
     const tank = body?.tank || {}
+    const quantities = resolveBarHarvestQuantities({
+      tank,
+      scrapBars: body?.scrap_bars ?? body?.scrapBars ?? 0,
+    })
 
     if (!slotId) throw new Error('slot_id requerido')
     if (!shiftId) throw new Error('shift_id requerido')
+    if (!quantities.valid) throw new Error(quantities.error || 'Barras mermadas invalidas')
 
-    const receptionPayload = buildPtReceptionFromHarvest({ slot, tank })
+    const receptionPayload = buildPtReceptionFromHarvest({ slot, tank, scrapBars: quantities.scrapBars })
     const sourceProductId = Number(body?.source_product_id || receptionPayload.source_product_id || 0)
-    const qtyReported = Number(body?.qty_reported || receptionPayload.qty_reported || 0)
+    const qtyReported = Number(receptionPayload.qty_reported || 0)
 
-    if (!qtyReported || qtyReported <= 0) throw new Error('qty_reported invalido para recepcion PT')
+    if (qtyReported <= 0 && quantities.scrapBars <= 0) {
+      throw new Error('qty_reported invalido para recepcion PT')
+    }
+    if (quantities.scrapBars > 0 && !(quantities.scrapKg > 0)) {
+      throw new Error('No se pudo calcular kg de merma para la canastilla')
+    }
 
     const harvestResult = await createUpdate({
       model: 'x_ice.brine.slot',
@@ -3281,6 +3318,39 @@ async function directProduction(method, path, body) {
       }
     } catch { /* ignore */ }
 
+    const scrapStatus = { ok: true, skipped: true, data: null }
+    if (quantities.scrapBars > 0) {
+      try {
+        const reasonId = await resolveProductionScrapReasonId(body?.scrap_reason_id || body?.reason_id || 0)
+        if (!reasonId) throw new Error('reason_id requerido para merma')
+        const scrapResult = await createUpdate({
+          model: 'gf.production.scrap',
+          method: 'create',
+          dict: {
+            shift_id: shiftId,
+            reason_id: reasonId,
+            line_id: Number(body?.line_id || tank?.line_id || 0) || undefined,
+            machine_id: Number(body?.machine_id || tank?.id || 0) || undefined,
+            operator_id: operatorId || undefined,
+            kg: quantities.scrapKg,
+            notes: buildBarHarvestScrapNotes({ slot, tank, quantities }),
+            scrap_phase: 'production',
+            timestamp: odooNow(),
+          },
+          sudo: 1,
+          app: 'pwa_colaboradores',
+        })
+        scrapStatus.ok = true
+        scrapStatus.skipped = false
+        scrapStatus.data = scrapResult
+      } catch (error) {
+        scrapStatus.ok = false
+        scrapStatus.skipped = false
+        scrapStatus.error = error?.message || 'No se pudo registrar la merma'
+      }
+    }
+
+    const ptStatus = { ok: true, skipped: qtyReported <= 0, data: null }
     try {
       const packedProduct = resolvePackedProductFromHarvest({
         harvestResult,
@@ -3289,35 +3359,59 @@ async function directProduction(method, path, body) {
           product_name: String(receptionPayload.product_name || '').trim(),
         },
       })
-      if (!packedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
+      if (qtyReported > 0) {
+        if (!packedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
 
-      const packResult = await odooHttp('POST', '/api/production/pack', {}, {
-        shift_id: shiftId,
-        cycle_id: 0,
-        product_id: packedProduct.product_id,
-        qty_bags: qtyReported,
-        production_order_id: 0,
-        line_type: String(body?.line_type || 'barra').trim() || 'barra',
-        source_product_id: sourceProductId || undefined,
-        slot_id: slotId,
-        machine_id: Number(tank?.id || body?.machine_id || 0) || undefined,
-      })
+        const packResult = await odooHttp('POST', '/api/production/pack', {}, {
+          shift_id: shiftId,
+          cycle_id: 0,
+          product_id: packedProduct.product_id,
+          qty_bags: qtyReported,
+          production_order_id: 0,
+          line_type: String(body?.line_type || 'barra').trim() || 'barra',
+          source_product_id: sourceProductId || undefined,
+          slot_id: slotId,
+          machine_id: Number(tank?.id || body?.machine_id || 0) || undefined,
+        })
+        ptStatus.ok = true
+        ptStatus.skipped = false
+        ptStatus.data = packResult?.data || packResult || {}
+      }
+
+      if (!scrapStatus.ok || !ptStatus.ok) {
+        const parts = []
+        if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
+        if (!ptStatus.ok) parts.push(`recepcion PT: ${ptStatus.error}`)
+        return {
+          ok: false,
+          harvested: true,
+          harvest: { ok: true, data: harvestResult },
+          scrap: scrapStatus,
+          pt_reception: ptStatus,
+          error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
+        }
+      }
 
       return {
         ok: true,
         harvest: { ok: true, data: harvestResult },
-        pt_reception: { ok: true, data: packResult?.data || packResult || {} },
+        scrap: scrapStatus,
+        pt_reception: ptStatus,
       }
     } catch (error) {
+      ptStatus.ok = false
+      ptStatus.skipped = false
+      ptStatus.error = error?.message || 'No se pudo generar la recepcion PT'
+      const parts = []
+      if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
+      parts.push(`recepcion PT: ${ptStatus.error}`)
       return {
         ok: false,
         harvested: true,
         harvest: { ok: true, data: harvestResult },
-        pt_reception: {
-          ok: false,
-          error: error?.message || 'No se pudo generar la recepcion PT',
-        },
-        error: error?.message || 'La canastilla fue cosechada pero la recepcion PT no se pudo generar',
+        scrap: scrapStatus,
+        pt_reception: ptStatus,
+        error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
       }
     }
   }
