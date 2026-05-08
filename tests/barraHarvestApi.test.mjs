@@ -83,6 +83,12 @@ test('harvest with mermada bars creates production scrap and sends only good bar
       if (params.model === 'gf.production.scrap' && params.method === 'create') {
         return createJsonResponse(200, { result: { success: true, id: 77 } })
       }
+      if (params.model === 'stock.move' && params.method === 'create') {
+        return createJsonResponse(200, { result: { success: true, id: 501 } })
+      }
+      if (params.model === 'stock.move' && params.method === 'function') {
+        return createJsonResponse(200, { result: { success: true, done: true } })
+      }
     }
 
     if (url === '/odoo-api/api/production/pack') {
@@ -118,6 +124,27 @@ test('harvest with mermada bars creates production scrap and sends only good bar
   assert.match(scrapCall.payload.params.dict.notes, /2 barras mermadas/)
   assert.match(scrapCall.payload.params.dict.notes, /6 barras buenas/)
 
+  const scrapMoveCreate = calls.find((call) =>
+    call.payload?.params?.model === 'stock.move'
+    && call.payload?.params?.method === 'create'
+  )
+  assert.ok(scrapMoveCreate)
+  assert.equal(scrapMoveCreate.payload.params.dict.product_id, 900)
+  assert.equal(scrapMoveCreate.payload.params.dict.product_uom_qty, 2)
+  assert.equal(scrapMoveCreate.payload.params.dict.quantity, 2)
+  assert.equal(scrapMoveCreate.payload.params.dict.location_id, 1519)
+  assert.equal(scrapMoveCreate.payload.params.dict.location_dest_id, 1173)
+  assert.equal(scrapMoveCreate.payload.params.dict.company_id, 35)
+  assert.match(scrapMoveCreate.payload.params.dict.origin, /MERMA BARRA A1/)
+
+  const scrapMoveDone = calls.find((call) =>
+    call.payload?.params?.model === 'stock.move'
+    && call.payload?.params?.method === 'function'
+  )
+  assert.ok(scrapMoveDone)
+  assert.deepEqual(scrapMoveDone.payload.params.ids, [501])
+  assert.equal(scrapMoveDone.payload.params.function, '_action_done')
+
   const packCall = calls.find((call) => call.url === '/odoo-api/api/production/pack')
   assert.ok(packCall)
   const packPayload = JSON.parse(packCall.options.body)
@@ -127,5 +154,6 @@ test('harvest with mermada bars creates production scrap and sends only good bar
 
   assert.equal(result.ok, true)
   assert.equal(result.scrap.ok, true)
+  assert.equal(result.scrap_inventory_move.ok, true)
   assert.equal(result.pt_reception.ok, true)
 })

@@ -572,6 +572,75 @@ async function resolveProductionScrapReasonId(preferredId = 0) {
   return Number(damaged?.id || rows[0]?.id || 0)
 }
 
+const IGUALA_BARRA_PT_LOCATION_ID = 1519
+const IGUALA_MERMA_LOCATION_ID = 1173
+const IGUALA_COMPANY_ID = 35
+const UNIT_UOM_ID = 1
+
+function extractCreateUpdateId(result) {
+  return Number(result?.id || result?.res_id || result?.result || result?.data?.id || 0)
+}
+
+async function createBarScrapInventoryMove({
+  product = {},
+  quantities = {},
+  slot = {},
+  tank = {},
+  companyId = 0,
+  sourceLocationId = IGUALA_BARRA_PT_LOCATION_ID,
+  destLocationId = IGUALA_MERMA_LOCATION_ID,
+  productUomId = UNIT_UOM_ID,
+} = {}) {
+  const scrapBars = Number(quantities?.scrapBars || 0)
+  if (!(scrapBars > 0)) return { ok: true, skipped: true, data: null }
+
+  const productId = Number(product?.product_id || 0)
+  if (!productId) throw new Error('product_id requerido para mover merma a ME-IGUALA')
+
+  const slotName = String(slot?.name || '').trim() || String(slot?.x_name || '').trim() || 'sin-slot'
+  const tankName = String(tank?.display_name || tank?.name || '').trim()
+  const moveResult = await createUpdate({
+    model: 'stock.move',
+    method: 'create',
+    dict: {
+      name: `Merma barra ${slotName} - ${String(product?.product_name || productId).trim()}`,
+      product_id: productId,
+      product_uom_qty: scrapBars,
+      quantity: scrapBars,
+      product_uom: Number(productUomId || UNIT_UOM_ID),
+      location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
+      location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
+      company_id: Number(companyId || getCompanyId() || IGUALA_COMPANY_ID),
+      origin: `MERMA BARRA ${slotName}${tankName ? ` - ${tankName}` : ''}`,
+    },
+    sudo: 1,
+    app: 'pwa_colaboradores',
+  })
+  const moveId = extractCreateUpdateId(moveResult)
+  if (!moveId) throw new Error('No se pudo obtener el movimiento de merma creado')
+
+  const doneResult = await createUpdate({
+    model: 'stock.move',
+    method: 'function',
+    ids: [moveId],
+    function: '_action_done',
+    sudo: 1,
+    app: 'pwa_colaboradores',
+  })
+
+  return {
+    ok: true,
+    skipped: false,
+    data: {
+      move_id: moveId,
+      move: moveResult,
+      done: doneResult,
+      location_id: Number(sourceLocationId || IGUALA_BARRA_PT_LOCATION_ID),
+      location_dest_id: Number(destLocationId || IGUALA_MERMA_LOCATION_ID),
+    },
+  }
+}
+
 // Format JS Date to Odoo datetime format (UTC): 'YYYY-MM-DD HH:MM:SS'
 function odooNow(date = new Date()) {
   const pad = (n) => String(n).padStart(2, '0')
@@ -3318,6 +3387,14 @@ async function directProduction(method, path, body) {
       }
     } catch { /* ignore */ }
 
+    const harvestedProduct = resolvePackedProductFromHarvest({
+      harvestResult,
+      fallbackProduct: {
+        product_id: Number(body?.product_id || receptionPayload.product_id || 0),
+        product_name: String(receptionPayload.product_name || '').trim(),
+      },
+    })
+
     const scrapStatus = { ok: true, skipped: true, data: null }
     if (quantities.scrapBars > 0) {
       try {
@@ -3350,22 +3427,38 @@ async function directProduction(method, path, body) {
       }
     }
 
+    const scrapInventoryStatus = { ok: true, skipped: quantities.scrapBars <= 0, data: null }
+    if (quantities.scrapBars > 0) {
+      try {
+        const moveResult = await createBarScrapInventoryMove({
+          product: harvestedProduct,
+          quantities,
+          slot,
+          tank,
+          companyId: Number(body?.company_id || getCompanyId() || IGUALA_COMPANY_ID),
+          sourceLocationId: Number(body?.scrap_source_location_id || IGUALA_BARRA_PT_LOCATION_ID),
+          destLocationId: Number(body?.scrap_dest_location_id || IGUALA_MERMA_LOCATION_ID),
+          productUomId: Number(body?.product_uom_id || harvestResult?.uom_id || harvestResult?.data?.uom_id || UNIT_UOM_ID),
+        })
+        scrapInventoryStatus.ok = true
+        scrapInventoryStatus.skipped = false
+        scrapInventoryStatus.data = moveResult.data || moveResult
+      } catch (error) {
+        scrapInventoryStatus.ok = false
+        scrapInventoryStatus.skipped = false
+        scrapInventoryStatus.error = error?.message || 'No se pudo mover la merma a ME-IGUALA'
+      }
+    }
+
     const ptStatus = { ok: true, skipped: qtyReported <= 0, data: null }
     try {
-      const packedProduct = resolvePackedProductFromHarvest({
-        harvestResult,
-        fallbackProduct: {
-          product_id: Number(body?.product_id || receptionPayload.product_id || 0),
-          product_name: String(receptionPayload.product_name || '').trim(),
-        },
-      })
       if (qtyReported > 0) {
-        if (!packedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
+        if (!harvestedProduct.product_id) throw new Error('product_id requerido para recepcion PT')
 
         const packResult = await odooHttp('POST', '/api/production/pack', {}, {
           shift_id: shiftId,
           cycle_id: 0,
-          product_id: packedProduct.product_id,
+          product_id: harvestedProduct.product_id,
           qty_bags: qtyReported,
           production_order_id: 0,
           line_type: String(body?.line_type || 'barra').trim() || 'barra',
@@ -3378,15 +3471,17 @@ async function directProduction(method, path, body) {
         ptStatus.data = packResult?.data || packResult || {}
       }
 
-      if (!scrapStatus.ok || !ptStatus.ok) {
+      if (!scrapStatus.ok || !scrapInventoryStatus.ok || !ptStatus.ok) {
         const parts = []
         if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
+        if (!scrapInventoryStatus.ok) parts.push(`movimiento a ME-IGUALA: ${scrapInventoryStatus.error}`)
         if (!ptStatus.ok) parts.push(`recepcion PT: ${ptStatus.error}`)
         return {
           ok: false,
           harvested: true,
           harvest: { ok: true, data: harvestResult },
           scrap: scrapStatus,
+          scrap_inventory_move: scrapInventoryStatus,
           pt_reception: ptStatus,
           error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
         }
@@ -3396,6 +3491,7 @@ async function directProduction(method, path, body) {
         ok: true,
         harvest: { ok: true, data: harvestResult },
         scrap: scrapStatus,
+        scrap_inventory_move: scrapInventoryStatus,
         pt_reception: ptStatus,
       }
     } catch (error) {
@@ -3404,12 +3500,14 @@ async function directProduction(method, path, body) {
       ptStatus.error = error?.message || 'No se pudo generar la recepcion PT'
       const parts = []
       if (!scrapStatus.ok) parts.push(`merma: ${scrapStatus.error}`)
+      if (!scrapInventoryStatus.ok) parts.push(`movimiento a ME-IGUALA: ${scrapInventoryStatus.error}`)
       parts.push(`recepcion PT: ${ptStatus.error}`)
       return {
         ok: false,
         harvested: true,
         harvest: { ok: true, data: harvestResult },
         scrap: scrapStatus,
+        scrap_inventory_move: scrapInventoryStatus,
         pt_reception: ptStatus,
         error: `La canastilla fue cosechada pero fallo ${parts.join(' y ')}`,
       }
