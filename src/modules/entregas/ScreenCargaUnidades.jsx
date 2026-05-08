@@ -5,6 +5,7 @@ import { getVanRoster, executeVanLoad, getProductsAtCedis } from './entregasServ
 import { ScreenShell, ConfirmDialog, EmptyState } from './components'
 import { buildLoadPreviewSummary } from './loadPreviewSummary'
 import LoadConfirmPreview from './components/LoadConfirmPreview'
+import { getCedisDispatchLabel, getVanDispatchSourceLabel, getVanUnitLabel } from './cargaUnidadesView'
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -329,6 +330,7 @@ export default function ScreenCargaUnidades() {
   //  Render
   // ─────────────────────────────────────────────────────────────────────────
   const doneCount = Object.values(execResults).filter((r) => r.ok).length
+  const dispatchSourceLabel = getCedisDispatchLabel(vans)
 
   return (
     <ScreenShell title="Cargar Unidades" backTo="/entregas">
@@ -354,6 +356,11 @@ export default function ScreenCargaUnidades() {
               {vans.length} repartidor{vans.length !== 1 ? 'es' : ''} activo{vans.length !== 1 ? 's' : ''}
               {doneCount > 0 ? ` · ${doneCount} cargado${doneCount !== 1 ? 's' : ''}` : ''}
             </p>
+            {dispatchSourceLabel && (
+              <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '6px 0 0', fontWeight: 700 }}>
+                Despacha desde {dispatchSourceLabel}
+              </p>
+            )}
           </div>
           <button
             onClick={loadVans}
@@ -430,7 +437,10 @@ export default function ScreenCargaUnidades() {
                         {van.employee_name || `Empleado ${empId}`}
                       </p>
                       <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '3px 0 0' }}>
-                        {van.mobile_location_name || `Ubicación ${van.mobile_location_id}`}
+                        Unidad destino: {getVanUnitLabel(van)}
+                      </p>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.blue2, margin: '3px 0 0', fontWeight: 700 }}>
+                        Despacha desde: {getVanDispatchSourceLabel(van)}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -682,7 +692,7 @@ export default function ScreenCargaUnidades() {
         <ConfirmDialog
           open
           title="Confirmar carga de van"
-          message={`¿Ejecutar la carga de ${getValidLines(confirmVan.employee_id).length} producto(s) hacia ${confirmVan.mobile_location_name || 'la unidad'}?`}
+          message={`¿Despachar ${getValidLines(confirmVan.employee_id).length} producto(s) desde ${getVanDispatchSourceLabel(confirmVan)} hacia ${getVanUnitLabel(confirmVan)}?`}
           confirmLabel="Confirmar"
           onConfirm={handleConfirmLoad}
           onCancel={() => setConfirmVan(null)}
@@ -693,8 +703,8 @@ export default function ScreenCargaUnidades() {
               stockItems: [],
             })}
             typo={typo}
-            unitName={confirmVan.mobile_location_name || 'Unidad'}
-            locationName={confirmVan.cedis_location_name || 'CEDIS'}
+            unitName={getVanUnitLabel(confirmVan)}
+            locationName={getVanDispatchSourceLabel(confirmVan)}
             stockVerified={Boolean(getStockSummary(confirmVan.employee_id)?.length)}
           />
         </ConfirmDialog>
