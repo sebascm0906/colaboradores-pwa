@@ -67,6 +67,15 @@ export const MODULES = [
     status: 'live',
     icon:   'almacen',
   },
+  {
+    id:     'koldcup',
+    label:  'KOLDCUP',
+    route:  '/koldcup',
+    tone:   'blue',
+    roles:  ['operador_koldcup'],
+    status: 'live',
+    icon:   'produccion',
+  },
 
   // ── Logística / Ventas — GLACIEM (34) y Vía Ágil (36) ──────────────────
   {

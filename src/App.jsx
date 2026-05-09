@@ -46,6 +46,12 @@ const ScreenMaterialesIssue    = lazy(() => import('./modules/almacen-pt/ScreenM
 const ScreenMaterialesReport   = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReport'))
 const ScreenMaterialesReconcile = lazy(() => import('./modules/almacen-pt/ScreenMaterialesReconcile'))
 const ScreenMaterialesCrearIssue = lazy(() => import('./modules/almacen-pt/ScreenMaterialesCrearIssue'))
+// KOLDCUP
+const ScreenKoldcupHub        = lazy(() => import('./modules/koldcup/ScreenKoldcupHub'))
+const ScreenKoldcupCompra     = lazy(() => import('./modules/koldcup/ScreenKoldcupCompra'))
+const ScreenKoldcupProduccion = lazy(() => import('./modules/koldcup/ScreenKoldcupProduccion'))
+const ScreenKoldcupCorte      = lazy(() => import('./modules/koldcup/ScreenKoldcupCorte'))
+const ScreenKoldcupTraspaso   = lazy(() => import('./modules/koldcup/ScreenKoldcupTraspaso'))
 // Supervisión
 const ScreenSupervision     = lazy(() => import('./modules/supervision/ScreenSupervision'))
 const ScreenParos           = lazy(() => import('./modules/supervision/ScreenParos'))
@@ -436,6 +442,13 @@ export default function App() {
             <Route path="/almacen-pt/declaracion-bolsas" element={<PrivateRoute><ScreenDeclaracionBolsasPT /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales/report/:issueId" element={<PrivateRoute><ScreenMaterialesReport /></PrivateRoute>} />
             <Route path="/almacen-pt/materiales/reconciliar" element={<PrivateRoute><ScreenMaterialesReconcile /></PrivateRoute>} />
+
+            {/* ── KOLDCUP ─────────────────────────────────────────────── */}
+            <Route path="/koldcup" element={<PrivateRoute><ScreenKoldcupHub /></PrivateRoute>} />
+            <Route path="/koldcup/compra" element={<PrivateRoute><ScreenKoldcupCompra /></PrivateRoute>} />
+            <Route path="/koldcup/produccion" element={<PrivateRoute><ScreenKoldcupProduccion /></PrivateRoute>} />
+            <Route path="/koldcup/corte" element={<PrivateRoute><ScreenKoldcupCorte /></PrivateRoute>} />
+            <Route path="/koldcup/traspaso" element={<PrivateRoute><ScreenKoldcupTraspaso /></PrivateRoute>} />
 
             {/* ── Supervisión Producción ───────────────────────────────── */}
             <Route path="/supervision" element={<PrivateRoute><ScreenSupervision /></PrivateRoute>} />
