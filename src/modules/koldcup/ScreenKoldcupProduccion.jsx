@@ -1,3 +1,5 @@
+import TransformationScreen from '../transformaciones/TransformationScreen'
+
 export default function ScreenKoldcupProduccion() {
-  return null
+  return <TransformationScreen roleScope="koldcup" />
 }
