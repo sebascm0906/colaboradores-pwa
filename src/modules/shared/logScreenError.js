@@ -30,7 +30,6 @@
  */
 export function logScreenError(screen, action, error) {
   const message = error?.message || String(error || 'Error desconocido')
-  // eslint-disable-next-line no-console
   console.warn(`[GFSC][${screen}] ${action} failed:`, message, error)
   return message
 }
