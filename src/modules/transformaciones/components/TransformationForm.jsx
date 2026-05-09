@@ -95,7 +95,7 @@ export default function TransformationForm({
             min="1"
             step="1"
             inputMode="numeric"
-            placeholder="Barras utilizadas"
+            placeholder={roleConfig.inputPlaceholder || 'Barras utilizadas'}
             value={draft.input_qty_units}
             onChange={(event) => onChange('input_qty_units', event.target.value)}
             style={fieldStyle(errors.input_qty_units)}
@@ -108,7 +108,7 @@ export default function TransformationForm({
             min="1"
             step="1"
             inputMode="numeric"
-            placeholder={`${roleConfig.outputUomLabel} producidas`}
+            placeholder={roleConfig.outputPlaceholder || `${roleConfig.outputUomLabel} producidas`}
             value={draft.output_qty_units}
             onChange={(event) => onChange('output_qty_units', event.target.value)}
             style={fieldStyle(errors.output_qty_units)}
@@ -149,7 +149,7 @@ export default function TransformationForm({
           border: 'none',
         }}
       >
-        {saving ? 'Guardando...' : 'Confirmar transformacion'}
+        {saving ? 'Guardando...' : (roleConfig.submitLabel || 'Confirmar transformacion')}
       </button>
     </div>
   )

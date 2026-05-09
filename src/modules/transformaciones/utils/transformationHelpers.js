@@ -15,6 +15,17 @@ const ROLE_SCOPE_CONFIG = {
     apiBase: '/pwa-entregas',
     defaultWarehouseId: 0,
   },
+  koldcup: {
+    title: 'Produccion KOLDCUP',
+    subtitle: 'Vasos sellados',
+    backTo: '/koldcup',
+    outputUomLabel: 'vasos',
+    inputPlaceholder: 'Cantidad consumida',
+    outputPlaceholder: 'Vasos sellados',
+    submitLabel: 'Confirmar produccion',
+    apiBase: '/pwa-koldcup',
+    defaultWarehouseId: 0,
+  },
 }
 
 export function getRoleScopeConfig(roleScope) {

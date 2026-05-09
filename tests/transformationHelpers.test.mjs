@@ -26,6 +26,18 @@ test('getRoleScopeConfig returns Entregas-specific labels and routes', () => {
   assert.equal(config.outputUomLabel, 'piezas')
 })
 
+test('getRoleScopeConfig returns KOLDCUP-specific labels and routes', () => {
+  const config = getRoleScopeConfig('koldcup')
+  assert.equal(config.title, 'Produccion KOLDCUP')
+  assert.equal(config.subtitle, 'Vasos sellados')
+  assert.equal(config.backTo, '/koldcup')
+  assert.equal(config.outputUomLabel, 'vasos')
+  assert.equal(config.apiBase, '/pwa-koldcup')
+  assert.equal(config.inputPlaceholder, 'Cantidad consumida')
+  assert.equal(config.outputPlaceholder, 'Vasos sellados')
+  assert.equal(config.submitLabel, 'Confirmar produccion')
+})
+
 test('getVisibleRecipes hides blocked recipes and preserves active ones', () => {
   const recipes = getVisibleRecipes([
     { recipe_code: 'molido_chico', active: true, label: 'Molido chico' },
