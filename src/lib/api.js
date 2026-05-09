@@ -7801,6 +7801,23 @@ async function directSupervisorVentas(method, path, body) {
   return NO_DIRECT
 }
 
+async function directKoldcup(method, path, body) {
+  const cleanPath = path.split('?')[0]
+  if (!cleanPath.startsWith('/pwa-koldcup/')) return NO_DIRECT
+
+  const queryStr = path.includes('?') ? path.split('?')[1] : ''
+  const queryObj = {}
+  if (queryStr) {
+    for (const [key, value] of new URLSearchParams(queryStr)) queryObj[key] = value
+  }
+
+  // KOLDCUP business mutations live in Odoo endpoints. This BFF only
+  // delegates; it must not generic-create purchase, cash, stock, or transfer
+  // records locally.
+  if (method === 'GET') return odooHttp('GET', cleanPath, queryObj)
+  return odooJson(cleanPath, body || {})
+}
+
 async function routeDirect(method, path, body) {
   const cleanPath = path.split('?')[0]
 
@@ -7814,6 +7831,7 @@ async function routeDirect(method, path, body) {
     directAlmacenPT,
     directEntregas,
     directSupervisorVentas,
+    directKoldcup,
   ]
 
   for (const handler of directHandlers) {
