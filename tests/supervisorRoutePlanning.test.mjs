@@ -14,6 +14,9 @@ import {
   normalizeCustomerSearchResult,
   getSupervisorRouteErrorMessage,
   buildPolygonMarkerStyle,
+  DEMAND_CLASSES,
+  sanitizeDemandClasses,
+  getDemandClassesSummary,
 } from '../src/modules/supervisor-ventas/routePlanning.js'
 
 test('getTomorrowDateString returns local YYYY-MM-DD for the next day', () => {
@@ -103,7 +106,87 @@ test('buildRoutePlanCriteriaPayload defaults to any time and all visit days', ()
     channel_ids: [1, 2],
     visit_days: [],
     time_window_id: null,
+    demand_classes: [],
   })
+})
+
+// ── F1: demand_classes ──────────────────────────────────────────────────────
+test('DEMAND_CLASSES constant exposes the canonical AA → C order', () => {
+  assert.deepEqual(DEMAND_CLASSES, ['AA', 'A', 'B', 'C'])
+})
+
+test('sanitizeDemandClasses keeps only valid classes in canonical order', () => {
+  assert.deepEqual(sanitizeDemandClasses([]), [])
+  assert.deepEqual(sanitizeDemandClasses(null), [])
+  assert.deepEqual(sanitizeDemandClasses(undefined), [])
+  assert.deepEqual(sanitizeDemandClasses(['A', 'AA']), ['AA', 'A'])
+  // Ignora valores invalidos y normaliza casing.
+  assert.deepEqual(sanitizeDemandClasses(['aa', 'a', 'b', 'c', 'D', 'Z', '']), ['AA', 'A', 'B', 'C'])
+  // Sin duplicados.
+  assert.deepEqual(sanitizeDemandClasses(['AA', 'AA', 'a']), ['AA', 'A'])
+})
+
+test('getDemandClassesSummary humaniza la seleccion para la UI', () => {
+  assert.equal(getDemandClassesSummary([]), 'Todas')
+  assert.equal(getDemandClassesSummary(null), 'Todas')
+  assert.equal(getDemandClassesSummary(['AA']), 'AA')
+  assert.equal(getDemandClassesSummary(['AA', 'A']), 'AA/A')
+  assert.equal(getDemandClassesSummary(['c', 'b', 'a', 'aa']), 'AA/A/B/C')
+})
+
+test('buildRoutePlanCriteriaPayload includes sanitized demand_classes (todas)', () => {
+  // Caso "todas": payload contiene demand_classes: [] (no se omite).
+  assert.deepEqual(buildRoutePlanCriteriaPayload({
+    routeId: 10,
+    dateTarget: '2026-05-10',
+    polygonId: 20,
+    channelIds: [],
+    visitDays: [],
+    timeWindowId: '',
+  }).demand_classes, [])
+})
+
+test('buildRoutePlanCriteriaPayload includes demand_classes ["AA","A"]', () => {
+  assert.deepEqual(buildRoutePlanCriteriaPayload({
+    routeId: 10,
+    dateTarget: '2026-05-10',
+    polygonId: 20,
+    channelIds: [],
+    visitDays: [],
+    timeWindowId: '',
+    demandClasses: ['A', 'AA'],
+  }).demand_classes, ['AA', 'A'])
+})
+
+test('buildRoutePlanCriteriaPayload includes demand_classes ["B","C"]', () => {
+  assert.deepEqual(buildRoutePlanCriteriaPayload({
+    routeId: 10,
+    dateTarget: '2026-05-10',
+    polygonId: 20,
+    channelIds: [],
+    visitDays: [],
+    timeWindowId: '',
+    demandClasses: ['B', 'C'],
+  }).demand_classes, ['B', 'C'])
+})
+
+test('buildRoutePlanCriteriaPayload descarta clases invalidas (defensa cliente)', () => {
+  // El backend tambien valida y devuelve VALIDATION_ERROR; este es la red de
+  // seguridad cliente para que la UI nunca envie basura.
+  assert.deepEqual(buildRoutePlanCriteriaPayload({
+    routeId: 10,
+    dateTarget: '2026-05-10',
+    polygonId: 20,
+    channelIds: [],
+    visitDays: [],
+    timeWindowId: '',
+    demandClasses: ['AA', 'Z', 99, '', null],
+  }).demand_classes, ['AA'])
+})
+
+test('getSupervisorRouteErrorMessage mapea VALIDATION_ERROR de demand_classes', () => {
+  assert.match(getSupervisorRouteErrorMessage({ code: 'demand_class_invalid' }), /AA, A, B o C/)
+  assert.match(getSupervisorRouteErrorMessage({ code: 'demand_classes_invalid' }), /AA, A, B o C/)
 })
 
 test('getDefaultTimeWindow returns any time semantics', () => {

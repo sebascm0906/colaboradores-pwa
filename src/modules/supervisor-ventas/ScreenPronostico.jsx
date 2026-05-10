@@ -21,11 +21,14 @@ import {
 import {
   buildRoutePlanCriteriaPayload,
   buildRouteForecastPayload,
+  DEMAND_CLASSES,
   getDefaultTimeWindow,
+  getDemandClassesSummary,
   getPlanningDateBounds,
   getSupervisorRouteErrorMessage,
   isFuturePlanningDate,
   normalizeRoutePlanningRow,
+  sanitizeDemandClasses,
 } from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -225,6 +228,8 @@ export default function ScreenPronostico() {
   const [selectedChannelIds, setSelectedChannelIds] = useState([])
   const [selectedVisitDays, setSelectedVisitDays] = useState([])
   const [selectedTimeWindowId, setSelectedTimeWindowId] = useState('')
+  // F1: clasificación de demanda (AA/A/B/C). Vacío = todas las clases.
+  const [selectedDemandClasses, setSelectedDemandClasses] = useState([])
   const [routeLoading, setRouteLoading] = useState(null)
   const [routeError, setRouteError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -458,6 +463,12 @@ export default function ScreenPronostico() {
       : [...prev, dayId])
   }
 
+  function handleDemandClassToggle(value) {
+    setSelectedDemandClasses(prev => sanitizeDemandClasses(
+      prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
+    ))
+  }
+
   function handleDateTargetChange(value) {
     if (!isFuturePlanningDate(value)) {
       flashMsg('Selecciona una fecha de manana en adelante', 4000)
@@ -480,6 +491,7 @@ export default function ScreenPronostico() {
       channelIds: selectedChannelIds,
       visitDays: selectedVisitDays,
       timeWindowId: selectedTimeWindowId,
+      demandClasses: selectedDemandClasses,
     })
   }
 
@@ -773,6 +785,53 @@ export default function ScreenPronostico() {
                       </button>
                     )
                   })}
+                </div>
+
+                {/* F1: Clasificación de clientes (AA/A/B/C). Vacío = todas. */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                    marginBottom: 4,
+                  }}>
+                    <span style={{ ...typo.caption, color: TOKENS.colors.textMuted, fontSize: 10, fontWeight: 600 }}>
+                      Clasificacion de clientes
+                    </span>
+                    <span style={{
+                      ...typo.caption, color: TOKENS.colors.textLow, fontSize: 10,
+                    }}>
+                      {getDemandClassesSummary(selectedDemandClasses)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {DEMAND_CLASSES.map((value) => {
+                      const selected = selectedDemandClasses.includes(value)
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={selected}
+                          aria-label={`Clasificacion ${value}`}
+                          onClick={() => handleDemandClassToggle(value)}
+                          style={{
+                            minWidth: 44, minHeight: 32, padding: '6px 10px',
+                            borderRadius: TOKENS.radius.pill,
+                            background: selected ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                            border: `1px solid ${selected ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                            color: selected ? TOKENS.colors.blue2 : TOKENS.colors.textMuted,
+                            fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+                          }}
+                        >
+                          {value}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p style={{
+                    ...typo.caption, color: TOKENS.colors.textLow,
+                    margin: '4px 0 0', fontSize: 10,
+                  }}>
+                    Vacio = todas las clasificaciones
+                  </p>
                 </div>
 
                 <select

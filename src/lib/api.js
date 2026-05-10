@@ -7396,6 +7396,19 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, error: 'Ruta fuera del CEDIS de la sesion.', code: 'route_not_in_warehouse' }
     }
 
+    // F1: clasificación de demanda (AA/A/B/C). Always emit array — incluso
+    // vacío — para que el backend limpie cualquier filtro pegado del ensure
+    // previo. Whitelist client-side como red de seguridad antes de enviar; el
+    // backend revalida y devuelve VALIDATION_ERROR si llegara algo inválido.
+    const ALLOWED_DEMAND_CLASSES = ['AA', 'A', 'B', 'C']
+    const demandClasses = Array.isArray(body?.demand_classes)
+      ? Array.from(new Set(
+          body.demand_classes
+            .map((v) => String(v || '').trim().toUpperCase())
+            .filter((v) => ALLOWED_DEMAND_CLASSES.includes(v))
+        ))
+      : []
+
     try {
       const envelope = await odooJson('/gf/salesops/supervisor/v2/route_plan/ensure', {
         meta: {
@@ -7410,6 +7423,7 @@ async function directSupervisorVentas(method, path, body) {
           channel_ids: Array.isArray(body?.channel_ids) ? body.channel_ids.map(Number).filter(Boolean) : [],
           visit_days: Array.isArray(body?.visit_days) ? body.visit_days.filter(Boolean) : [],
           time_window_id: body?.time_window_id ? Number(body.time_window_id) : null,
+          demand_classes: demandClasses,
         },
       })
 
