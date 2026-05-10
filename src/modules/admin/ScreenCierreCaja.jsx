@@ -55,6 +55,7 @@ function MobileCierreCaja() {
       finally { setLoading(false) }
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [])
 
   const totalVentas = sales.reduce((s, v) => s + (v.total || 0), 0)

@@ -30,7 +30,8 @@
  */
 export function logScreenError(screen, action, error) {
   const message = error?.message || String(error || 'Error desconocido')
-  // eslint-disable-next-line no-console
+  // La regla eslint `no-console` no esta activada en este proyecto, por lo que
+  // un disable comment para console.warn aqui resultaba unused-directive.
   console.warn(`[GFSC][${screen}] ${action} failed:`, message, error)
   return message
 }

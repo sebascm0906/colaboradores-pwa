@@ -53,6 +53,7 @@ export default function ScreenEmpaque() {
   useEffect(() => {
     if (activeRole === 'operador_rolito') return
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [activeRole])
 
   // V2: Rolito operators get the new simplified packing

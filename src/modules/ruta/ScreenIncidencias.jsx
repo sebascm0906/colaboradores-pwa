@@ -48,6 +48,7 @@ export default function ScreenIncidencias() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadIncidents() }, [])
 
   async function loadIncidents() {

@@ -33,6 +33,7 @@ async function fetchLegacyProducts(warehouseId) {
 }
 
 /** Limpia el cache — útil cuando el usuario quiere forzar refresh */
+// eslint-disable-next-line react-refresh/only-export-components
 export function invalidateProductCache(warehouseId) {
   if (warehouseId == null) legacyCache.clear()
   else legacyCache.delete(warehouseId)

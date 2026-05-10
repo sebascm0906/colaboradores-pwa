@@ -36,6 +36,7 @@ export default function ScreenAlmacenPT() {
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
   const employeeId = session?.employee_id || 0
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   // Si el backend dice receive_turn, redirigimos al handover automaticamente.

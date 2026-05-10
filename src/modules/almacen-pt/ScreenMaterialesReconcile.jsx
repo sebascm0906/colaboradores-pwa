@@ -36,6 +36,7 @@ export default function ScreenMaterialesReconcile() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

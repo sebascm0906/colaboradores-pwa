@@ -25,6 +25,7 @@ export default function ScreenInventarioPT() {
 
   const warehouseId = session?.warehouse_id || DEFAULT_WAREHOUSE_ID
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

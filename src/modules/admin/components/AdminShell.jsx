@@ -24,6 +24,7 @@ import ActivityFeed from './ActivityFeed'
 //
 // Regla: si un rol no está en `roles`, el ítem se oculta de la UI.
 // Backend valida permisos en DB — este filtrado es solo UX.
+// eslint-disable-next-line react-refresh/only-export-components
 export const NAV_ITEMS = [
   { id: 'hub',          label: 'Caja del día',     route: '/admin',                    roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
@@ -44,11 +45,13 @@ export const NAV_ITEMS = [
 ]
 
 /** Filtra NAV_ITEMS por el rol actual. Export para tests y HubV2. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function navItemsForRole(role) {
   if (!role) return []
   return NAV_ITEMS.filter(item => item.roles.includes(role))
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function navItemsForRoles(roles = []) {
   return NAV_ITEMS.filter((item) => item.roles.some((role) => roles.includes(role)))
 }

@@ -118,7 +118,12 @@ const ScreenForecastUnlock   = lazy(() => import('./modules/gerente/ScreenForeca
 const ScreenGastosGerente    = lazy(() => import('./modules/gerente/ScreenGastos'))
 
 // ─── Contexto de sesión ──────────────────────────────────────────────────────
+// NOTA: Mover SessionContext + useSession a un archivo aparte para satisfacer
+// `react-refresh/only-export-components` requeriria refactorizar imports en
+// decenas de pantallas. Queda como deuda tecnica documentada (gap).
+// eslint-disable-next-line react-refresh/only-export-components
 export const SessionContext = createContext(null)
+// eslint-disable-next-line react-refresh/only-export-components
 export function useSession() { return useContext(SessionContext) }
 
 function getStoredSession() {

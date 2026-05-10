@@ -81,6 +81,7 @@ export default function ScreenChecklistUnidad() {
   const [photoCheckId, setPhotoCheckId] = useState(null)
   const [uploadingPhotoCheckId, setUploadingPhotoCheckId] = useState(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadAll() }, [])
 
   /**
