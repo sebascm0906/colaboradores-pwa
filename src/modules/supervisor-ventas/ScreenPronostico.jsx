@@ -17,6 +17,10 @@ import {
   getPlanningSubpolygons,
   getPlanningChannels,
   getPlanningTimeWindows,
+  // F4-E.2: Plan Maestro Semanal — sugerencias y confirmacion de recursos
+  getBranchConfigs,
+  getRouteSuggestions,
+  confirmRouteSuggestion,
 } from './api'
 import {
   buildRoutePlanCriteriaPayload,
@@ -247,6 +251,24 @@ export default function ScreenPronostico() {
   const [editLines, setEditLines] = useState([])
   const [editProductLineIdx, setEditProductLineIdx] = useState(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
+
+  // ── F4-E.2: Plan Maestro Semanal — toggle + sugerencias ─────────────
+  // Toggle entre flujo manual (existente, intacto) y nuevo flujo de
+  // sugerencias derivadas del weekly plan (gf.route.weekly.plan.line).
+  // El flujo manual NO se rompe; ambos modos coexisten.
+  const [planMode, setPlanMode] = useState('manual') // 'manual' | 'plan_maestro'
+  const [branchConfigs, setBranchConfigs] = useState([])
+  const [branchConfigsLoaded, setBranchConfigsLoaded] = useState(false)
+  const [selectedBranchConfigId, setSelectedBranchConfigId] = useState(null)
+  const [pmPlan, setPmPlan] = useState(null) // {weekly_plan_id, name, state, target_date}
+  const [pmSuggestions, setPmSuggestions] = useState([])
+  const [pmLoading, setPmLoading] = useState(false)
+  const [pmError, setPmError] = useState(null) // {code, message} or null
+  const [pmWarning, setPmWarning] = useState(null) // string (out-of-range)
+  // Per-card form state: { [lineId]: { driverId, vehicleId, salespersonId,
+  //   warehouseDispatchId, mobileLocationId, departureTime, saving, error,
+  //   savedRouteId, savedRouteName } }
+  const [pmCardState, setPmCardState] = useState({})
 
   const productOptions = useMemo(
     () => products.map(p => ({ id: String(p.id), label: p.name || p.display_name || `#${p.id}` })),
@@ -539,6 +561,206 @@ export default function ScreenPronostico() {
     }
   }
 
+  // ── F4-E.2: Plan Maestro Semanal — helpers + effects ─────────────────
+
+  function pmTranslateErrorCode(code, fallback = '') {
+    const map = {
+      forbidden: 'No tienes permisos para ver/editar sugerencias del plan maestro',
+      weekly_plan_not_found: 'No hay plan maestro para esta fecha en esta sucursal',
+      weekly_plan_ambiguous: 'Conflicto: multiples planes para esta fecha — contactar Yamil',
+      weekly_plan_not_editable: 'Este plan no es editable (publicado/cerrado/cancelado)',
+      weekly_plan_line_not_found: 'La linea ya no existe (refrescar)',
+      missing_required_fields: 'Faltan campos requeridos (chofer y camioneta)',
+      invalid_payload: 'Datos invalidos',
+      route_not_found: 'Chofer + camioneta no resuelven a una ruta activa',
+      route_ambiguous: 'Multiples rutas posibles para chofer+camioneta — pedir a Yamil/Sebas escoger',
+      write_error: 'Error al guardar — reintentar',
+      read_error: 'Error leyendo branch configs — reintentar',
+    }
+    return map[code] || fallback || 'Error desconocido'
+  }
+
+  function pmCardFor(lineId) {
+    return pmCardState[lineId] || {
+      driverId: '',
+      vehicleId: '',
+      salespersonId: '',
+      warehouseDispatchId: '',
+      mobileLocationId: '',
+      departureTime: '',
+      saving: false,
+      error: null,
+      savedRouteId: null,
+      savedRouteName: null,
+    }
+  }
+
+  function updatePmCard(lineId, partial) {
+    setPmCardState((prev) => ({
+      ...prev,
+      [lineId]: { ...pmCardFor(lineId), ...partial },
+    }))
+  }
+
+  function pmSeedCardFromSuggestion(suggestion) {
+    return {
+      driverId: suggestion.planned_driver_id ? String(suggestion.planned_driver_id) : '',
+      vehicleId: suggestion.planned_vehicle_id ? String(suggestion.planned_vehicle_id) : '',
+      salespersonId: suggestion.planned_salesperson_id ? String(suggestion.planned_salesperson_id) : '',
+      warehouseDispatchId: suggestion.planned_warehouse_dispatch_id ? String(suggestion.planned_warehouse_dispatch_id) : '',
+      mobileLocationId: suggestion.planned_mobile_location_id ? String(suggestion.planned_mobile_location_id) : '',
+      departureTime: suggestion.planned_departure_time
+        ? String(suggestion.planned_departure_time)
+        : '',
+      saving: false,
+      error: null,
+      savedRouteId: suggestion.resolved_route_id || null,
+      savedRouteName: null,
+    }
+  }
+
+  const loadBranchConfigs = useCallback(async () => {
+    try {
+      const resp = await getBranchConfigs()
+      const list = (resp?.data?.branch_configs || []).filter((bc) => bc.state === 'active')
+      setBranchConfigs(list)
+      setBranchConfigsLoaded(true)
+      // Pre-select primero si solo hay uno
+      setSelectedBranchConfigId((current) => {
+        if (current) return current
+        return list.length === 1 ? list[0].id : null
+      })
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'getBranchConfigs', e)
+      setBranchConfigs([])
+      setBranchConfigsLoaded(true)
+    }
+  }, [])
+
+  const loadPmSuggestions = useCallback(async () => {
+    if (planMode !== 'plan_maestro') return
+    if (!selectedBranchConfigId) {
+      setPmSuggestions([])
+      setPmPlan(null)
+      setPmError(null)
+      setPmWarning(null)
+      return
+    }
+    setPmLoading(true)
+    setPmError(null)
+    setPmWarning(null)
+    try {
+      const resp = await getRouteSuggestions({
+        date: dateTarget,
+        branchConfigId: selectedBranchConfigId,
+      })
+      if (resp?.ok === false) {
+        const code = resp?.data?.code || 'unknown'
+        setPmError({
+          code,
+          message: pmTranslateErrorCode(code, resp?.message),
+        })
+        setPmSuggestions([])
+        setPmPlan(null)
+        return
+      }
+      const data = resp?.data || {}
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions : []
+      setPmPlan({
+        weekly_plan_id: data.weekly_plan_id,
+        weekly_plan_name: data.weekly_plan_name,
+        weekly_plan_state: data.weekly_plan_state,
+        target_date: data.target_date,
+        week_start_date: data.week_start_date,
+        week_end_date: data.week_end_date,
+      })
+      setPmSuggestions(suggestions)
+      // Seed card state from incoming suggestions (preserve user-typed
+      // values for cards en edicion).
+      setPmCardState((prev) => {
+        const next = { ...prev }
+        for (const s of suggestions) {
+          if (!next[s.weekly_plan_line_id]) {
+            next[s.weekly_plan_line_id] = pmSeedCardFromSuggestion(s)
+          }
+        }
+        return next
+      })
+      // Warning para out-of-range (resp.message poblado por backend)
+      if (resp?.message && suggestions.length === 0) {
+        setPmWarning(resp.message)
+      }
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'getRouteSuggestions', e)
+      const code = e?.data?.code || e?.code
+      setPmError({
+        code: code || 'unknown',
+        message: pmTranslateErrorCode(code, e?.message || 'Error al cargar sugerencias'),
+      })
+      setPmSuggestions([])
+      setPmPlan(null)
+    } finally {
+      setPmLoading(false)
+    }
+  }, [planMode, selectedBranchConfigId, dateTarget])
+
+  useEffect(() => { loadBranchConfigs() }, [loadBranchConfigs])
+  useEffect(() => { loadPmSuggestions() }, [loadPmSuggestions])
+
+  async function handlePmConfirm(suggestion) {
+    const lineId = suggestion.weekly_plan_line_id
+    const card = pmCardFor(lineId)
+    const driverId = Number(card.driverId || 0)
+    const vehicleId = Number(card.vehicleId || 0)
+    if (!driverId || !vehicleId) {
+      updatePmCard(lineId, {
+        error: pmTranslateErrorCode('missing_required_fields'),
+      })
+      return
+    }
+    updatePmCard(lineId, { saving: true, error: null })
+    try {
+      const payload = {
+        weekly_plan_line_id: lineId,
+        planned_driver_id: driverId,
+        planned_vehicle_id: vehicleId,
+      }
+      if (card.salespersonId) payload.planned_salesperson_id = Number(card.salespersonId)
+      if (card.warehouseDispatchId) payload.planned_warehouse_dispatch_id = Number(card.warehouseDispatchId)
+      if (card.mobileLocationId) payload.planned_mobile_location_id = Number(card.mobileLocationId)
+      if (card.departureTime) {
+        const t = parseFloat(card.departureTime)
+        if (!Number.isNaN(t)) payload.planned_departure_time = t
+      }
+      const resp = await confirmRouteSuggestion(payload)
+      if (resp?.ok === false) {
+        const code = resp?.data?.code || 'unknown'
+        updatePmCard(lineId, {
+          saving: false,
+          error: pmTranslateErrorCode(code, resp?.message),
+        })
+        return
+      }
+      const data = resp?.data || {}
+      updatePmCard(lineId, {
+        saving: false,
+        error: null,
+        savedRouteId: data.resolved_route_id || null,
+        savedRouteName: data.resolved_route_name || null,
+      })
+      // Refrescar sugerencias para reflejar el cambio
+      await loadPmSuggestions()
+      flashMsg(`Recursos confirmados (ruta ${data.resolved_route_name || data.resolved_route_id})`)
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'confirmRouteSuggestion', e)
+      const code = e?.data?.code || e?.code
+      updatePmCard(lineId, {
+        saving: false,
+        error: pmTranslateErrorCode(code, e?.message || 'Error al confirmar'),
+      })
+    }
+  }
+
   const [actionLoading, setActionLoading] = useState(null) // forecast id being acted on
 
   async function handleConfirm(forecastId) {
@@ -637,6 +859,246 @@ export default function ScreenPronostico() {
           </div>
         ) : (
           <>
+            {/* F4-E.2: Toggle modo manual vs plan maestro */}
+            <div style={{
+              marginTop: 8, marginBottom: 8, padding: 4, borderRadius: TOKENS.radius.pill,
+              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
+            }}>
+              {[
+                { key: 'manual', label: 'Crear ruta manual' },
+                { key: 'plan_maestro', label: 'Sugerencia plan maestro' },
+              ].map((opt) => {
+                const active = planMode === opt.key
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setPlanMode(opt.key)}
+                    style={{
+                      minHeight: 44, padding: '10px 12px', borderRadius: TOKENS.radius.pill,
+                      background: active ? TOKENS.colors.blue2 : 'transparent',
+                      color: active ? '#fff' : TOKENS.colors.textMuted,
+                      fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* F4-E.2: Seccion Plan Maestro (visible solo en modo plan_maestro) */}
+            {planMode === 'plan_maestro' && (
+              <div style={{
+                marginTop: 8, padding: 16, borderRadius: TOKENS.radius.xl,
+                background: TOKENS.glass.hero, border: `1px solid ${TOKENS.colors.borderBlue}`,
+                boxShadow: `${TOKENS.shadow.md}, ${TOKENS.shadow.inset}`,
+              }}>
+                <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 14 }}>SUGERENCIAS DEL PLAN MAESTRO SEMANAL</p>
+
+                {/* Branch picker (auto-selecciona si solo hay uno) */}
+                {branchConfigsLoaded && branchConfigs.length > 1 && (
+                  <div style={{
+                    marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
+                    background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>SUCURSAL</p>
+                    <select
+                      value={selectedBranchConfigId || ''}
+                      onChange={(e) => setSelectedBranchConfigId(Number(e.target.value) || null)}
+                      style={{
+                        width: '100%', marginTop: 4, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
+                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                        color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                      }}
+                    >
+                      <option value="">— elegir —</option>
+                      {branchConfigs.map((bc) => (
+                        <option key={bc.id} value={bc.id}>
+                          {bc.display_name || `Branch #${bc.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {!branchConfigsLoaded && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 12 }}>
+                    Cargando sucursales...
+                  </p>
+                )}
+
+                {branchConfigsLoaded && branchConfigs.length === 0 && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.warning, fontSize: 12 }}>
+                    No hay sucursales disponibles. Pedir permisos al admin.
+                  </p>
+                )}
+
+                {/* Plan info */}
+                {pmPlan && (
+                  <div style={{
+                    marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
+                    background: 'rgba(43,143,224,0.08)', border: '1px solid rgba(43,143,224,0.22)',
+                  }}>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>
+                      PLAN MAESTRO
+                    </p>
+                    <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 13 }}>
+                      {pmPlan.weekly_plan_name} · {pmPlan.weekly_plan_state}
+                    </p>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '2px 0 0', fontSize: 11 }}>
+                      Semana {pmPlan.week_start_date} → {pmPlan.week_end_date}
+                    </p>
+                  </div>
+                )}
+
+                {pmLoading && (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                    <div style={{ width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)', borderTop: '2px solid #2B8FE0', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  </div>
+                )}
+
+                {pmError && (
+                  <div style={{
+                    marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
+                    background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.32)',
+                  }}>
+                    <p style={{ ...typo.caption, color: '#ef4444', margin: 0, fontSize: 11, fontWeight: 600 }}>
+                      {pmError.message}
+                    </p>
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '2px 0 0', fontSize: 10 }}>
+                      code: {pmError.code}
+                    </p>
+                  </div>
+                )}
+
+                {pmWarning && !pmError && (
+                  <div style={{
+                    marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
+                    background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.32)',
+                  }}>
+                    <p style={{ ...typo.caption, color: '#f59e0b', margin: 0, fontSize: 11, fontWeight: 600 }}>
+                      {pmWarning}
+                    </p>
+                  </div>
+                )}
+
+                {!pmLoading && !pmError && pmSuggestions.length === 0 && pmPlan && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 12, padding: '10px 0' }}>
+                    Sin sugerencias para esta fecha.
+                  </p>
+                )}
+
+                {!pmLoading && pmSuggestions.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {pmSuggestions.map((s) => {
+                      const card = pmCardFor(s.weekly_plan_line_id)
+                      const isResolved = !!card.savedRouteId || s.route_resolution_status === 'resolved'
+                      const opts = Array.isArray(s.valid_route_options) ? s.valid_route_options : []
+                      const drivers = Array.from(new Map(opts
+                        .filter((o) => o.driver_employee_id)
+                        .map((o) => [o.driver_employee_id, { id: o.driver_employee_id, name: o.driver_name }])).values())
+                      const vehicles = Array.from(new Map(opts
+                        .filter((o) => o.vehicle_id)
+                        .map((o) => [o.vehicle_id, { id: o.vehicle_id, name: o.vehicle_name }])).values())
+                      return (
+                        <div key={s.weekly_plan_line_id} style={{
+                          padding: 12, borderRadius: TOKENS.radius.md,
+                          background: isResolved ? 'rgba(34,197,94,0.06)' : TOKENS.colors.surfaceSoft,
+                          border: `1px solid ${isResolved ? 'rgba(34,197,94,0.32)' : TOKENS.colors.border}`,
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                            <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 13 }}>
+                              {s.polygon_code} {s.subpolygon_code ? `· ${s.subpolygon_code}` : ''}
+                            </p>
+                            <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: 0, fontSize: 11 }}>
+                              run #{s.run_number || 1} · {s.shift_type || 'mixed'}
+                            </p>
+                          </div>
+                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 4px', fontSize: 11 }}>
+                            {s.planned_customer_count} clientes esperados · salida {s.planned_departure_time?.toFixed?.(1) || s.planned_departure_time}h
+                          </p>
+                          {s.capacity_warning && (
+                            <p style={{ ...typo.caption, color: '#f59e0b', margin: '0 0 6px', fontSize: 10 }}>
+                              ⚠ {s.capacity_warning}
+                            </p>
+                          )}
+                          {isResolved ? (
+                            <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: '6px 0 0', fontSize: 11, fontWeight: 600 }}>
+                              ✓ Resuelta — ruta #{card.savedRouteId || s.resolved_route_id} {card.savedRouteName ? `(${card.savedRouteName})` : ''}
+                            </p>
+                          ) : (
+                            <>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                                <select
+                                  value={card.driverId}
+                                  onChange={(e) => updatePmCard(s.weekly_plan_line_id, { driverId: e.target.value, error: null })}
+                                  disabled={card.saving}
+                                  style={{
+                                    minHeight: 44, padding: '8px', borderRadius: TOKENS.radius.sm,
+                                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                    color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                                  }}
+                                >
+                                  <option value="">— chofer —</option>
+                                  {drivers.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name || `#${d.id}`}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={card.vehicleId}
+                                  onChange={(e) => updatePmCard(s.weekly_plan_line_id, { vehicleId: e.target.value, error: null })}
+                                  disabled={card.saving}
+                                  style={{
+                                    minHeight: 44, padding: '8px', borderRadius: TOKENS.radius.sm,
+                                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                                    color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                                  }}
+                                >
+                                  <option value="">— camioneta —</option>
+                                  {vehicles.map((v) => (
+                                    <option key={v.id} value={v.id}>{v.name || `#${v.id}`}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              {card.error && (
+                                <p style={{ ...typo.caption, color: '#ef4444', margin: '6px 0 0', fontSize: 10 }}>
+                                  {card.error}
+                                </p>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handlePmConfirm(s)}
+                                disabled={card.saving || !card.driverId || !card.vehicleId}
+                                style={{
+                                  width: '100%', minHeight: 44, marginTop: 8, padding: '10px',
+                                  borderRadius: TOKENS.radius.md,
+                                  background: (card.driverId && card.vehicleId && !card.saving) ? TOKENS.colors.blue2 : TOKENS.colors.surface,
+                                  color: (card.driverId && card.vehicleId && !card.saving) ? '#fff' : TOKENS.colors.textLow,
+                                  border: `1px solid ${TOKENS.colors.border}`,
+                                  fontSize: 12, fontWeight: 700, opacity: card.saving ? 0.6 : 1,
+                                }}
+                              >
+                                {card.saving ? 'Confirmando...' : 'Confirmar recursos'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <p style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 10, marginTop: 14 }}>
+                  Confirmar recursos NO genera ruta diaria. Solo se guardan en el contrato semanal.
+                </p>
+              </div>
+            )}
+
+            {/* Form manual (visible solo en modo manual) */}
+            {planMode === 'manual' && (
+            <>
             {/* Form */}
             <div style={{
               marginTop: 8, padding: 16, borderRadius: TOKENS.radius.xl,
@@ -1043,6 +1505,9 @@ export default function ScreenPronostico() {
                 }}>{msg}</p>
               )}
             </div>
+            </>
+            )}
+            {/* F4-E.2: fin del conditional planMode === 'manual' */}
 
             {/* Recent forecasts */}
             {forecasts.length > 0 && (
