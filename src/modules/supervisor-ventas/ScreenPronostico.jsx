@@ -566,7 +566,10 @@ export default function ScreenPronostico() {
   function pmTranslateErrorCode(code, fallback = '') {
     const map = {
       forbidden: 'No tienes permisos para ver/editar sugerencias del plan maestro',
-      weekly_plan_not_found: 'No hay plan maestro para esta fecha en esta sucursal',
+      // F4-E.6: empty state amigable cuando no hay weekly plan para esta
+      // fecha/sucursal. El error proviene del backend con HTTP 404 pero a
+      // nivel de UX es estado normal (la supervisora puede usar manual).
+      weekly_plan_not_found: 'No hay sugerencias del plan maestro para esta fecha y sucursal. Puedes continuar usando la creación manual.',
       weekly_plan_ambiguous: 'Conflicto: multiples planes para esta fecha — contactar Yamil',
       weekly_plan_not_editable: 'Este plan no es editable (publicado/cerrado/cancelado)',
       weekly_plan_line_not_found: 'La linea ya no existe (refrescar)',
@@ -576,6 +579,13 @@ export default function ScreenPronostico() {
       route_ambiguous: 'Multiples rutas posibles para chofer+camioneta — pedir a Yamil/Sebas escoger',
       write_error: 'Error al guardar — reintentar',
       read_error: 'Error leyendo branch configs — reintentar',
+      // F4-E.6: codigos del scope effective (PR #34/#35/F4-E.4).
+      branch_not_allowed: 'No tienes permiso para consultar esta sucursal.',
+      no_branches_accessible: 'No tienes sucursales asignadas a tu sesión. Contacta a tu supervisor.',
+      // F4-E.6: codigos del employee token (PR #35).
+      employee_token_missing: 'Tu sesión venció. Vuelve a iniciar sesión.',
+      employee_token_invalid: 'Tu sesión venció. Vuelve a iniciar sesión.',
+      employee_inactive: 'Tu sesión venció. Vuelve a iniciar sesión.',
     }
     return map[code] || fallback || 'Error desconocido'
   }
