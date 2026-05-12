@@ -226,6 +226,12 @@ function toMany2oneId(value) {
   return Number(value || 0)
 }
 
+function localDateString(date = new Date()) {
+  const value = date instanceof Date ? date : new Date(date)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+}
+
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -4735,6 +4741,69 @@ async function evaluateShiftCloseReadiness(shiftId) {
   return { canClose: blockers.length === 0, blockers }
 }
 
+function buildProductionShiftUniqueDomain({ warehouseId, date, shiftCode }) {
+  return [
+    ['plant_warehouse_id', '=', Number(warehouseId || 0)],
+    ['date', '=', String(date || '')],
+    ['shift_code', '=', String(shiftCode || '1')],
+  ]
+}
+
+function isProductionShiftUniqueError(error) {
+  const message = String(error?.message || error || '').toLowerCase()
+  return message.includes('duplicate key value')
+    && (
+      message.includes('gf_production_shift_gf_production_shift_unique')
+      || message.includes('(plant_warehouse_id, date, shift_code)')
+    )
+}
+
+function shapeSupervisorShift(row, fallbackWarehouseId = 0) {
+  if (!row) return null
+  const warehouseM2o = row.plant_warehouse_id ?? row.warehouse_id
+  return {
+    id: Number(row.id || row.shift_id || 0) || 0,
+    name: row.name || row.display_name || '',
+    date: row.date || '',
+    shift_code: row.shift_code != null ? String(row.shift_code) : '',
+    state: row.state || '',
+    warehouse_id: toMany2oneId(warehouseM2o) || Number(fallbackWarehouseId || 0) || 0,
+  }
+}
+
+async function findProductionShiftByUnique({ warehouseId, date, shiftCode }) {
+  const cleanWarehouseId = Number(warehouseId || 0) || 0
+  const cleanDate = String(date || '')
+  const cleanShiftCode = String(shiftCode || '1')
+  if (!cleanWarehouseId || !cleanDate || !cleanShiftCode) return null
+
+  const result = await readModelSorted('gf.production.shift', {
+    fields: ['id', 'name', 'date', 'shift_code', 'state', 'plant_warehouse_id'],
+    domain: buildProductionShiftUniqueDomain({
+      warehouseId: cleanWarehouseId,
+      date: cleanDate,
+      shiftCode: cleanShiftCode,
+    }),
+    sort_column: 'id',
+    sort_desc: true,
+    limit: 1,
+    sudo: 1,
+  })
+  return pickFirstResponse(result)
+}
+
+function buildExistingShiftCreateResponse(row, fallbackWarehouseId = 0) {
+  return {
+    success: true,
+    already_existed: true,
+    data: {
+      id: Number(row?.id || 0) || 0,
+      case: 1,
+    },
+    shift: shapeSupervisorShift(row, fallbackWarehouseId),
+  }
+}
+
 async function directSupervision(method, path, body) {
   const query = new URLSearchParams(path.split('?')[1] || '')
   const cleanPath = path.split('?')[0]
@@ -4794,12 +4863,13 @@ async function directSupervision(method, path, body) {
     const data = resp?.data || {}
     let shiftId = Number(data.shift_id || 0) || 0
     let shiftWarehouseId = Number(data.warehouse_id || 0) || 0
+    let fallbackShift = null
 
     // Fallback por almacén explícito: útil para usuarios administrativos que
     // necesitan operar sobre un turno de producción fuera de su sesión base.
     if ((!resp?.ok || !shiftId || (requestedWarehouseId && shiftWarehouseId && shiftWarehouseId !== requestedWarehouseId)) && requestedWarehouseId) {
       const fallbackRes = await readModelSorted('gf.production.shift', {
-        fields: ['id', 'name', 'state', 'plant_warehouse_id'],
+        fields: ['id', 'name', 'date', 'shift_code', 'state', 'plant_warehouse_id'],
         domain: [
           ['state', 'in', ['draft', 'in_progress']],
           ['plant_warehouse_id', '=', requestedWarehouseId],
@@ -4811,8 +4881,9 @@ async function directSupervision(method, path, body) {
       })
       const fallback = pickFirstResponse(fallbackRes)
       if (fallback?.id) {
+        fallbackShift = shapeSupervisorShift(fallback, requestedWarehouseId)
         shiftId = Number(fallback.id || 0) || 0
-        shiftWarehouseId = Number(fallback.plant_warehouse_id?.[0] || requestedWarehouseId || 0) || 0
+        shiftWarehouseId = fallbackShift.warehouse_id || requestedWarehouseId || 0
       }
     }
 
@@ -4827,8 +4898,10 @@ async function directSupervision(method, path, body) {
     } catch (_) { /* non-blocking */ }
     return {
       id: shiftId,
-      name: data.name || dash.name || '',
-      state: data.state || dash.state || '',
+      name: data.name || dash.name || fallbackShift?.name || '',
+      date: data.date || dash.date || fallbackShift?.date || '',
+      shift_code: data.shift_code != null ? String(data.shift_code) : (dash.shift_code != null ? String(dash.shift_code) : (fallbackShift?.shift_code || '')),
+      state: data.state || dash.state || fallbackShift?.state || '',
       warehouse_id: shiftWarehouseId || requestedWarehouseId || 0,
       // Metricas (desde dashboard; backend las calcula)
       total_kg_produced: dash.total_kg_produced ?? null,
@@ -4845,23 +4918,49 @@ async function directSupervision(method, path, body) {
   }
 
   if (cleanPath === '/pwa-sup/shift-create' && method === 'POST') {
-    const result = await createUpdate({
-      model: 'gf.production.shift',
-      method: 'create',
-      dict: {
-        date: body?.date || new Date().toISOString().slice(0, 10),
-        shift_code: String(body?.shift_code || '1'),
-        plant_warehouse_id: Number(body?.warehouse_id || warehouseId || 0) || undefined,
-        leader_employee_id: Number(body?.leader_id || getEmployeeId() || 0) || undefined,
-        operator_employee_ids: Array.isArray(body?.operator_ids)
-          ? body.operator_ids.map((id) => [4, Number(id)])
-          : [],
-        state: 'draft',
-      },
-      sudo: 1,
-      app: 'pwa_colaboradores',
+    const shiftDate = body?.date || localDateString()
+    const shiftCode = String(body?.shift_code || '1')
+    const targetWarehouseId = Number(body?.warehouse_id || warehouseId || 0) || 0
+
+    const existing = await findProductionShiftByUnique({
+      warehouseId: targetWarehouseId,
+      date: shiftDate,
+      shiftCode,
     })
-    return { success: true, data: result }
+    if (existing?.id) {
+      return buildExistingShiftCreateResponse(existing, targetWarehouseId)
+    }
+
+    try {
+      const result = await createUpdate({
+        model: 'gf.production.shift',
+        method: 'create',
+        dict: {
+          date: shiftDate,
+          shift_code: shiftCode,
+          plant_warehouse_id: targetWarehouseId || undefined,
+          leader_employee_id: Number(body?.leader_id || getEmployeeId() || 0) || undefined,
+          operator_employee_ids: Array.isArray(body?.operator_ids)
+            ? body.operator_ids.map((id) => [4, Number(id)])
+            : [],
+          state: 'draft',
+        },
+        sudo: 1,
+        app: 'pwa_colaboradores',
+      })
+      return { success: true, already_existed: false, data: result }
+    } catch (err) {
+      if (!isProductionShiftUniqueError(err)) throw err
+      const existingAfterRace = await findProductionShiftByUnique({
+        warehouseId: targetWarehouseId,
+        date: shiftDate,
+        shiftCode,
+      })
+      if (existingAfterRace?.id) {
+        return buildExistingShiftCreateResponse(existingAfterRace, targetWarehouseId)
+      }
+      throw new Error('El turno ya existe, pero no se pudo cargar. Actualiza la pantalla e intenta de nuevo.')
+    }
   }
 
   if (cleanPath === '/pwa-sup/shift-start' && method === 'POST') {

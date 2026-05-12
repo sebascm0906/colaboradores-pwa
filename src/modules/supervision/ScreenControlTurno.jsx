@@ -258,13 +258,27 @@ export default function ScreenControlTurno() {
     if (!formData.shift_code) return
     setSubmitting(true)
     try {
-      await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
-      setMsg({ type: 'success', text: 'Turno abierto correctamente' })
+      const result = await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
+      setMsg({
+        type: 'success',
+        text: result?.already_existed ? 'El turno ya existia; se cargo correctamente' : 'Turno abierto correctamente',
+      })
       setFormData({ shift_code: '', warehouse_id: 76 })
       setConfirmClose(false)
       setCloseReadiness(null)
       await loadData()
-    } catch (err) { setMsg({ type: 'error', text: err.message || 'Error al abrir turno' }) }
+    } catch (err) {
+      const errorText = String(err?.message || '')
+      const isDuplicateShift = errorText.includes('gf_production_shift_gf_production_shift_unique')
+        || errorText.includes('(plant_warehouse_id, date, shift_code)')
+      setMsg({
+        type: 'error',
+        text: isDuplicateShift
+          ? 'Ese turno ya existe. Actualiza la pantalla y vuelve a intentar.'
+          : errorText || 'Error al abrir turno',
+      })
+      if (isDuplicateShift) await loadData()
+    }
     finally { setSubmitting(false) }
   }
 
