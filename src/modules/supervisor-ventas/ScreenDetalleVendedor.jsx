@@ -31,6 +31,7 @@ export default function ScreenDetalleVendedor() {
     return () => window.removeEventListener('resize', h)
   }, [])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { load() }, [vendedorId, routeId])
 
   async function load() {

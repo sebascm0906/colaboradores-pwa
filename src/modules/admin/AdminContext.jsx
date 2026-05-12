@@ -13,6 +13,7 @@ import { bootCapabilities } from './adminService'
 
 const AdminContext = createContext(null)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAdmin() {
   const ctx = useContext(AdminContext)
   if (!ctx) throw new Error('useAdmin debe usarse dentro de <AdminProvider>')

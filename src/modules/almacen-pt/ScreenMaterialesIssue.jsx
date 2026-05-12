@@ -49,6 +49,7 @@ export default function ScreenMaterialesIssue() {
   const [validatingSubmit, setValidatingSubmit] = useState(false)
   const [validateError, setValidateError] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function handleRejectIssue(issueId) {

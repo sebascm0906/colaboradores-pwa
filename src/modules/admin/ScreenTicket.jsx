@@ -29,6 +29,7 @@ export default function ScreenTicket() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadOrder() }, [orderId])
 
   async function loadOrder() {

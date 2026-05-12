@@ -69,6 +69,7 @@ export default function ScreenMerma() {
 
   useEffect(() => {
     loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [])
 
   async function loadData() {

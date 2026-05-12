@@ -16,6 +16,43 @@ function toNumberList(values) {
     .filter(Boolean)
 }
 
+// ── Demand classes (F1) ──────────────────────────────────────────────────────
+// Backend semantics for `/gf/salesops/supervisor/v2/route_plan/ensure`:
+//   - field absent / null / [] → no restriction (todas las clasificaciones)
+//   - ["AA","A","B","C"] (subset) → filter customers by those classes
+//   - any other value → backend responds VALIDATION_ERROR (demand_class_invalid)
+// The PWA always sends an array (defaulting to []) so a previous filter never
+// stays pegado en el plan al re-asegurarlo.
+
+export const DEMAND_CLASSES = ['AA', 'A', 'B', 'C']
+
+/**
+ * Filtra y normaliza clases válidas (AA/A/B/C). Devuelve un array (puede ser
+ * vacío). Mantiene el orden canónico AA → C, sin duplicados.
+ */
+export function sanitizeDemandClasses(values) {
+  if (!Array.isArray(values)) return []
+  const seen = new Set()
+  for (const raw of values) {
+    const v = String(raw || '').trim().toUpperCase()
+    if (DEMAND_CLASSES.includes(v)) seen.add(v)
+  }
+  return DEMAND_CLASSES.filter((c) => seen.has(c))
+}
+
+/**
+ * Devuelve el resumen humano para mostrar en UI:
+ *   []           → "Todas"
+ *   ["AA"]       → "AA"
+ *   ["AA","A"]   → "AA/A"
+ *   ["AA","A","B","C"] → "AA/A/B/C"
+ */
+export function getDemandClassesSummary(values) {
+  const cleaned = sanitizeDemandClasses(values)
+  if (cleaned.length === 0) return 'Todas'
+  return cleaned.join('/')
+}
+
 export function getTomorrowDateString(baseDate = new Date()) {
   const d = new Date(baseDate)
   d.setDate(d.getDate() + 1)
@@ -93,6 +130,7 @@ export function buildRoutePlanCriteriaPayload({
   channelIds,
   visitDays,
   timeWindowId,
+  demandClasses,
 }) {
   return {
     route_id: Number(routeId || 0),
@@ -102,6 +140,8 @@ export function buildRoutePlanCriteriaPayload({
     channel_ids: toNumberList(channelIds),
     visit_days: Array.isArray(visitDays) ? visitDays.filter(Boolean) : [],
     time_window_id: timeWindowId ? Number(timeWindowId) : null,
+    // Always send (even []) para limpiar filtros pegados de un ensure previo.
+    demand_classes: sanitizeDemandClasses(demandClasses),
   }
 }
 
@@ -143,6 +183,9 @@ export function getSupervisorRouteErrorMessage(error = {}) {
     missing_customer_geo: 'El cliente no tiene ubicacion geografica suficiente.',
     customer_already_in_plan: 'El cliente ya esta en este plan diario.',
     plan_not_editable: 'Este plan ya no permite agregar clientes.',
+    // F1: validación de clases de demanda en backend.
+    demand_class_invalid: 'Clasificacion invalida. Usa solo AA, A, B o C.',
+    demand_classes_invalid: 'Clasificacion invalida. Usa solo AA, A, B o C.',
   }
   return messages[code] || error.message || error.error || 'No se pudo completar la operacion.'
 }

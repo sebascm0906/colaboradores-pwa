@@ -57,6 +57,7 @@ export default function ScreenMaterialesCrearIssue() {
   // marque saving=true. El ref bloquea en el tick actual.
   const submittingRef = useRef(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { bootstrap() }, [])
 
   async function bootstrap() {

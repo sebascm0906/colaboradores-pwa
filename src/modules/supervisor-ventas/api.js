@@ -205,3 +205,73 @@ export async function getDaySales(opts = {}) {
          : [],
   }
 }
+
+// ── F4-E.2: Route suggestions from weekly plan master ───────────────────────
+// Backend endpoints (gf_route_compliance/controllers/pwa_route_suggestions.py):
+//   GET  /pwa-supv/branch-configs
+//   GET  /pwa-supv/route-suggestions
+//   POST /pwa-supv/route-suggestions/confirm
+//
+// Permite a la supervisora ver las sugerencias del Plan Maestro Semanal
+// (gf.route.weekly.plan.line) para una fecha y confirmar recursos
+// (driver/vehicle/etc.) SIN generar gf.route.plan ni invocar F4-D.
+// El flujo manual existente (ensureDailyRoutePlan) queda intacto y coexiste
+// con esta opcion como toggle en ScreenPronostico.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * F4-E.2: lista branch_configs activos accesibles para la PWA.
+ * Permite resolver branch_config_id sin hardcodearlo en el frontend.
+ *
+ * @returns {Promise<{ok: boolean, data: {branch_configs: Array, count: number}}>}
+ */
+export function getBranchConfigs() {
+  return api('GET', '/pwa-supv/branch-configs')
+}
+
+/**
+ * F4-E.2: lee sugerencias del weekly plan para una fecha + branch.
+ *
+ * Reglas backend:
+ *   - Si se pasa weekly_plan_id, ese tiene prioridad.
+ *   - Si no, se busca por (branch_config_id, date) en estados draft|published|in_progress.
+ *   - Estados cancelled/closed bloqueados.
+ *   - Si la fecha cae fuera del rango del plan, devuelve suggestions=[] + message warning.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.date]              YYYY-MM-DD (default backend: tomorrow)
+ * @param {number} [opts.weeklyPlanId]      ID del weekly plan (prioritario)
+ * @param {number} [opts.branchConfigId]    Requerido si no se pasa weeklyPlanId
+ * @returns {Promise<Object>}
+ */
+export function getRouteSuggestions({ date, weeklyPlanId, branchConfigId } = {}) {
+  const qs = new URLSearchParams()
+  if (date) qs.set('date', date)
+  if (weeklyPlanId) qs.set('weekly_plan_id', String(weeklyPlanId))
+  if (branchConfigId) qs.set('branch_config_id', String(branchConfigId))
+  const query = qs.toString()
+  return api('GET', `/pwa-supv/route-suggestions${query ? `?${query}` : ''}`)
+}
+
+/**
+ * F4-E.2: confirma recursos sobre una linea del weekly plan.
+ *
+ * El backend (gf_route_compliance) escribe SOLO en gf.route.weekly.plan.line
+ * con whitelist estricto. NO crea gf.route.plan ni gf.route.stop.
+ * Driver+vehicle deben resolver a 1 gf.route activa.
+ *
+ * Campos permitidos (extras devuelven invalid_payload):
+ *   - weekly_plan_line_id (REQUIRED)
+ *   - planned_driver_id (REQUIRED)
+ *   - planned_vehicle_id (REQUIRED)
+ *   - planned_salesperson_id (opcional)
+ *   - planned_mobile_location_id (opcional)
+ *   - planned_warehouse_dispatch_id (opcional)
+ *   - planned_departure_time (opcional, float horas)
+ *
+ * @param {Object} payload
+ * @returns {Promise<Object>}
+ */
+export function confirmRouteSuggestion(payload) {
+  return api('POST', '/pwa-supv/route-suggestions/confirm', payload || {})
+}

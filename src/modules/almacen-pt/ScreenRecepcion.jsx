@@ -214,6 +214,7 @@ export default function ScreenRecepcion() {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

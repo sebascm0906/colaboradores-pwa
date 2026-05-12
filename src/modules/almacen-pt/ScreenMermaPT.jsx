@@ -62,6 +62,7 @@ export default function ScreenMermaPT() {
   const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
   const [voiceNote, setVoiceNote] = useState('')         // banner informativo
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

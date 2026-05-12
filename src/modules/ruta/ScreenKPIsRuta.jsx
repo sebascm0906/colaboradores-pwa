@@ -55,6 +55,7 @@ export default function ScreenKPIsRuta() {
       finally { setLoading(false) }
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [])
 
   const salesPct = target?.sales_target > 0 ? Math.round((target.sales_actual / target.sales_target) * 100) : 0

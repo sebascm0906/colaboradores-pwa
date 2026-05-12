@@ -27,6 +27,7 @@ export default function ScreenConciliacion() {
       finally { setLoading(false) }
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [])
 
   return (

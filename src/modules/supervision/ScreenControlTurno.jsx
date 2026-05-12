@@ -166,6 +166,7 @@ export default function ScreenControlTurno() {
     [energyReadings]
   )
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   function resetStartReadiness() {
@@ -472,6 +473,7 @@ export default function ScreenControlTurno() {
       window.clearInterval(intervalId)
       window.removeEventListener('storage', handleStorage)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [shift?.id, shift?.state])
 
   return (

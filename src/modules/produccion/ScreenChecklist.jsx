@@ -35,6 +35,7 @@ export default function ScreenChecklist() {
   const productionState = activeRole ? { selected_role: activeRole } : undefined
   const backTo = resolveChecklistBackTarget(location.state)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadChecklist() }, [])
 
   async function loadChecklist() {

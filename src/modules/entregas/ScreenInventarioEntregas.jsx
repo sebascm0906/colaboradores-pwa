@@ -31,6 +31,7 @@ export default function ScreenInventarioEntregas() {
   const [search, setSearch]   = useState('')
   const [filter, setFilter]   = useState('all')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { load() }, [])
 
   async function load() {

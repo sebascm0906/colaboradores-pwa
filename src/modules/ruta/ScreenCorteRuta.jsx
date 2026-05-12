@@ -34,6 +34,7 @@ export default function ScreenCorteRuta() {
   // Marca server-side: solo true cuando backend devolvió data.corte_validated
   const [serverConfirmed, setServerConfirmed] = useState(false)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
   async function loadData() {

@@ -26,6 +26,7 @@ import { computePosSummary } from '../posPricing'
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 // Umbrales de venta (UI — backend debe re-validar)
+// eslint-disable-next-line react-refresh/only-export-components
 export const POS_THRESHOLDS = {
   MANAGER_AUTH: 5000,   // > $5000: requiere autorización gerente
   DIRECTOR_AUTH: 50000, // > $50000: requiere autorización dirección

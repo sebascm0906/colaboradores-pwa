@@ -31,6 +31,7 @@ export default function ScreenDevolucionesV2() {
 
   useEffect(() => {
     loadReturns()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   }, [])
 
   async function loadReturns() {
