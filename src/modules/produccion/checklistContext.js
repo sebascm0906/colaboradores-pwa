@@ -16,6 +16,18 @@ export function resolveChecklistLineType(role = '') {
   return 'all'
 }
 
+export function getChecklistTemplateLineTypeCandidates(lineType = '') {
+  const normalized = String(lineType || '').trim().toLowerCase()
+  if (normalized === 'rolito' || normalized === 'barras') return [normalized, 'all']
+  if (normalized === 'transformacion') return [normalized, 'all']
+  return ['all']
+}
+
+export function selectChecklistForShift(checklists = []) {
+  const rows = Array.isArray(checklists) ? checklists : []
+  return rows.find((checklist) => checklist?.state === 'completed') || rows[0] || null
+}
+
 export function buildChecklistPath(shiftId, roleContext = '') {
   const params = new URLSearchParams()
   params.set('shift_id', String(shiftId))
@@ -42,10 +54,13 @@ export function resolveChecklistBackTarget(state = {}, fallback = '/produccion')
   return fallback
 }
 
-export function shouldBackfillShiftChecklistLink(checklist = {}, shift = {}) {
+export function shouldBackfillShiftChecklistLink(checklist = {}, shift = {}, linkedChecklist = null) {
   const checklistId = Number(checklist?.id || 0)
   const shiftId = Number(Array.isArray(checklist?.shift_id) ? checklist.shift_id[0] : checklist?.shift_id || 0)
   const linkedRaw = Array.isArray(shift?.haccp_checklist_id) ? shift.haccp_checklist_id[0] : shift?.haccp_checklist_id
   const linkedId = Number(linkedRaw || 0)
-  return Boolean(checklistId && shiftId && checklist?.state === 'completed' && !linkedId)
+  if (!checklistId || !shiftId || checklist?.state !== 'completed') return false
+  if (!linkedId) return true
+  if (linkedId === checklistId) return false
+  return Boolean(linkedChecklist && linkedChecklist.state !== 'completed')
 }

@@ -4,9 +4,11 @@ import assert from 'node:assert/strict'
 import {
   buildChecklistCacheKey,
   buildChecklistPath,
+  getChecklistTemplateLineTypeCandidates,
   resolveChecklistBackTarget,
   resolveChecklistLineType,
   resolveChecklistRoleContext,
+  selectChecklistForShift,
   shouldBackfillShiftChecklistLink,
 } from '../src/modules/produccion/checklistContext.js'
 
@@ -71,5 +73,54 @@ test('shouldBackfillShiftChecklistLink backfills completed checklist missing fro
       { id: 17, haccp_checklist_id: null },
     ),
     true,
+  )
+})
+
+test('shouldBackfillShiftChecklistLink repoints a pending linked checklist to a completed one', () => {
+  assert.equal(
+    shouldBackfillShiftChecklistLink(
+      { id: 42, shift_id: 17, state: 'completed' },
+      { id: 17, haccp_checklist_id: [41, 'HACCP viejo'] },
+      { id: 41, shift_id: 17, state: 'pending' },
+    ),
+    true,
+  )
+})
+
+test('shouldBackfillShiftChecklistLink keeps an already completed linked checklist', () => {
+  assert.equal(
+    shouldBackfillShiftChecklistLink(
+      { id: 42, shift_id: 17, state: 'completed' },
+      { id: 17, haccp_checklist_id: [41, 'HACCP viejo'] },
+      { id: 41, shift_id: 17, state: 'completed' },
+    ),
+    false,
+  )
+})
+
+test('getChecklistTemplateLineTypeCandidates falls back from line-specific templates to all', () => {
+  assert.deepEqual(getChecklistTemplateLineTypeCandidates('rolito'), ['rolito', 'all'])
+  assert.deepEqual(getChecklistTemplateLineTypeCandidates('barras'), ['barras', 'all'])
+  assert.deepEqual(getChecklistTemplateLineTypeCandidates('all'), ['all'])
+})
+
+test('selectChecklistForShift prefers completed checklist over newer pending duplicate', () => {
+  assert.deepEqual(
+    selectChecklistForShift([
+      { id: 43, state: 'pending' },
+      { id: 42, state: 'completed' },
+      { id: 41, state: 'failed' },
+    ]),
+    { id: 42, state: 'completed' },
+  )
+})
+
+test('selectChecklistForShift falls back to the first checklist when none is completed', () => {
+  assert.deepEqual(
+    selectChecklistForShift([
+      { id: 43, state: 'pending' },
+      { id: 41, state: 'failed' },
+    ]),
+    { id: 43, state: 'pending' },
   )
 })

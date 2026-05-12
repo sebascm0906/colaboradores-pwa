@@ -17,6 +17,8 @@ import {
 } from '../modules/produccion/checklistNumericRange.js'
 import {
   buildChecklistCacheKey,
+  getChecklistTemplateLineTypeCandidates,
+  selectChecklistForShift,
   shouldBackfillShiftChecklistLink,
 } from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
@@ -2176,10 +2178,10 @@ async function directProduction(method, path, body) {
     // for "find existing" and "create new"). Without this, a prior Rolito
     // checklist on the same shift would be served to a Barras operator.
     let targetTemplateId = 0
-    {
+    for (const candidateLineType of getChecklistTemplateLineTypeCandidates(lineType)) {
       const tmplRes = await readModelSorted('gf.haccp.template', {
         fields: ['id', 'name', 'line_type', 'active'],
-        domain: [['active', '=', true], ['line_type', '=', lineType]],
+        domain: [['active', '=', true], ['line_type', '=', candidateLineType]],
         sort_column: 'id',
         sort_desc: false,
         limit: 1,
@@ -2187,6 +2189,7 @@ async function directProduction(method, path, body) {
       })
       const tmpl = pickFirstResponse(tmplRes)
       targetTemplateId = Number(tmpl?.id || 0)
+      if (targetTemplateId) break
     }
 
     // 2) Find an existing checklist for this shift that matches the target
@@ -2199,10 +2202,10 @@ async function directProduction(method, path, body) {
       domain: existingDomain,
       sort_column: 'id',
       sort_desc: true,
-      limit: 1,
+      limit: 10,
       sudo: 1,
     })
-    let checklist = pickFirstResponse(checklistResult)
+    let checklist = selectChecklistForShift(Array.isArray(checklistResult?.response) ? checklistResult.response : [])
 
     if (!checklist) {
       if (!targetTemplateId) return null
@@ -2368,7 +2371,22 @@ async function directProduction(method, path, body) {
           sudo: 1,
         })
         const shift = pickFirstResponse(shiftRes)
-        if (shouldBackfillShiftChecklistLink(checklist, shift)) {
+        const linkedChecklistId = Number(Array.isArray(shift?.haccp_checklist_id)
+          ? shift.haccp_checklist_id[0]
+          : shift?.haccp_checklist_id || 0)
+        let linkedChecklist = null
+        if (linkedChecklistId && linkedChecklistId !== Number(checklist.id || 0)) {
+          const linkedChecklistRes = await readModelSorted('gf.haccp.checklist', {
+            fields: ['id', 'shift_id', 'state'],
+            domain: [['id', '=', linkedChecklistId]],
+            sort_column: 'id',
+            sort_desc: false,
+            limit: 1,
+            sudo: 1,
+          })
+          linkedChecklist = pickFirstResponse(linkedChecklistRes)
+        }
+        if (shouldBackfillShiftChecklistLink(checklist, shift, linkedChecklist)) {
           await createUpdate({
             model: 'gf.production.shift',
             method: 'update',
