@@ -7901,6 +7901,47 @@ async function directSupervisorVentas(method, path, body) {
     })
   }
 
+  // ── F4-E.3 PR #33/#34/#35: route suggestions desde plan maestro semanal ───
+  // Backend: gf_route_compliance/controllers/pwa_route_suggestions.py.
+  // Sin handler aqui caian al fallback /api-n8n/ que no expone estos paths
+  // (404 webhook no registrado). Permisos = scope efectivo
+  // API key user (capa #34) ∩ employee token (capa #35).
+
+  if (cleanPath === '/pwa-supv/branch-configs' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/branch-configs', {})
+  }
+
+  if (cleanPath === '/pwa-supv/route-suggestions' && method === 'GET') {
+    return odooHttp('GET', '/pwa-supv/route-suggestions', {
+      weekly_plan_id:   Number(query.get('weekly_plan_id'))   || undefined,
+      branch_config_id: Number(query.get('branch_config_id')) || undefined,
+      date:             query.get('date') || undefined,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/route-suggestions/confirm' && method === 'POST') {
+    // Backend tiene whitelist estricto: weekly_plan_line_id + planned_*
+    // (driver, vehicle requeridos; salesperson/mobile_location/
+    // warehouse_dispatch/departure_time opcionales). Extras -> invalid_payload.
+    return odooJson('/pwa-supv/route-suggestions/confirm', {
+      weekly_plan_line_id:           Number(body?.weekly_plan_line_id || 0),
+      planned_driver_id:             Number(body?.planned_driver_id || 0),
+      planned_vehicle_id:            Number(body?.planned_vehicle_id || 0),
+      planned_salesperson_id:        body?.planned_salesperson_id
+                                      ? Number(body.planned_salesperson_id)
+                                      : undefined,
+      planned_mobile_location_id:    body?.planned_mobile_location_id
+                                      ? Number(body.planned_mobile_location_id)
+                                      : undefined,
+      planned_warehouse_dispatch_id: body?.planned_warehouse_dispatch_id
+                                      ? Number(body.planned_warehouse_dispatch_id)
+                                      : undefined,
+      planned_departure_time:        body?.planned_departure_time !== undefined
+                                      ? Number(body.planned_departure_time)
+                                      : undefined,
+    })
+  }
+
   return NO_DIRECT
 }
 
