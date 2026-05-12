@@ -159,6 +159,45 @@ test('supervision shift create reports a closed existing shift instead of treati
   assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
 })
 
+test('supervision shift create reports model authorization errors as an operational blocker', async () => {
+  setSession()
+
+  globalThis.fetch = async (url) => {
+    if (url === '/odoo-api/get_records_sorted') {
+      return createJsonResponse(200, {
+        result: {
+          response: [],
+        },
+      })
+    }
+
+    if (url === '/odoo-api/api/create_update') {
+      return createJsonResponse(200, {
+        result: {
+          ok: false,
+          error: 'Modelo no autorizado.',
+          case: -403,
+          status: 403,
+          data: {
+            code: 'model_not_allowed',
+          },
+        },
+      })
+    }
+
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  await assert.rejects(
+    () => api('POST', '/pwa-sup/shift-create', {
+      date: '2026-05-13',
+      shift_code: 1,
+      warehouse_id: 76,
+    }),
+    /API de Odoo no tiene autorizado abrir turnos/
+  )
+})
+
 test('supervision active shift fallback returns the fallback draft metadata', async () => {
   setSession()
 

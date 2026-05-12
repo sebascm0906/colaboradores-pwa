@@ -4758,6 +4758,12 @@ function isProductionShiftUniqueError(error) {
     )
 }
 
+function isModelNotAllowedError(error) {
+  const message = String(error?.message || error || '').toLowerCase()
+  return message.includes('modelo no autorizado')
+    || message.includes('model_not_allowed')
+}
+
 function shapeSupervisorShift(row, fallbackWarehouseId = 0) {
   if (!row) return null
   const warehouseM2o = row.plant_warehouse_id ?? row.warehouse_id
@@ -4981,6 +4987,9 @@ async function directSupervision(method, path, body) {
       })
       return { success: true, already_existed: false, data: result }
     } catch (err) {
+      if (isModelNotAllowedError(err)) {
+        throw new Error('La API de Odoo no tiene autorizado abrir turnos desde la app. Pide a administracion crear o reabrir el turno en Odoo.')
+      }
       if (!isProductionShiftUniqueError(err)) throw err
       const existingAfterRace = await findProductionShiftByUnique({
         warehouseId: targetWarehouseId,
