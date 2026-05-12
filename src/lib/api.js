@@ -176,9 +176,15 @@ function buildJsonRpcPayload(params) {
 }
 
 function extractErrorDetails(payload, status = 0) {
+  // F4-E.6: tambien leer payload.data.code/message para el shape de
+  // gf_route_compliance controllers (pwa_route_suggestions): el response
+  // shape es {ok, message, data: {code, ...}} sin envoltura "error".
+  // Sin este path el codigo caia al fallback 'http_error' y la UI mostraba
+  // mensaje engañoso (caso real: weekly_plan_not_found -> http_error).
   const code = String(
     payload?.error?.data?.code
       || payload?.error?.code
+      || payload?.data?.code
       || payload?.code
       || 'http_error'
   )
@@ -186,6 +192,7 @@ function extractErrorDetails(payload, status = 0) {
     payload?.error?.data?.message
     || payload?.error?.message
     || payload?.message
+    || payload?.data?.message
     || payload?.error
     || `http_${status || 0}`
 
