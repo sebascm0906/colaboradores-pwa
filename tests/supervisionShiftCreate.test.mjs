@@ -113,6 +113,52 @@ test('supervision shift create reuses the existing unique shift instead of creat
   assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
 })
 
+test('supervision shift create reports a closed existing shift instead of treating it as open', async () => {
+  setSession()
+  const calls = []
+
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url === '/odoo-api/get_records_sorted') {
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 80,
+            name: 'Planta Iguala - 2026-05-12 - Turno 1',
+            date: '2026-05-12',
+            shift_code: '1',
+            state: 'closed',
+            plant_warehouse_id: [76, 'Planta Iguala'],
+          }],
+        },
+      })
+    }
+
+    if (url === '/odoo-api/api/create_update') {
+      return createJsonResponse(200, {
+        result: {
+          error: 'create_update should not be called when the closed shift already exists',
+          case: -3,
+        },
+      })
+    }
+
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  await assert.rejects(
+    () => api('POST', '/pwa-sup/shift-create', {
+      date: '2026-05-12',
+      shift_code: 1,
+      warehouse_id: 76,
+    }),
+    /ya esta cerrado/
+  )
+  assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
+})
+
 test('supervision active shift fallback returns the fallback draft metadata', async () => {
   setSession()
 

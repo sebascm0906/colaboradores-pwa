@@ -4771,6 +4771,34 @@ function shapeSupervisorShift(row, fallbackWarehouseId = 0) {
   }
 }
 
+function isOpenProductionShiftState(state) {
+  return ['draft', 'in_progress'].includes(String(state || '').toLowerCase())
+}
+
+function getProductionShiftStateLabel(state) {
+  const normalized = String(state || '').toLowerCase()
+  return ({
+    draft: 'borrador',
+    in_progress: 'en curso',
+    closed: 'cerrado',
+    cancelled: 'cancelado',
+    canceled: 'cancelado',
+  })[normalized] || normalized || 'existente'
+}
+
+function getShiftCodeLabel(shiftCode) {
+  const normalized = String(shiftCode || '')
+  if (normalized === '1') return 'Dia'
+  if (normalized === '2') return 'Noche'
+  return normalized || 'seleccionado'
+}
+
+function buildExistingShiftBlockedMessage(row) {
+  const shift = shapeSupervisorShift(row)
+  const stateLabel = getProductionShiftStateLabel(shift?.state)
+  return `El turno ${getShiftCodeLabel(shift?.shift_code)} del ${shift?.date || 'dia seleccionado'} ya esta ${stateLabel}. No se puede abrir otro turno con la misma planta, fecha y turno.`
+}
+
 async function findProductionShiftByUnique({ warehouseId, date, shiftCode }) {
   const cleanWarehouseId = Number(warehouseId || 0) || 0
   const cleanDate = String(date || '')
@@ -4928,6 +4956,9 @@ async function directSupervision(method, path, body) {
       shiftCode,
     })
     if (existing?.id) {
+      if (!isOpenProductionShiftState(existing.state)) {
+        throw new Error(buildExistingShiftBlockedMessage(existing))
+      }
       return buildExistingShiftCreateResponse(existing, targetWarehouseId)
     }
 
@@ -4957,6 +4988,9 @@ async function directSupervision(method, path, body) {
         shiftCode,
       })
       if (existingAfterRace?.id) {
+        if (!isOpenProductionShiftState(existingAfterRace.state)) {
+          throw new Error(buildExistingShiftBlockedMessage(existingAfterRace))
+        }
         return buildExistingShiftCreateResponse(existingAfterRace, targetWarehouseId)
       }
       throw new Error('El turno ya existe, pero no se pudo cargar. Actualiza la pantalla e intenta de nuevo.')
