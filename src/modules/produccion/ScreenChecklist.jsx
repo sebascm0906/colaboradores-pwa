@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getMyShift, getChecklist, submitCheck, completeChecklist } from './api'
-import { resolveChecklistRoleContext } from './checklistContext'
+import { resolveChecklistBackTarget, resolveChecklistRoleContext } from './checklistContext'
 import { logScreenError } from '../shared/logScreenError'
 import {
   normalizeChecklistPhotoValue,
@@ -33,6 +33,7 @@ export default function ScreenChecklist() {
   const [photoCheckId, setPhotoCheckId] = useState(null)
   const activeRole = resolveChecklistRoleContext(session, location.state?.selected_role)
   const productionState = activeRole ? { selected_role: activeRole } : undefined
+  const backTo = resolveChecklistBackTarget(location.state)
 
   useEffect(() => { loadChecklist() }, [])
 
@@ -197,7 +198,7 @@ export default function ScreenChecklist() {
       }
 
       await completeChecklist(checklist.id)
-      navigate('/produccion', { state: productionState })
+      navigate(backTo, { state: backTo === '/produccion' ? productionState : undefined, replace: true })
     } catch (e) {
       logScreenError('ScreenChecklist', 'completeChecklist', e)
       setError('No se pudo completar el checklist')
@@ -237,7 +238,7 @@ export default function ScreenChecklist() {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 20, paddingBottom: 12 }}>
-          <button onClick={() => navigate('/produccion', { state: productionState })} style={{
+          <button onClick={() => navigate(backTo, { state: backTo === '/produccion' ? productionState : undefined })} style={{
             width: 38, height: 38, borderRadius: TOKENS.radius.md,
             background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,

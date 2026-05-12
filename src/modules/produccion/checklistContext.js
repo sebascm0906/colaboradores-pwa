@@ -26,3 +26,26 @@ export function buildChecklistPath(shiftId, roleContext = '') {
   }
   return `/pwa-prod/checklist?${params.toString()}`
 }
+
+export function buildChecklistCacheKey(shiftId, roleContext = '', lineType = '') {
+  return [
+    'checklist',
+    String(shiftId || ''),
+    String(roleContext || '').trim().toLowerCase(),
+    String(lineType || '').trim().toLowerCase(),
+  ].join(':')
+}
+
+export function resolveChecklistBackTarget(state = {}, fallback = '/produccion') {
+  const backTo = String(state?.backTo || '').trim()
+  if (backTo.startsWith('/') && !backTo.startsWith('//')) return backTo
+  return fallback
+}
+
+export function shouldBackfillShiftChecklistLink(checklist = {}, shift = {}) {
+  const checklistId = Number(checklist?.id || 0)
+  const shiftId = Number(Array.isArray(checklist?.shift_id) ? checklist.shift_id[0] : checklist?.shift_id || 0)
+  const linkedRaw = Array.isArray(shift?.haccp_checklist_id) ? shift.haccp_checklist_id[0] : shift?.haccp_checklist_id
+  const linkedId = Number(linkedRaw || 0)
+  return Boolean(checklistId && shiftId && checklist?.state === 'completed' && !linkedId)
+}

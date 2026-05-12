@@ -36,8 +36,8 @@ const BLOCKER_ROUTE = {
   open_cycles: { route: '/supervision/turno', label: 'Ir a turno' },
   balance: { route: '/supervision/merma', label: 'Revisar merma' },
   shift_state: { route: '/supervision/turno', label: 'Ir a turno' },
-  haccp: { route: '/produccion/checklist', label: 'Ir a checklist' },
-  checklist: { route: '/produccion/checklist', label: 'Ir a checklist' },
+  haccp: { route: '/produccion/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
+  checklist: { route: '/produccion/checklist', label: 'Ir a checklist', state: { backTo: '/supervision' } },
 }
 
 const STATUS_COLORS = {
@@ -287,7 +287,7 @@ export default function ScreenSupervision() {
                     code={b.code}
                     message={b.message}
                     typo={typo}
-                    onGo={BLOCKER_ROUTE[b.code] ? () => navigate(BLOCKER_ROUTE[b.code].route) : null}
+                    onGo={BLOCKER_ROUTE[b.code] ? () => navigate(BLOCKER_ROUTE[b.code].route, { state: BLOCKER_ROUTE[b.code].state }) : null}
                     goLabel={BLOCKER_ROUTE[b.code]?.label}
                   />
                 ))}
@@ -303,7 +303,7 @@ export default function ScreenSupervision() {
                     code={w.code}
                     message={w.message}
                     typo={typo}
-                    onGo={BLOCKER_ROUTE[w.code] ? () => navigate(BLOCKER_ROUTE[w.code].route) : null}
+                    onGo={BLOCKER_ROUTE[w.code] ? () => navigate(BLOCKER_ROUTE[w.code].route, { state: BLOCKER_ROUTE[w.code].state }) : null}
                     goLabel={BLOCKER_ROUTE[w.code]?.label}
                   />
                 ))}

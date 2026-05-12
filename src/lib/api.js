@@ -15,6 +15,10 @@ import {
   normalizeChecklistNumericCheck,
   normalizeChecklistNumericRange,
 } from '../modules/produccion/checklistNumericRange.js'
+import {
+  buildChecklistCacheKey,
+  shouldBackfillShiftChecklistLink,
+} from '../modules/produccion/checklistContext.js'
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 import {
@@ -2149,11 +2153,6 @@ async function directProduction(method, path, body) {
     const shiftId = Number(query.get('shift_id') || 0)
     if (!shiftId) return null
 
-    // Dedupe concurrent calls (React StrictMode double-invoke, parallel screens)
-    const cacheKey = `checklist:${shiftId}`
-    if (_checklistInFlight.has(cacheKey)) return _checklistInFlight.get(cacheKey)
-    const promise = (async () => {
-
     // 1) Determine target template based on explicit module context first.
     // If omitted, fall back to session.role for backward compatibility.
     const requestedRole = String(query.get('role_context') || '').trim().toLowerCase()
@@ -2165,6 +2164,13 @@ async function directProduction(method, path, body) {
     else if (requestedRole.includes('barra')) lineType = 'barras'
     else if (sessionRole.includes('rolito')) lineType = 'rolito'
     else if (sessionRole.includes('barra')) lineType = 'barras'
+
+    // Dedupe concurrent calls (React StrictMode double-invoke, parallel screens).
+    // The line/role context is part of identity; Rolito and Barras can share a
+    // shift but require different HACCP templates.
+    const cacheKey = buildChecklistCacheKey(shiftId, requestedRole || sessionRole, lineType)
+    if (_checklistInFlight.has(cacheKey)) return _checklistInFlight.get(cacheKey)
+    const promise = (async () => {
 
     // 1b) Resolve the target template id for this operator line (used both
     // for "find existing" and "create new"). Without this, a prior Rolito
@@ -2349,6 +2355,30 @@ async function directProduction(method, path, body) {
       }
 
       checks = rawChecks.map(({ _range_was_inverted, ...check }) => check)
+    }
+
+    if (checklist?.state === 'completed') {
+      try {
+        const shiftRes = await readModelSorted('gf.production.shift', {
+          fields: ['id', 'haccp_checklist_id'],
+          domain: [['id', '=', shiftId]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: 1,
+          sudo: 1,
+        })
+        const shift = pickFirstResponse(shiftRes)
+        if (shouldBackfillShiftChecklistLink(checklist, shift)) {
+          await createUpdate({
+            model: 'gf.production.shift',
+            method: 'update',
+            ids: [shiftId],
+            dict: { haccp_checklist_id: checklist.id },
+            sudo: 1,
+            app: 'pwa_colaboradores',
+          }).catch(() => null)
+        }
+      } catch { /* non-fatal: readiness will keep surfacing the blocker */ }
     }
 
     return {
