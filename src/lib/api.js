@@ -4741,29 +4741,6 @@ async function evaluateShiftCloseReadiness(shiftId) {
   return { canClose: blockers.length === 0, blockers }
 }
 
-function buildProductionShiftUniqueDomain({ warehouseId, date, shiftCode }) {
-  return [
-    ['plant_warehouse_id', '=', Number(warehouseId || 0)],
-    ['date', '=', String(date || '')],
-    ['shift_code', '=', String(shiftCode || '1')],
-  ]
-}
-
-function isProductionShiftUniqueError(error) {
-  const message = String(error?.message || error || '').toLowerCase()
-  return message.includes('duplicate key value')
-    && (
-      message.includes('gf_production_shift_gf_production_shift_unique')
-      || message.includes('(plant_warehouse_id, date, shift_code)')
-    )
-}
-
-function isModelNotAllowedError(error) {
-  const message = String(error?.message || error || '').toLowerCase()
-  return message.includes('modelo no autorizado')
-    || message.includes('model_not_allowed')
-}
-
 function shapeSupervisorShift(row, fallbackWarehouseId = 0) {
   if (!row) return null
   const warehouseM2o = row.plant_warehouse_id ?? row.warehouse_id
@@ -4774,67 +4751,6 @@ function shapeSupervisorShift(row, fallbackWarehouseId = 0) {
     shift_code: row.shift_code != null ? String(row.shift_code) : '',
     state: row.state || '',
     warehouse_id: toMany2oneId(warehouseM2o) || Number(fallbackWarehouseId || 0) || 0,
-  }
-}
-
-function isOpenProductionShiftState(state) {
-  return ['draft', 'in_progress'].includes(String(state || '').toLowerCase())
-}
-
-function getProductionShiftStateLabel(state) {
-  const normalized = String(state || '').toLowerCase()
-  return ({
-    draft: 'borrador',
-    in_progress: 'en curso',
-    closed: 'cerrado',
-    cancelled: 'cancelado',
-    canceled: 'cancelado',
-  })[normalized] || normalized || 'existente'
-}
-
-function getShiftCodeLabel(shiftCode) {
-  const normalized = String(shiftCode || '')
-  if (normalized === '1') return 'Dia'
-  if (normalized === '2') return 'Noche'
-  return normalized || 'seleccionado'
-}
-
-function buildExistingShiftBlockedMessage(row) {
-  const shift = shapeSupervisorShift(row)
-  const stateLabel = getProductionShiftStateLabel(shift?.state)
-  return `El turno ${getShiftCodeLabel(shift?.shift_code)} del ${shift?.date || 'dia seleccionado'} ya esta ${stateLabel}. No se puede abrir otro turno con la misma planta, fecha y turno.`
-}
-
-async function findProductionShiftByUnique({ warehouseId, date, shiftCode }) {
-  const cleanWarehouseId = Number(warehouseId || 0) || 0
-  const cleanDate = String(date || '')
-  const cleanShiftCode = String(shiftCode || '1')
-  if (!cleanWarehouseId || !cleanDate || !cleanShiftCode) return null
-
-  const result = await readModelSorted('gf.production.shift', {
-    fields: ['id', 'name', 'date', 'shift_code', 'state', 'plant_warehouse_id'],
-    domain: buildProductionShiftUniqueDomain({
-      warehouseId: cleanWarehouseId,
-      date: cleanDate,
-      shiftCode: cleanShiftCode,
-    }),
-    sort_column: 'id',
-    sort_desc: true,
-    limit: 1,
-    sudo: 1,
-  })
-  return pickFirstResponse(result)
-}
-
-function buildExistingShiftCreateResponse(row, fallbackWarehouseId = 0) {
-  return {
-    success: true,
-    already_existed: true,
-    data: {
-      id: Number(row?.id || 0) || 0,
-      case: 1,
-    },
-    shift: shapeSupervisorShift(row, fallbackWarehouseId),
   }
 }
 
@@ -4956,53 +4872,36 @@ async function directSupervision(method, path, body) {
     const shiftCode = String(body?.shift_code || '1')
     const targetWarehouseId = Number(body?.warehouse_id || warehouseId || 0) || 0
 
-    const existing = await findProductionShiftByUnique({
-      warehouseId: targetWarehouseId,
+    const result = await odooHttp('POST', '/api/production/shift/open', {}, {
       date: shiftDate,
-      shiftCode,
+      shift_code: shiftCode,
+      warehouse_id: targetWarehouseId,
+      leader_id: Number(body?.leader_id || getEmployeeId() || 0) || undefined,
+      operator_ids: Array.isArray(body?.operator_ids)
+        ? body.operator_ids.map((id) => Number(id)).filter(Boolean)
+        : [],
     })
-    if (existing?.id) {
-      if (!isOpenProductionShiftState(existing.state)) {
-        throw new Error(buildExistingShiftBlockedMessage(existing))
-      }
-      return buildExistingShiftCreateResponse(existing, targetWarehouseId)
+
+    if (!result?.ok) {
+      throw new Error(result?.message || 'No se pudo abrir el turno')
     }
 
-    try {
-      const result = await createUpdate({
-        model: 'gf.production.shift',
-        method: 'create',
-        dict: {
-          date: shiftDate,
-          shift_code: shiftCode,
-          plant_warehouse_id: targetWarehouseId || undefined,
-          leader_employee_id: Number(body?.leader_id || getEmployeeId() || 0) || undefined,
-          operator_employee_ids: Array.isArray(body?.operator_ids)
-            ? body.operator_ids.map((id) => [4, Number(id)])
-            : [],
-          state: 'draft',
-        },
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
-      return { success: true, already_existed: false, data: result }
-    } catch (err) {
-      if (isModelNotAllowedError(err)) {
-        throw new Error('La API de Odoo no tiene autorizado abrir turnos desde la app. Pide a administracion crear o reabrir el turno en Odoo.')
-      }
-      if (!isProductionShiftUniqueError(err)) throw err
-      const existingAfterRace = await findProductionShiftByUnique({
-        warehouseId: targetWarehouseId,
-        date: shiftDate,
-        shiftCode,
-      })
-      if (existingAfterRace?.id) {
-        if (!isOpenProductionShiftState(existingAfterRace.state)) {
-          throw new Error(buildExistingShiftBlockedMessage(existingAfterRace))
-        }
-        return buildExistingShiftCreateResponse(existingAfterRace, targetWarehouseId)
-      }
-      throw new Error('El turno ya existe, pero no se pudo cargar. Actualiza la pantalla e intenta de nuevo.')
+    const data = result.data || {}
+    return {
+      success: true,
+      already_existed: Boolean(data.already_existed),
+      data: {
+        id: Number(data.shift_id || 0) || 0,
+        case: data.already_existed ? 1 : 0,
+      },
+      shift: shapeSupervisorShift({
+        id: data.shift_id,
+        name: data.name,
+        date: data.date,
+        shift_code: data.shift_code,
+        state: data.state,
+        warehouse_id: data.warehouse_id,
+      }, targetWarehouseId),
     }
   }
 

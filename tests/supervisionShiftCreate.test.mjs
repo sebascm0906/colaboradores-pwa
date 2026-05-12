@@ -66,22 +66,18 @@ test('supervision shift create reuses the existing unique shift instead of creat
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, payload })
 
-    if (url === '/odoo-api/get_records_sorted') {
-      assert.deepEqual(payload.params.domain, [
-        ['plant_warehouse_id', '=', 76],
-        ['date', '=', '2026-05-12'],
-        ['shift_code', '=', '1'],
-      ])
+    if (url === '/odoo-api/api/production/shift/open') {
       return createJsonResponse(200, {
-        result: {
-          response: [{
-            id: 80,
-            name: 'Iguala Dia 2026-05-12',
-            date: '2026-05-12',
-            shift_code: '1',
-            state: 'draft',
-            plant_warehouse_id: [76, 'Planta Iguala'],
-          }],
+        ok: true,
+        message: 'Turno existente',
+        data: {
+          shift_id: 80,
+          name: 'Iguala Dia 2026-05-12',
+          date: '2026-05-12',
+          shift_code: '1',
+          state: 'draft',
+          warehouse_id: 76,
+          already_existed: true,
         },
       })
     }
@@ -110,6 +106,14 @@ test('supervision shift create reuses the existing unique shift instead of creat
   assert.equal(result.shift.state, 'draft')
   assert.equal(result.shift.date, '2026-05-12')
   assert.equal(result.shift.shift_code, '1')
+  const openCall = calls.find((call) => call.url === '/odoo-api/api/production/shift/open')
+  assert.deepEqual(openCall.payload, {
+    date: '2026-05-12',
+    shift_code: '1',
+    warehouse_id: 76,
+    leader_id: 577,
+    operator_ids: [],
+  })
   assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
 })
 
@@ -121,17 +125,18 @@ test('supervision shift create reports a closed existing shift instead of treati
     const payload = options.body ? JSON.parse(options.body) : null
     calls.push({ url, payload })
 
-    if (url === '/odoo-api/get_records_sorted') {
+    if (url === '/odoo-api/api/production/shift/open') {
       return createJsonResponse(200, {
-        result: {
-          response: [{
-            id: 80,
-            name: 'Planta Iguala - 2026-05-12 - Turno 1',
-            date: '2026-05-12',
-            shift_code: '1',
-            state: 'closed',
-            plant_warehouse_id: [76, 'Planta Iguala'],
-          }],
+        ok: false,
+        message: 'El turno Dia del 2026-05-12 ya esta cerrado. No se puede abrir otro turno con la misma planta, fecha y turno.',
+        data: {
+          shift_id: 80,
+          name: 'Planta Iguala - 2026-05-12 - Turno 1',
+          date: '2026-05-12',
+          shift_code: '1',
+          state: 'closed',
+          warehouse_id: 76,
+          already_existed: true,
         },
       })
     }
@@ -163,25 +168,11 @@ test('supervision shift create reports model authorization errors as an operatio
   setSession()
 
   globalThis.fetch = async (url) => {
-    if (url === '/odoo-api/get_records_sorted') {
+    if (url === '/odoo-api/api/production/shift/open') {
       return createJsonResponse(200, {
-        result: {
-          response: [],
-        },
-      })
-    }
-
-    if (url === '/odoo-api/api/create_update') {
-      return createJsonResponse(200, {
-        result: {
-          ok: false,
-          error: 'Modelo no autorizado.',
-          case: -403,
-          status: 403,
-          data: {
-            code: 'model_not_allowed',
-          },
-        },
+        ok: false,
+        message: 'La API de Odoo no tiene autorizado abrir turnos desde la app.',
+        data: {},
       })
     }
 
