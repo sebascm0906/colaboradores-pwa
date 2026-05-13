@@ -1060,7 +1060,7 @@ async function directAdmin(method, path, body) {
         date: body?.date || todayStart.slice(0, 10),
         employee_id: employeeId,
         company_id: companyIdPayload || undefined,
-        account_id: 64, // 601.84.01 Otros gastos generales
+        account_id: 2230, // 601.84.01 Otros gastos generales (company 34)
         payment_mode: body?.payment_mode || 'company_account',
         quantity,
         total_amount: totalAmount,
