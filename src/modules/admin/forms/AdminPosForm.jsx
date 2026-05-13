@@ -1,10 +1,5 @@
-// ─── AdminPosForm — Venta mostrador V2 (desktop) ────────────────────────────
+// --- AdminPosForm — Venta mostrador V2 (desktop) --------------------------
 // Backend: `gf_pwa_admin.sale-create` + `pos-products` + `customers`.
-// Layout desktop de 2 columnas:
-//   ┌─────────────────────────┬──────────────────────┐
-//   │ Search + Product grid   │  Customer + Cart     │
-//   │ (scroll independiente)  │  Totals + Payment    │
-//   └─────────────────────────┴──────────────────────┘
 // Mobile legacy sigue en ScreenPOS.jsx < 1024px.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,14 +7,19 @@ import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import AuthBanner from '../../../components/AuthBanner'
 import { useToast } from '../../../components/Toast'
-import { safeNumber } from '../../../lib/safeNumber'
 import {
-  getPosProducts,
+  getPosCatalog,
   searchCustomers,
   getDefaultCustomer,
   createSaleOrder,
 } from '../api'
-import { addProductToCart, changeCartItemQty, getDisplayStock, stockLabel } from '../posCart'
+import {
+  addProductToCart,
+  changeCartItemQty,
+  getDisplayStock,
+  repriceCartFromCatalog,
+  stockLabel,
+} from '../posCart'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
 
@@ -28,8 +28,8 @@ const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))
 // Umbrales de venta (UI — backend debe re-validar)
 // eslint-disable-next-line react-refresh/only-export-components
 export const POS_THRESHOLDS = {
-  MANAGER_AUTH: 5000,   // > $5000: requiere autorización gerente
-  DIRECTOR_AUTH: 50000, // > $50000: requiere autorización dirección
+  MANAGER_AUTH: 5000,
+  DIRECTOR_AUTH: 50000,
 }
 
 export default function AdminPosForm() {
@@ -44,72 +44,80 @@ export default function AdminPosForm() {
 
   const [cart, setCart] = useState([])
   const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
+  const [pricelist, setPricelist] = useState({ id: null, name: '' })
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [searchingCustomer, setSearchingCustomer] = useState(false)
-  const [payConfirm, setPayConfirm] = useState(null) // 'cash' | 'card' | null
-  const [cardRef, setCardRef] = useState('')          // folio obligatorio si card
+  const [payConfirm, setPayConfirm] = useState(null)
+  const [cardRef, setCardRef] = useState('')
   const toast = useToast()
 
-  // ── Carga inicial ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true
-    async function load() {
-      if (!warehouseId) {
-        if (alive) {
-          setProducts([])
-          setError('Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.')
-          setLoading(false)
-        }
-        return
-      }
-      setLoading(true)
-      setError('')
-      try {
-        const res = await getPosProducts(warehouseId)
-        const data = res?.data ?? res
-        const list = Array.isArray(data) ? data : (Array.isArray(data?.products) ? data.products : [])
-        if (alive) setProducts(list)
-      } catch (e) {
-        if (alive) setError(e?.message || 'Error cargando productos')
-      } finally {
-        if (alive) setLoading(false)
-      }
+  const loadCatalog = useCallback(async (selectedPartnerId) => {
+    if (!warehouseId) {
+      setProducts([])
+      setPricelist({ id: null, name: '' })
+      setError('Tu sesión no tiene almacén asignado. Vuelve a iniciar sesión.')
+      setLoading(false)
+      return
     }
-    load()
-    return () => { alive = false }
-  }, [warehouseId])
+
+    setLoading(true)
+    setError('')
+    try {
+      const catalog = await getPosCatalog({
+        warehouseId,
+        companyId,
+        partnerId: selectedPartnerId || undefined,
+      })
+      const list = Array.isArray(catalog?.products) ? catalog.products : []
+      setProducts(list)
+      setPricelist({
+        id: catalog?.pricelist_id || null,
+        name: catalog?.pricelist_name || '',
+      })
+      setCart((prev) => repriceCartFromCatalog(prev, list))
+    } catch (e) {
+      setError(e?.message || 'Error cargando productos')
+    } finally {
+      setLoading(false)
+    }
+  }, [companyId, warehouseId])
+
+  useEffect(() => {
+    loadCatalog(customer.id)
+  }, [customer.id, loadCatalog])
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        const res = await getDefaultCustomer()
+        const res = await getDefaultCustomer(companyId)
         const c = res?.data ?? res
-        if (alive && c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
-      } catch (e) { logScreenError('AdminPosForm', 'getDefaultCustomer', e) }
+        if (alive && c && c.id) {
+          setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
+        }
+      } catch (e) {
+        logScreenError('AdminPosForm', 'getDefaultCustomer', e)
+      }
     })()
     return () => { alive = false }
-  }, [])
+  }, [companyId])
 
-  // Reset cart cuando cambia razón social o almacén
   useEffect(() => {
     setCart([])
     setPayConfirm(null)
   }, [companyId, warehouseId])
 
-  // ── Productos filtrados ───────────────────────────────────────────────────
   const filtered = useMemo(() => {
     if (!search.trim()) return products
     const q = search.trim().toLowerCase()
-    return products.filter(p =>
+    return products.filter((p) =>
       (p.name || '').toLowerCase().includes(q) ||
       (p.default_code || p.sku || '').toLowerCase().includes(q),
     )
   }, [products, search])
 
-  // ── Carrito ───────────────────────────────────────────────────────────────
   function addToCart(product) {
     setCart((prev) => addProductToCart(prev, product))
   }
@@ -119,17 +127,19 @@ export default function AdminPosForm() {
   }
 
   function removeItem(productId) {
-    setCart(prev => prev.filter(c => c.product_id !== productId))
+    setCart((prev) => prev.filter((c) => c.product_id !== productId))
   }
 
   const { subtotal, total } = computePosSummary(cart)
 
-  // ── Cliente ───────────────────────────────────────────────────────────────
   const doCustomerSearch = useCallback(async (q) => {
-    if (!q || q.length < 2) { setCustomerResults([]); return }
+    if (!q || q.length < 2) {
+      setCustomerResults([])
+      return
+    }
     setSearchingCustomer(true)
     try {
-      const res = await searchCustomers(q)
+      const res = await searchCustomers(q, companyId)
       const data = res?.data ?? res
       setCustomerResults(Array.isArray(data) ? data : [])
     } catch {
@@ -137,7 +147,7 @@ export default function AdminPosForm() {
     } finally {
       setSearchingCustomer(false)
     }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     const t = setTimeout(() => doCustomerSearch(customerQuery), 400)
@@ -151,11 +161,9 @@ export default function AdminPosForm() {
     setCustomerResults([])
   }
 
-  // ── Cobro ─────────────────────────────────────────────────────────────────
   async function confirmPay() {
     if (!payConfirm || cart.length === 0) return
 
-    // Validación: folio de terminal obligatorio en pagos con tarjeta
     if (payConfirm === 'card') {
       const ref = cardRef.trim()
       if (ref.length < 4) {
@@ -173,9 +181,9 @@ export default function AdminPosForm() {
         sucursal_code: sucursal || undefined,
         partner_id: customer.id,
         payment_method: payConfirm,
-        // Folio terminal: requerido backend cuando payment_method='card'
         payment_reference: payConfirm === 'card' ? cardRef.trim() : undefined,
-        lines: cart.map(c => ({
+        pricelist_id: pricelist.id || undefined,
+        lines: cart.map((c) => ({
           product_id: c.product_id,
           qty: c.qty,
           price_unit: c.price_unit,
@@ -198,11 +206,15 @@ export default function AdminPosForm() {
     }
   }
 
-  // ── Estilos ───────────────────────────────────────────────────────────────
   const inputStyle = {
-    width: '100%', padding: '10px 14px', borderRadius: TOKENS.radius.md,
-    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-    color: TOKENS.colors.text, fontSize: 14, outline: 'none',
+    width: '100%',
+    padding: '10px 14px',
+    borderRadius: TOKENS.radius.md,
+    background: TOKENS.colors.surface,
+    border: `1px solid ${TOKENS.colors.border}`,
+    color: TOKENS.colors.text,
+    fontSize: 14,
+    outline: 'none',
     fontFamily: "'DM Sans', sans-serif",
   }
 
@@ -210,14 +222,20 @@ export default function AdminPosForm() {
     <div>
       <div style={{ marginBottom: 20 }}>
         <p style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-          color: TOKENS.colors.textLow, margin: 0,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.18em',
+          color: TOKENS.colors.textLow,
+          margin: 0,
         }}>
           VENTA MOSTRADOR · {companyLabel.toUpperCase()}
         </p>
         <h1 style={{
-          fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em',
-          color: TOKENS.colors.text, margin: '4px 0 0',
+          fontSize: 26,
+          fontWeight: 700,
+          letterSpacing: '-0.03em',
+          color: TOKENS.colors.text,
+          margin: '4px 0 0',
         }}>
           POS
         </h1>
@@ -225,9 +243,14 @@ export default function AdminPosForm() {
 
       {error && (
         <div style={{
-          padding: '10px 14px', borderRadius: TOKENS.radius.sm, marginBottom: 12,
-          background: TOKENS.colors.errorSoft, border: `1px solid ${TOKENS.colors.error}40`,
-          fontSize: 12, fontWeight: 600, color: TOKENS.colors.error,
+          padding: '10px 14px',
+          borderRadius: TOKENS.radius.sm,
+          marginBottom: 12,
+          background: TOKENS.colors.errorSoft,
+          border: `1px solid ${TOKENS.colors.error}40`,
+          fontSize: 12,
+          fontWeight: 600,
+          color: TOKENS.colors.error,
         }}>
           {error}
         </div>
@@ -239,36 +262,43 @@ export default function AdminPosForm() {
         gap: 20,
         alignItems: 'start',
       }}>
-        {/* ── Columna izquierda: búsqueda + grid productos ── */}
         <div style={{
-          padding: 22, borderRadius: TOKENS.radius.xl,
-          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+          padding: 22,
+          borderRadius: TOKENS.radius.xl,
+          background: TOKENS.glass.panel,
+          border: `1px solid ${TOKENS.colors.border}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <input
               type="text"
-              placeholder="Buscar producto por nombre o SKU…"
+              placeholder="Buscar producto por nombre o SKU..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               style={{ ...inputStyle, flex: 1 }}
             />
             <span style={{ fontSize: 11, fontWeight: 600, color: TOKENS.colors.textLow, whiteSpace: 'nowrap' }}>
-              {loading ? '…' : `${filtered.length} / ${products.length}`}
+              {loading ? '...' : `${filtered.length} / ${products.length}`}
             </span>
           </div>
 
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}>
               <div style={{
-                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
-                borderTop: '2px solid #2B8FE0', borderRadius: '50%',
+                width: 28,
+                height: 28,
+                border: '2px solid rgba(255,255,255,0.12)',
+                borderTop: '2px solid #2B8FE0',
+                borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite',
               }} />
             </div>
           ) : filtered.length === 0 ? (
             <div style={{
-              padding: '40px 20px', borderRadius: TOKENS.radius.lg, textAlign: 'center',
-              background: TOKENS.glass.panelSoft, border: `1px dashed ${TOKENS.colors.border}`,
+              padding: '40px 20px',
+              borderRadius: TOKENS.radius.lg,
+              textAlign: 'center',
+              background: TOKENS.glass.panelSoft,
+              border: `1px dashed ${TOKENS.colors.border}`,
             }}>
               <p style={{ fontSize: 13, color: TOKENS.colors.textMuted, margin: 0 }}>
                 {products.length === 0 ? 'Sin productos en este almacén' : 'Sin coincidencias'}
@@ -283,30 +313,38 @@ export default function AdminPosForm() {
               overflowY: 'auto',
               paddingRight: 4,
             }}>
-              {filtered.map(p => {
+              {filtered.map((p) => {
                 const stock = getDisplayStock(p)
-                const inCart = cart.find(c => c.product_id === p.id)
+                const inCart = cart.find((c) => c.product_id === p.id)
                 return (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => addToCart(p)}
                     style={{
-                      padding: '12px 12px 10px', borderRadius: TOKENS.radius.md,
+                      padding: '12px 12px 10px',
+                      borderRadius: TOKENS.radius.md,
                       background: inCart ? `${TOKENS.colors.blue2}14` : TOKENS.colors.surface,
                       border: `1px solid ${inCart ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
                       textAlign: 'left',
                       cursor: 'pointer',
                       position: 'relative',
                       minHeight: 92,
-                      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                   >
                     <p style={{
-                      fontSize: 12, fontWeight: 600, color: TOKENS.colors.text,
-                      margin: 0, lineHeight: 1.3,
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: TOKENS.colors.text,
+                      margin: 0,
+                      lineHeight: 1.3,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
                     }}>
                       {p.name}
@@ -315,20 +353,26 @@ export default function AdminPosForm() {
                       <span style={{ fontSize: 15, fontWeight: 700, color: TOKENS.colors.blue3 }}>
                         {fmt(p.price || p.list_price || 0)}
                       </span>
-                      <span style={{
-                        fontSize: 10, fontWeight: 600,
-                        color: TOKENS.colors.textMuted,
-                      }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: TOKENS.colors.textMuted }}>
                         {stockLabel(stock)}
                       </span>
                     </div>
                     {inCart && (
                       <div style={{
-                        position: 'absolute', top: 6, right: 6,
-                        minWidth: 22, height: 22, borderRadius: TOKENS.radius.pill,
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        minWidth: 22,
+                        height: 22,
+                        borderRadius: TOKENS.radius.pill,
                         background: TOKENS.colors.success,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700, color: 'white', padding: '0 6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: 'white',
+                        padding: '0 6px',
                       }}>
                         {inCart.qty}
                       </div>
@@ -340,38 +384,54 @@ export default function AdminPosForm() {
           )}
         </div>
 
-        {/* ── Columna derecha: cliente + carrito + totales ── */}
         <div style={{
-          padding: 22, borderRadius: TOKENS.radius.xl,
-          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
-          position: 'sticky', top: 84,
-          display: 'flex', flexDirection: 'column',
+          padding: 22,
+          borderRadius: TOKENS.radius.xl,
+          background: TOKENS.glass.panel,
+          border: `1px solid ${TOKENS.colors.border}`,
+          position: 'sticky',
+          top: 84,
+          display: 'flex',
+          flexDirection: 'column',
           maxHeight: 'calc(100dvh - 100px)',
         }}>
           <p style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-            color: TOKENS.colors.textLow, margin: '0 0 12px',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            color: TOKENS.colors.textLow,
+            margin: '0 0 12px',
           }}>
             CLIENTE
           </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <div style={{
-              flex: 1, minWidth: 0,
-              padding: '8px 12px', borderRadius: TOKENS.radius.md,
-              background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              fontSize: 13, color: TOKENS.colors.textSoft,
+              flex: 1,
+              minWidth: 0,
+              padding: '8px 12px',
+              borderRadius: TOKENS.radius.md,
+              background: TOKENS.colors.surface,
+              border: `1px solid ${TOKENS.colors.border}`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontSize: 13,
+              color: TOKENS.colors.textSoft,
             }}>
               {customer.name}
             </div>
             <button
               type="button"
-              onClick={() => setShowCustomerSearch(v => !v)}
+              onClick={() => setShowCustomerSearch((v) => !v)}
               style={{
-                padding: '8px 12px', borderRadius: TOKENS.radius.md,
-                background: `${TOKENS.colors.blue2}18`, border: `1px solid ${TOKENS.colors.blue2}30`,
-                fontSize: 11, fontWeight: 600, color: TOKENS.colors.blue3,
+                padding: '8px 12px',
+                borderRadius: TOKENS.radius.md,
+                background: `${TOKENS.colors.blue2}18`,
+                border: `1px solid ${TOKENS.colors.blue2}30`,
+                fontSize: 11,
+                fontWeight: 600,
+                color: TOKENS.colors.blue3,
                 fontFamily: "'DM Sans', sans-serif",
               }}
             >
@@ -379,43 +439,66 @@ export default function AdminPosForm() {
             </button>
           </div>
 
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 11, color: TOKENS.colors.textLow }}>
+              {pricelist.name ? `Lista de precios: ${pricelist.name}` : 'Lista de precios por defecto'}
+            </span>
+          </div>
+
           {showCustomerSearch && (
             <div style={{
-              padding: 12, borderRadius: TOKENS.radius.md, marginBottom: 12,
-              background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+              padding: 12,
+              borderRadius: TOKENS.radius.md,
+              marginBottom: 12,
+              background: TOKENS.colors.surfaceSoft,
+              border: `1px solid ${TOKENS.colors.border}`,
             }}>
               <input
                 type="text"
-                placeholder="Buscar cliente…"
+                placeholder="Buscar cliente..."
                 value={customerQuery}
-                onChange={e => setCustomerQuery(e.target.value)}
+                onChange={(e) => setCustomerQuery(e.target.value)}
                 autoFocus
                 style={{
-                  width: '100%', padding: '8px 12px', borderRadius: TOKENS.radius.sm,
-                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                  color: TOKENS.colors.text, fontSize: 12, outline: 'none',
-                  fontFamily: "'DM Sans', sans-serif", marginBottom: 8,
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: TOKENS.radius.sm,
+                  background: TOKENS.colors.surface,
+                  border: `1px solid ${TOKENS.colors.border}`,
+                  color: TOKENS.colors.text,
+                  fontSize: 12,
+                  outline: 'none',
+                  fontFamily: "'DM Sans', sans-serif",
+                  marginBottom: 8,
                 }}
               />
               {searchingCustomer && (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
                   <div style={{
-                    width: 16, height: 16, border: '2px solid rgba(255,255,255,0.12)',
-                    borderTop: '2px solid #2B8FE0', borderRadius: '50%',
+                    width: 16,
+                    height: 16,
+                    border: '2px solid rgba(255,255,255,0.12)',
+                    borderTop: '2px solid #2B8FE0',
+                    borderRadius: '50%',
                     animation: 'spin 0.8s linear infinite',
                   }} />
                 </div>
               )}
               <div style={{ maxHeight: 180, overflowY: 'auto' }}>
-                {customerResults.map(c => (
+                {customerResults.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => selectCustomer(c)}
                     style={{
-                      display: 'block', width: '100%', textAlign: 'left',
-                      padding: '8px 10px', borderRadius: TOKENS.radius.sm,
-                      background: 'transparent', fontSize: 12, color: TOKENS.colors.text,
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 10px',
+                      borderRadius: TOKENS.radius.sm,
+                      background: 'transparent',
+                      fontSize: 12,
+                      color: TOKENS.colors.text,
                       fontFamily: "'DM Sans', sans-serif",
                     }}
                   >
@@ -427,14 +510,20 @@ export default function AdminPosForm() {
           )}
 
           <p style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-            color: TOKENS.colors.textLow, margin: '4px 0 10px',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.18em',
+            color: TOKENS.colors.textLow,
+            margin: '4px 0 10px',
           }}>
             CARRITO · {cart.length}
           </p>
 
           <div style={{
-            flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 12,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            marginBottom: 12,
             borderRadius: TOKENS.radius.md,
             border: `1px solid ${TOKENS.colors.border}`,
           }}>
@@ -445,15 +534,23 @@ export default function AdminPosForm() {
                 </p>
               </div>
             ) : (
-              cart.map(item => (
+              cart.map((item) => (
                 <div key={item.product_id} style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 12px',
                   borderBottom: `1px solid ${TOKENS.colors.border}30`,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
-                      fontSize: 12, fontWeight: 600, color: TOKENS.colors.text, margin: 0,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: TOKENS.colors.text,
+                      margin: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}>
                       {item.name}
                     </p>
@@ -466,17 +563,27 @@ export default function AdminPosForm() {
                       type="button"
                       onClick={() => updateQty(item.product_id, -1)}
                       style={{
-                        width: 24, height: 24, borderRadius: TOKENS.radius.sm,
-                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 700,
+                        width: 24,
+                        height: 24,
+                        borderRadius: TOKENS.radius.sm,
+                        background: TOKENS.colors.surface,
+                        border: `1px solid ${TOKENS.colors.border}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: TOKENS.colors.textSoft,
+                        fontSize: 13,
+                        fontWeight: 700,
                       }}
                     >
-                      −
+                      -
                     </button>
                     <span style={{
-                      fontSize: 12, fontWeight: 700, color: TOKENS.colors.text,
-                      minWidth: 22, textAlign: 'center',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: TOKENS.colors.text,
+                      minWidth: 22,
+                      textAlign: 'center',
                     }}>
                       {item.qty}
                     </span>
@@ -484,18 +591,28 @@ export default function AdminPosForm() {
                       type="button"
                       onClick={() => updateQty(item.product_id, 1)}
                       style={{
-                        width: 24, height: 24, borderRadius: TOKENS.radius.sm,
-                        background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: TOKENS.colors.textSoft, fontSize: 13, fontWeight: 700,
+                        width: 24,
+                        height: 24,
+                        borderRadius: TOKENS.radius.sm,
+                        background: TOKENS.colors.surface,
+                        border: `1px solid ${TOKENS.colors.border}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: TOKENS.colors.textSoft,
+                        fontSize: 13,
+                        fontWeight: 700,
                       }}
                     >
                       +
                     </button>
                   </div>
                   <span style={{
-                    fontSize: 12, fontWeight: 700, color: TOKENS.colors.blue3,
-                    minWidth: 64, textAlign: 'right',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: TOKENS.colors.blue3,
+                    minWidth: 64,
+                    textAlign: 'right',
                   }}>
                     {fmt(item.qty * item.price_unit)}
                   </span>
@@ -503,13 +620,18 @@ export default function AdminPosForm() {
                     type="button"
                     onClick={() => removeItem(item.product_id)}
                     style={{
-                      width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: TOKENS.colors.error, flexShrink: 0,
+                      width: 22,
+                      height: 22,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: TOKENS.colors.error,
+                      flexShrink: 0,
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18"/>
-                      <line x1="6" y1="6" x2="18" y2="18"/>
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </button>
                 </div>
@@ -517,10 +639,11 @@ export default function AdminPosForm() {
             )}
           </div>
 
-          {/* Totales */}
           <div style={{
-            padding: '12px 14px', borderRadius: TOKENS.radius.md,
-            background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+            padding: '12px 14px',
+            borderRadius: TOKENS.radius.md,
+            background: TOKENS.colors.surfaceSoft,
+            border: `1px solid ${TOKENS.colors.border}`,
             marginBottom: 12,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -528,25 +651,22 @@ export default function AdminPosForm() {
               <span style={{ fontSize: 12, color: TOKENS.colors.textSoft }}>{fmt(subtotal)}</span>
             </div>
             <div style={{
-              display: 'flex', justifyContent: 'space-between',
-              paddingTop: 6, borderTop: `1px solid ${TOKENS.colors.border}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              paddingTop: 6,
+              borderTop: `1px solid ${TOKENS.colors.border}`,
             }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: TOKENS.colors.text }}>Total</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: TOKENS.colors.text }}>{fmt(total)}</span>
             </div>
           </div>
 
-          {/* Acciones de cobro */}
           {payConfirm ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <p style={{
-                fontSize: 11, color: TOKENS.colors.textSoft,
-                textAlign: 'center', margin: 0,
-              }}>
+              <p style={{ fontSize: 11, color: TOKENS.colors.textSoft, textAlign: 'center', margin: 0 }}>
                 Confirmar pago con <strong>{payConfirm === 'cash' ? 'Efectivo' : 'Terminal'}</strong> — {fmt(total)}
               </p>
 
-              {/* Banner de autorización según monto */}
               {total > POS_THRESHOLDS.DIRECTOR_AUTH && (
                 <AuthBanner
                   level="director"
@@ -562,7 +682,6 @@ export default function AdminPosForm() {
                 />
               )}
 
-              {/* Folio obligatorio para pagos con tarjeta */}
               {payConfirm === 'card' && (
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: TOKENS.colors.warning }}>
@@ -571,12 +690,13 @@ export default function AdminPosForm() {
                   <input
                     type="text"
                     value={cardRef}
-                    onChange={e => setCardRef(e.target.value)}
+                    onChange={(e) => setCardRef(e.target.value)}
                     placeholder="Ej: 0012345"
                     autoFocus
                     maxLength={32}
                     style={{
-                      ...inputStyle, marginTop: 4,
+                      ...inputStyle,
+                      marginTop: 4,
                       borderColor: cardRef.trim().length >= 4 ? TOKENS.colors.border : TOKENS.colors.warning,
                     }}
                   />
@@ -592,9 +712,14 @@ export default function AdminPosForm() {
                   onClick={() => { setPayConfirm(null); setCardRef('') }}
                   disabled={submitting}
                   style={{
-                    flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
-                    background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                    fontSize: 13, fontWeight: 600, color: TOKENS.colors.textSoft,
+                    flex: 1,
+                    padding: '12px 0',
+                    borderRadius: TOKENS.radius.md,
+                    background: TOKENS.colors.surface,
+                    border: `1px solid ${TOKENS.colors.border}`,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: TOKENS.colors.textSoft,
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
@@ -605,15 +730,19 @@ export default function AdminPosForm() {
                   onClick={confirmPay}
                   disabled={submitting || (payConfirm === 'card' && cardRef.trim().length < 4)}
                   style={{
-                    flex: 1, padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    flex: 1,
+                    padding: '12px 0',
+                    borderRadius: TOKENS.radius.md,
                     background: `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                     opacity: (submitting || (payConfirm === 'card' && cardRef.trim().length < 4)) ? 0.5 : 1,
                     cursor: submitting ? 'wait' : 'pointer',
-                    fontSize: 13, fontWeight: 700, color: 'white',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: 'white',
                     fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
-                  {submitting ? 'Procesando…' : 'Confirmar'}
+                  {submitting ? 'Procesando...' : 'Confirmar'}
                 </button>
               </div>
             </div>
@@ -624,14 +753,18 @@ export default function AdminPosForm() {
                 onClick={() => cart.length > 0 && setPayConfirm('cash')}
                 disabled={cart.length === 0}
                 style={{
-                  flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
+                  flex: 1,
+                  padding: '14px 0',
+                  borderRadius: TOKENS.radius.md,
                   background: cart.length === 0
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
                   opacity: cart.length === 0 ? 0.5 : 1,
                   cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-                  fontSize: 13, fontWeight: 700, color: 'white',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: 'white',
                   fontFamily: "'DM Sans', sans-serif",
                 }}
               >
@@ -642,14 +775,18 @@ export default function AdminPosForm() {
                 onClick={() => cart.length > 0 && setPayConfirm('card')}
                 disabled={cart.length === 0}
                 style={{
-                  flex: 1, padding: '14px 0', borderRadius: TOKENS.radius.md,
+                  flex: 1,
+                  padding: '14px 0',
+                  borderRadius: TOKENS.radius.md,
                   background: cart.length === 0
                     ? TOKENS.colors.surface
                     : `linear-gradient(135deg, ${TOKENS.colors.blue}, ${TOKENS.colors.blue2})`,
                   border: cart.length === 0 ? `1px solid ${TOKENS.colors.border}` : 'none',
                   opacity: cart.length === 0 ? 0.5 : 1,
                   cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
-                  fontSize: 13, fontWeight: 700, color: 'white',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: 'white',
                   fontFamily: "'DM Sans', sans-serif",
                 }}
               >

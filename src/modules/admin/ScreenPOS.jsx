@@ -6,14 +6,20 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { softWarehouse } from '../../lib/sessionGuards'
-import { getPosProducts, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
+import { getPosCatalog, searchCustomers, getDefaultCustomer, createSaleOrder } from './api'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminPosForm from './forms/AdminPosForm'
 import { logScreenError } from '../shared/logScreenError'
 import SessionErrorState from '../../components/SessionErrorState'
 import { computePosSummary } from './posPricing'
-import { addProductToCart, changeCartItemQty, getDisplayStock, stockLabel } from './posCart'
+import {
+  addProductToCart,
+  changeCartItemQty,
+  getDisplayStock,
+  repriceCartFromCatalog,
+  stockLabel,
+} from './posCart'
 
 export default function ScreenPOS() {
   const { session } = useSession()
@@ -61,6 +67,7 @@ function MobilePOS({ warehouseId }) {
 
   // Customer
   const [customer, setCustomer] = useState({ id: null, name: 'VENTA PUBLICO' })
+  const [pricelist, setPricelist] = useState({ id: null, name: '' })
   const [showCustomerSearch, setShowCustomerSearch] = useState(false)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
@@ -75,28 +82,42 @@ function MobilePOS({ warehouseId }) {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
-  useEffect(() => { loadProducts() }, [])
-
-  useEffect(() => {
-    loadDefaultCustomer()
-  }, [])
-
-  async function loadProducts() {
+  const loadProducts = useCallback(async (selectedPartnerId) => {
     setLoading(true)
     try {
-      const data = await getPosProducts(warehouseId)
-      setProducts(Array.isArray(data) ? data : [])
-    } catch (e) { logScreenError('ScreenPOS', 'getPosProducts', e); setError('Error cargando productos') }
-    finally { setLoading(false) }
-  }
+      const catalog = await getPosCatalog({
+        warehouseId,
+        partnerId: selectedPartnerId || undefined,
+      })
+      const list = Array.isArray(catalog?.products) ? catalog.products : []
+      setProducts(list)
+      setPricelist({
+        id: catalog?.pricelist_id || null,
+        name: catalog?.pricelist_name || '',
+      })
+      setCart((prev) => repriceCartFromCatalog(prev, list))
+    } catch (e) {
+      logScreenError('ScreenPOS', 'getPosCatalog', e)
+      setError('Error cargando productos')
+    } finally {
+      setLoading(false)
+    }
+  }, [warehouseId])
 
-  async function loadDefaultCustomer() {
+  useEffect(() => {
+    loadProducts(customer.id)
+  }, [customer.id, loadProducts])
+
+  const loadDefaultCustomer = useCallback(async () => {
     try {
       const c = await getDefaultCustomer()
       if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
     } catch (e) { logScreenError('ScreenPOS', 'getDefaultCustomer', e) }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadDefaultCustomer()
+  }, [loadDefaultCustomer])
 
   // Filtered products
   const filtered = useMemo(() => {
@@ -152,6 +173,7 @@ function MobilePOS({ warehouseId }) {
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
         partner_id: customer.id,
+        pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,
         lines: cart.map(c => ({ product_id: c.product_id, qty: c.qty, price_unit: c.price_unit })),
       })
@@ -272,6 +294,12 @@ function MobilePOS({ warehouseId }) {
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.blue3 }}>Cambiar cliente</span>
               </button>
+            </div>
+
+            <div style={{ marginTop: -6, marginBottom: 12 }}>
+              <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>
+                {pricelist.name ? `Lista de precios: ${pricelist.name}` : 'Lista de precios por defecto'}
+              </span>
             </div>
 
             {/* Customer Search Overlay */}

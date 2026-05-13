@@ -1,7 +1,11 @@
 // ─── API Admin Sucursal — POS, Gastos, Requisiciones ─────────────────────────
 // Endpoints del módulo Odoo `gf_pwa_admin` (Sebastián, rollout 2026-04-10).
 import { api } from '../../lib/api.js'
-import { normalizePosProductsResponse } from './posProducts.js'
+import {
+  buildPosCatalogPath,
+  normalizePosCatalogResponse,
+  normalizePosProductsResponse,
+} from './posProducts.js'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,20 +21,29 @@ function toQuery(filters = {}) {
 
 // ── POS Mostrador ────────────────────────────────────────────────────────────
 
+/** Catálogo POS con stock y pricelist aplicados para el cliente seleccionado */
+export async function getPosCatalog(filters = {}) {
+  const response = await api('GET', buildPosCatalogPath(filters))
+  return normalizePosCatalogResponse(response)
+}
+
 /** Productos disponibles con stock en el CEDIS del empleado */
-export async function getPosProducts(warehouseId) {
-  const response = await api('GET', `/pwa-admin/pos-products?warehouse_id=${warehouseId}`)
+export async function getPosProducts(arg) {
+  const filters = typeof arg === 'object'
+    ? arg
+    : { warehouseId: arg }
+  const response = await api('GET', buildPosCatalogPath(filters))
   return normalizePosProductsResponse(response)
 }
 
 /** Buscar clientes (para factura) */
-export function searchCustomers(query) {
-  return api('GET', `/pwa-admin/customers?q=${encodeURIComponent(query)}`)
+export function searchCustomers(query, companyId) {
+  return api('GET', `/pwa-admin/customers${toQuery({ q: query, company_id: companyId })}`)
 }
 
 /** Cliente default "Publico Mostrador" de la sucursal */
-export function getDefaultCustomer() {
-  return api('GET', '/pwa-admin/default-customer')
+export function getDefaultCustomer(companyId) {
+  return api('GET', `/pwa-admin/default-customer${toQuery({ company_id: companyId })}`)
 }
 
 /** Crear venta (sale.order + confirmar) */

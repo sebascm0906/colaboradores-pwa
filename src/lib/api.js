@@ -890,16 +890,26 @@ async function directAdmin(method, path, body) {
     return odooHttp('GET', '/pwa-admin/pos-products', {
       warehouse_id: reqWarehouseId || undefined,
       company_id: Number(query.get('company_id') || companyId || 0) || undefined,
+      partner_id: Number(query.get('partner_id') || 0) || undefined,
     })
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const q = String(query.get('q') || '').trim()
-    const domain = ['|', '|', ['name', 'ilike', q], ['email', 'ilike', q], ['mobile', 'ilike', q]]
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const domain = []
+    if (reqCompanyId) {
+      domain.push('|', ['company_id', '=', false], ['company_id', '=', reqCompanyId])
+    }
+    if (q) {
+      domain.push('|', '|', ['name', 'ilike', q], ['email', 'ilike', q], ['mobile', 'ilike', q])
+    } else {
+      domain.push(['customer_rank', '>', 0])
+    }
     const result = await readModelSorted('res.partner', {
       fields: ['id', 'name', 'email', 'mobile', 'phone', 'vat', 'customer_rank', 'is_company'],
-      domain: q ? domain : [['customer_rank', '>', 0]],
+      domain,
       sort_column: 'name',
       sort_desc: false,
       limit: 30,
@@ -917,9 +927,16 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    const domain = []
+    if (reqCompanyId) {
+      domain.push('|', ['company_id', '=', false], ['company_id', '=', reqCompanyId])
+    }
+    domain.push('|', ['name', 'ilike', 'PUBLIC'], ['name', 'ilike', 'PUBLICO'])
     const result = await readModelSorted('res.partner', {
       fields: ['id', 'name', 'email', 'mobile', 'phone'],
-      domain: ['|', ['name', 'ilike', 'PUBLIC'], ['name', 'ilike', 'PUBLICO']],
+      domain,
       sort_column: 'name',
       sort_desc: false,
       limit: 1,

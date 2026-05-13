@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   addProductToCart,
   changeCartItemQty,
+  repriceCartFromCatalog,
   stockLabel,
 } from '../src/modules/admin/posCart.js'
 
@@ -56,4 +57,65 @@ test('changeCartItemQty removes the row when quantity drops to zero', () => {
 
 test('stockLabel stays neutral when stock is zero', () => {
   assert.equal(stockLabel(0), 'Stock 0')
+})
+
+test('repriceCartFromCatalog updates each line with the selected customer prices', () => {
+  const repriced = repriceCartFromCatalog([
+    {
+      product_id: 10,
+      name: 'Hielo 5kg',
+      qty: 2,
+      price_unit: 85,
+      stock: 10,
+    },
+    {
+      product_id: 11,
+      name: 'Molido chico',
+      qty: 1,
+      price_unit: 90,
+      stock: 4,
+    },
+  ], [
+    { id: 10, price: 70, stock: 8 },
+    { id: 11, price: 120, stock: 3 },
+  ])
+
+  assert.deepEqual(repriced, [
+    {
+      product_id: 10,
+      name: 'Hielo 5kg',
+      qty: 2,
+      price_unit: 70,
+      stock: 8,
+    },
+    {
+      product_id: 11,
+      name: 'Molido chico',
+      qty: 1,
+      price_unit: 120,
+      stock: 3,
+    },
+  ])
+})
+
+test('repriceCartFromCatalog keeps the old line values when the product is missing from the new catalog', () => {
+  const repriced = repriceCartFromCatalog([
+    {
+      product_id: 10,
+      name: 'Hielo 5kg',
+      qty: 2,
+      price_unit: 85,
+      stock: 10,
+    },
+  ], [])
+
+  assert.deepEqual(repriced, [
+    {
+      product_id: 10,
+      name: 'Hielo 5kg',
+      qty: 2,
+      price_unit: 85,
+      stock: 10,
+    },
+  ])
 })

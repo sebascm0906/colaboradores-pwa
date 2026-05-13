@@ -26,6 +26,22 @@ export function addProductToCart(cart = [], product = {}) {
   ]
 }
 
+export function repriceCartFromCatalog(cart = [], products = []) {
+  const productMap = new Map(
+    (Array.isArray(products) ? products : []).map((product) => [product?.id, product]),
+  )
+
+  return cart.map((item) => {
+    const updated = productMap.get(item.product_id)
+    if (!updated) return item
+    return {
+      ...item,
+      price_unit: Number(updated.price || updated.list_price || 0),
+      stock: getDisplayStock(updated),
+    }
+  })
+}
+
 export function changeCartItemQty(cart = [], productId, delta) {
   return cart
     .map((item) => {
