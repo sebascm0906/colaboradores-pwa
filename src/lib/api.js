@@ -3171,35 +3171,10 @@ async function directProduction(method, path, body) {
       }
     } catch { /* non-fatal */ }
 
-    // (3) Call the real action_close_shift. If Odoo raises on a missing end
-    // energy reading or other business rule, surface the error to the caller.
-    try {
-      return await createUpdate({
-        model: 'gf.production.shift',
-        method: 'function',
-        ids: [shiftId],
-        function: 'action_close_shift',
-        sudo: 1,
-        app: 'pwa_colaboradores',
-      })
-    } catch (e) {
-      // DEUDA TECNICA: detecta metodo faltante via string parsing del error Odoo.
-      // action_close_shift ESTA CONFIRMADO como controller real.
-      // Este fallback solo existe para Odoo envs donde el metodo no este deployado.
-      // TODO: eliminar cuando action_close_shift este en 100% de instancias.
-      const msg = String(e.message || '').toLowerCase()
-      if (msg.includes('has no attribute') || msg.includes('not found') || msg.includes('incident')) {
-        return createUpdate({
-          model: 'gf.production.shift',
-          method: 'update',
-          ids: [shiftId],
-          dict: { state: 'closed', end_time: odooNow() },
-          sudo: 1,
-          app: 'pwa_colaboradores',
-        })
-      }
-      throw e
-    }
+    // (3) Call the dedicated Odoo REST endpoint for shift close.
+    // Uses /api/production/shift/close instead of create_update+action_close_shift
+    // because action_close_shift is not in the generic API function whitelist.
+    return await odooHttp('POST', '/api/production/shift/close', {}, { shift_id: shiftId })
   }
 
   // ── Barra: List brine tanks (gf.production.machine, machine_type='tanque_salmuera')
