@@ -21,6 +21,7 @@ import {
   stockLabel,
 } from './posCart'
 import {
+  normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
 } from './posCustomers'
@@ -116,7 +117,7 @@ function MobilePOS({ warehouseId }) {
 
   const loadDefaultCustomer = useCallback(async () => {
     try {
-      const c = await getDefaultCustomer(companyId)
+      const c = normalizeDefaultCustomerResponse(await getDefaultCustomer(companyId))
       if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
     } catch (e) { logScreenError('ScreenPOS', 'getDefaultCustomer', e) }
   }, [companyId])
@@ -154,7 +155,10 @@ function MobilePOS({ warehouseId }) {
     try {
       const res = await searchCustomers(q, companyId)
       setCustomerResults(normalizeCustomerResults(res))
-    } catch { setCustomerResults([]) }
+    } catch (e) {
+      logScreenError('ScreenPOS', 'searchCustomers', e)
+      setCustomerResults([])
+    }
     finally { setSearchingCustomer(false) }
   }, [companyId])
 

@@ -895,55 +895,17 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const q = String(query.get('q') || '').trim()
-    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
-    const domain = []
-    if (reqCompanyId) {
-      domain.push('|', ['company_id', '=', false], ['company_id', '=', reqCompanyId])
-    }
-    if (q) {
-      domain.push('|', '|', ['name', 'ilike', q], ['email', 'ilike', q], ['mobile', 'ilike', q])
-    } else {
-      domain.push(['customer_rank', '>', 0])
-    }
-    const result = await readModelSorted('res.partner', {
-      fields: ['id', 'name', 'email', 'mobile', 'phone', 'vat', 'customer_rank', 'is_company'],
-      domain,
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 30,
-      sudo: 1,
+    return odooHttp('GET', '/pwa-admin/customers', {
+      q: query.get('q') || undefined,
+      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
+      limit: Number(query.get('limit') || 30) || undefined,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      email: row.email || '',
-      phone: row.phone || row.mobile || '',
-      mobile: row.mobile || '',
-      vat: row.vat || '',
-      is_company: row.is_company,
-    }))
   }
 
   if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
-    const query = new URLSearchParams(path.split('?')[1] || '')
-    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
-    const domain = []
-    if (reqCompanyId) {
-      domain.push('|', ['company_id', '=', false], ['company_id', '=', reqCompanyId])
-    }
-    domain.push('|', ['name', 'ilike', 'PUBLIC'], ['name', 'ilike', 'PUBLICO'])
-    const result = await readModelSorted('res.partner', {
-      fields: ['id', 'name', 'email', 'mobile', 'phone'],
-      domain,
-      sort_column: 'name',
-      sort_desc: false,
-      limit: 1,
-      sudo: 1,
+    return odooHttp('GET', '/pwa-admin/default-customer', {
+      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
     })
-    const row = pickFirstResponse(result)
-    return row ? { id: row.id, name: row.name, email: row.email || '', phone: row.phone || row.mobile || '' } : null
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {

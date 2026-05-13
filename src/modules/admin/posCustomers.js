@@ -5,5 +5,16 @@ export function shouldLoadCustomerSuggestions(query) {
 
 export function normalizeCustomerResults(response) {
   const data = response?.data ?? response
-  return Array.isArray(data) ? data : []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.customers)) return data.customers
+  if (Array.isArray(response?.customers)) return response.customers
+  return []
+}
+
+export function normalizeDefaultCustomerResponse(response) {
+  const data = response?.data ?? response
+  if (!data || Array.isArray(data)) return null
+  if (data.customer && typeof data.customer === 'object') return data.customer
+  if (typeof data.id === 'number' || typeof data.id === 'string') return data
+  return null
 }

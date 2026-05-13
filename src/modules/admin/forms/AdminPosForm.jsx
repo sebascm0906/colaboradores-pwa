@@ -21,6 +21,7 @@ import {
   stockLabel,
 } from '../posCart'
 import {
+  normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
 } from '../posCustomers'
@@ -97,7 +98,7 @@ export default function AdminPosForm() {
     ;(async () => {
       try {
         const res = await getDefaultCustomer(companyId)
-        const c = res?.data ?? res
+        const c = normalizeDefaultCustomerResponse(res)
         if (alive && c && c.id) {
           setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
         }
@@ -145,7 +146,8 @@ export default function AdminPosForm() {
     try {
       const res = await searchCustomers(q, companyId)
       setCustomerResults(normalizeCustomerResults(res))
-    } catch {
+    } catch (e) {
+      logScreenError('AdminPosForm', 'searchCustomers', e)
       setCustomerResults([])
     } finally {
       setSearchingCustomer(false)
