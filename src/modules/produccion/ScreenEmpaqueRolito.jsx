@@ -202,7 +202,7 @@ export default function ScreenEmpaqueRolito() {
       if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
       const packResult = await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
       // Defensa adicional: si el handler no lanzo pero retorno sin id, lo tratamos como error
-      if (!packResult?.id) {
+      if (!packResult?.id && !packResult?.packing_entry_id) {
         const msg = packResult?.error || packResult?.message || packResult?.user_message || 'El empaque no se guardó en el servidor'
         throw new Error(msg)
       }

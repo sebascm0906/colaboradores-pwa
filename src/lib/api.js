@@ -2780,12 +2780,19 @@ async function directProduction(method, path, body) {
       qty_bags: Number(body?.qty_bags || 0),
       production_order_id: Number(body?.production_order_id || 0),
     })
-    const entry = result?.data || result
-    if (!entry?.id) {
-      const msg = entry?.error || entry?.message || entry?.user_message || 'No se pudo guardar el empaque en Odoo'
-      throw new ApiError(msg, { status: 200, code: entry?.case ?? 'packing_save_failed' })
+    // Backend puede responder { ok, data: { packing_entry_id } } o { id } directo
+    if (result?.ok === false) {
+      const msg = result?.error || result?.message || 'No se pudo guardar el empaque en Odoo'
+      throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
     }
-    addLocalPackingEntry(shiftId, entry)
+    const raw = result?.data || result
+    const entryId = raw?.id || raw?.packing_entry_id
+    if (!entryId) {
+      const msg = raw?.error || raw?.message || 'No se pudo guardar el empaque en Odoo'
+      throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
+    }
+    const entry = entryId !== raw?.id ? { ...raw, id: entryId } : raw
+    if (shiftId) addLocalPackingEntry(shiftId, entry)
     return entry
   }
 
