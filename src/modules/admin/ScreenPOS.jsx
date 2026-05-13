@@ -20,6 +20,10 @@ import {
   repriceCartFromCatalog,
   stockLabel,
 } from './posCart'
+import {
+  normalizeCustomerResults,
+  shouldLoadCustomerSuggestions,
+} from './posCustomers'
 
 export default function ScreenPOS() {
   const { session } = useSession()
@@ -57,6 +61,7 @@ function MobilePOS({ warehouseId }) {
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const companyId = Number(session?.company_id || 0) || undefined
 
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
@@ -87,6 +92,7 @@ function MobilePOS({ warehouseId }) {
     try {
       const catalog = await getPosCatalog({
         warehouseId,
+        companyId,
         partnerId: selectedPartnerId || undefined,
       })
       const list = Array.isArray(catalog?.products) ? catalog.products : []
@@ -102,7 +108,7 @@ function MobilePOS({ warehouseId }) {
     } finally {
       setLoading(false)
     }
-  }, [warehouseId])
+  }, [companyId, warehouseId])
 
   useEffect(() => {
     loadProducts(customer.id)
@@ -110,10 +116,10 @@ function MobilePOS({ warehouseId }) {
 
   const loadDefaultCustomer = useCallback(async () => {
     try {
-      const c = await getDefaultCustomer()
+      const c = await getDefaultCustomer(companyId)
       if (c && c.id) setCustomer({ id: c.id, name: c.name || 'VENTA PUBLICO' })
     } catch (e) { logScreenError('ScreenPOS', 'getDefaultCustomer', e) }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     loadDefaultCustomer()
@@ -143,19 +149,24 @@ function MobilePOS({ warehouseId }) {
 
   // Customer search
   const doCustomerSearch = useCallback(async (q) => {
-    if (!q || q.length < 2) { setCustomerResults([]); return }
+    if (!shouldLoadCustomerSuggestions(q)) { setCustomerResults([]); return }
     setSearchingCustomer(true)
     try {
-      const res = await searchCustomers(q)
-      setCustomerResults(Array.isArray(res) ? res : [])
+      const res = await searchCustomers(q, companyId)
+      setCustomerResults(normalizeCustomerResults(res))
     } catch { setCustomerResults([]) }
     finally { setSearchingCustomer(false) }
-  }, [])
+  }, [companyId])
 
   useEffect(() => {
     const timer = setTimeout(() => doCustomerSearch(customerQuery), 400)
     return () => clearTimeout(timer)
   }, [customerQuery, doCustomerSearch])
+
+  useEffect(() => {
+    if (!showCustomerSearch) return
+    doCustomerSearch(customerQuery)
+  }, [showCustomerSearch, customerQuery, doCustomerSearch])
 
   function selectCustomer(c) {
     setCustomer({ id: c.id, name: c.name })
@@ -172,6 +183,7 @@ function MobilePOS({ warehouseId }) {
     try {
       const result = await createSaleOrder({
         warehouse_id: warehouseId,
+        company_id: companyId,
         partner_id: customer.id,
         pricelist_id: pricelist.id || undefined,
         payment_method: payConfirm,

@@ -20,6 +20,10 @@ import {
   repriceCartFromCatalog,
   stockLabel,
 } from '../posCart'
+import {
+  normalizeCustomerResults,
+  shouldLoadCustomerSuggestions,
+} from '../posCustomers'
 import { logScreenError } from '../../shared/logScreenError'
 import { computePosSummary } from '../posPricing'
 
@@ -133,15 +137,14 @@ export default function AdminPosForm() {
   const { subtotal, total } = computePosSummary(cart)
 
   const doCustomerSearch = useCallback(async (q) => {
-    if (!q || q.length < 2) {
+    if (!shouldLoadCustomerSuggestions(q)) {
       setCustomerResults([])
       return
     }
     setSearchingCustomer(true)
     try {
       const res = await searchCustomers(q, companyId)
-      const data = res?.data ?? res
-      setCustomerResults(Array.isArray(data) ? data : [])
+      setCustomerResults(normalizeCustomerResults(res))
     } catch {
       setCustomerResults([])
     } finally {
@@ -153,6 +156,11 @@ export default function AdminPosForm() {
     const t = setTimeout(() => doCustomerSearch(customerQuery), 400)
     return () => clearTimeout(t)
   }, [customerQuery, doCustomerSearch])
+
+  useEffect(() => {
+    if (!showCustomerSearch) return
+    doCustomerSearch(customerQuery)
+  }, [showCustomerSearch, customerQuery, doCustomerSearch])
 
   function selectCustomer(c) {
     setCustomer({ id: c.id, name: c.name })
@@ -485,6 +493,17 @@ export default function AdminPosForm() {
                 </div>
               )}
               <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                {!searchingCustomer && customerResults.length === 0 && (
+                  <div style={{
+                    padding: '10px 8px',
+                    fontSize: 11,
+                    color: TOKENS.colors.textMuted,
+                  }}>
+                    {customerQuery.trim().length === 1
+                      ? 'Escribe al menos 2 letras para buscar.'
+                      : 'No se encontraron clientes para esta búsqueda.'}
+                  </div>
+                )}
                 {customerResults.map((c) => (
                   <button
                     key={c.id}
@@ -496,10 +515,12 @@ export default function AdminPosForm() {
                       textAlign: 'left',
                       padding: '8px 10px',
                       borderRadius: TOKENS.radius.sm,
-                      background: 'transparent',
+                      background: c.id === customer.id ? `${TOKENS.colors.blue2}18` : 'transparent',
+                      border: `1px solid ${c.id === customer.id ? `${TOKENS.colors.blue2}35` : 'transparent'}`,
                       fontSize: 12,
                       color: TOKENS.colors.text,
                       fontFamily: "'DM Sans', sans-serif",
+                      marginBottom: 4,
                     }}
                   >
                     {c.name}
