@@ -200,7 +200,12 @@ export default function ScreenEmpaqueRolito() {
       // cycle_id se envia siempre — backend debe persistirlo
       const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
       if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
-      await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
+      const packResult = await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
+      // Defensa adicional: si el handler no lanzo pero retorno sin id, lo tratamos como error
+      if (!packResult?.id) {
+        const msg = packResult?.error || packResult?.message || packResult?.user_message || 'El empaque no se guardó en el servidor'
+        throw new Error(msg)
+      }
 
       // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
       if (voiceContext?.trace_id) {
