@@ -1,14 +1,20 @@
-// ─── ActivityFeed — feed lateral de actividad del día ───────────────────────
-// Muestra los últimos eventos (ventas + gastos) de la razón social activa.
-// Polling cada 30s. Es "lectura viva" sin afectar navegación.
 import { useEffect, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
-import { getDashboardData, buildActivityFeed } from '../adminService'
+import { getTodayExpenses, getTodayMpTransfers, getTodaySales } from '../api'
+import { buildModuleActivityFeed, resolveActivityFeedScope } from '../activityFeedModel'
 
 const POLL_MS = 30_000
 
-export default function ActivityFeed() {
+function normalizeList(payload) {
+  const data = payload?.data ?? payload
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.items)) return data.items
+  if (Array.isArray(data?.transfers)) return data.transfers
+  return []
+}
+
+export default function ActivityFeed({ moduleId = 'hub' }) {
   const { warehouseId, companyId } = useAdmin()
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,12 +25,21 @@ export default function ActivityFeed() {
 
     async function load() {
       try {
-        const { sales, expenses } = await getDashboardData({ warehouseId, companyId })
+        const scope = resolveActivityFeedScope(moduleId)
+        const [salesRaw, expensesRaw, transfersRaw] = await Promise.all([
+          scope.sales ? getTodaySales({ warehouseId, companyId }).catch(() => []) : Promise.resolve([]),
+          scope.expenses ? getTodayExpenses({ companyId, warehouseId }).catch(() => []) : Promise.resolve([]),
+          scope.transfers ? getTodayMpTransfers({ companyId, warehouseId }).catch(() => []) : Promise.resolve([]),
+        ])
         if (!alive) return
-        setEvents(buildActivityFeed({ sales, expenses }))
+        setEvents(buildModuleActivityFeed(moduleId, {
+          sales: normalizeList(salesRaw),
+          expenses: normalizeList(expensesRaw),
+          transfers: normalizeList(transfersRaw),
+        }))
         setLastFetch(new Date())
       } catch {
-        // silent — el feed es secundario
+        // silent - el feed es secundario
       } finally {
         if (alive) setLoading(false)
       }
@@ -33,7 +48,7 @@ export default function ActivityFeed() {
     load()
     const id = setInterval(load, POLL_MS)
     return () => { alive = false; clearInterval(id) }
-  }, [warehouseId, companyId])
+  }, [warehouseId, companyId, moduleId])
 
   const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -76,13 +91,17 @@ export default function ActivityFeed() {
           background: TOKENS.colors.surfaceSoft, border: `1px dashed ${TOKENS.colors.border}`,
         }}>
           <p style={{ fontSize: 11, color: TOKENS.colors.textMuted, margin: 0 }}>
-            Sin actividad aún
+            Sin actividad aun
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {events.map(ev => {
-            const color = ev.type === 'sale' ? TOKENS.colors.success : TOKENS.colors.warning
+          {events.map((ev) => {
+            const color = ev.type === 'sale'
+              ? TOKENS.colors.success
+              : ev.type === 'transfer'
+                ? TOKENS.colors.blue3
+                : TOKENS.colors.warning
             return (
               <div key={ev.id} style={{
                 padding: '10px 12px', borderRadius: TOKENS.radius.md,
@@ -111,7 +130,7 @@ export default function ActivityFeed() {
                   )}
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
-                  {ev.type === 'expense' ? '-' : ''}{fmt(ev.amount)}
+                  {ev.valueLabel || `${ev.type === 'expense' ? '-' : ''}${fmt(ev.amount)}`}
                 </span>
               </div>
             )

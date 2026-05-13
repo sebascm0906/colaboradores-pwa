@@ -930,8 +930,10 @@ async function directAdmin(method, path, body) {
   }
 
   if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0) || 0
     const domain = [['date', '>=', todayStart], ['date', '<=', todayEnd]]
-    if (companyId) domain.push(['company_id', '=', companyId])
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
     const result = await readModelSorted('hr.expense', {
       fields: ['id', 'name', 'date', 'state', 'total_amount', 'company_id', 'employee_id', 'description'],
       domain,
@@ -947,7 +949,7 @@ async function directAdmin(method, path, body) {
       amount: Number(row.total_amount || 0),
       date: row.date || null,
       state: row.state || 'draft',
-      company_id: row.company_id?.[0] || 0,
+      company_id: row.company_id?.[0] || reqCompanyId || 0,
       employee_id: row.employee_id?.[0] || 0,
     }))
   }
@@ -1695,6 +1697,41 @@ async function directAdmin(method, path, body) {
   // Delega al controller Odoo (hardcoded para Fabricacion-Iguala).
   if (cleanPath === '/pwa-admin/traspaso-mp/iguala-stock' && method === 'GET') {
     return odooHttp('GET', '/pwa-admin/traspaso-mp/iguala-stock', {})
+  }
+
+  if (cleanPath === '/pwa-admin/traspaso-mp/today' && method === 'GET') {
+    const query = new URLSearchParams(path.split('?')[1] || '')
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0) || 0
+    const limit = Number(query.get('limit') || 50) || 50
+    const domain = [
+      ['create_date', '>=', todayStart],
+      ['create_date', '<=', todayEnd],
+    ]
+    if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
+
+    const result = await readModelSorted('gf.production.material.issue', {
+      fields: ['id', 'name', 'material_id', 'qty_issued', 'state', 'create_date', 'write_date', 'company_id', 'issued_by', 'line_id'],
+      domain,
+      sort_column: 'create_date',
+      sort_desc: true,
+      limit,
+      sudo: 1,
+    })
+
+    return pickListResponse(result).map((row) => ({
+      id: row.id,
+      name: row.name || `Traspaso ${row.id}`,
+      material_id: row.material_id?.[0] || 0,
+      material_name: row.material_id?.[1] || 'Materia prima',
+      qty_issued: Number(row.qty_issued || 0),
+      uom: 'Units',
+      state: row.state || 'draft',
+      create_date: row.create_date || row.write_date || null,
+      write_date: row.write_date || null,
+      company_id: row.company_id?.[0] || reqCompanyId || 0,
+      issued_by_name: row.issued_by?.[1] || '',
+      line_name: row.line_id?.[1] || '',
+    }))
   }
 
   // ── Materia Prima — stock.quant filtrado por locaciones MP ──────────────

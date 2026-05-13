@@ -107,6 +107,13 @@ export function getTodayExpenses(filters = {}) {
   return api('GET', `/pwa-admin/today-expenses${qs}`)
 }
 
+/** Traspasos MP del día para el feed contextual del módulo admin. */
+export function getTodayMpTransfers(filters = {}) {
+  const { companyId, warehouseId, limit } = filters
+  const qs = toQuery({ company_id: companyId, warehouse_id: warehouseId, limit })
+  return api('GET', `/pwa-admin/traspaso-mp/today${qs}`)
+}
+
 /** Adjunta una foto/archivo a un hr.expense. Base64 sin prefix data:. */
 export function attachExpense(payload) {
   const { expenseId, filename, base64, mime } = payload || {}

@@ -230,7 +230,7 @@ export default function AdminShell({
           </main>
 
           {/* Feed derecho — oculto en vistas que lo desactivan (ej: Requisiciones) */}
-          {!hideActivityFeed && <ActivityFeed />}
+          {!hideActivityFeed && <ActivityFeed moduleId={activeBlock} />}
         </div>
       ) : (
         // Mobile fallback — columna simple
