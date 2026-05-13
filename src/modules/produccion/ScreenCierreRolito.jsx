@@ -10,7 +10,7 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { getModuleById } from '../registry'
 import { resolveModuleContextRole } from '../../lib/roleContext'
-import { getShiftOverview, saveBagReconciliation } from './rolitoService'
+import { getShiftOverview, saveBagReconciliation, getActiveCycle } from './rolitoService'
 import { getBagReturnDeclaration, matchesBagReturnDeclaration } from './bagReturnDeclarationStore'
 import { notifyOperatorClose } from './api'
 import { computeRolitoBagDifference, sumRolitoUsedBags } from './rolitoBagMath'
@@ -109,9 +109,10 @@ export default function ScreenCierreRolito() {
         bagsDamaged: totalBagsDamaged,
       })
     : null
+  const activeCycle = !isBarraOperator ? getActiveCycle(data.cycles) : null
   const allChecked = checks.every((check) => check.done)
   const hasBlockers = false
-  const canClose = allChecked && !alreadyClosed && bagDeclarationReady
+  const canClose = allChecked && !alreadyClosed && bagDeclarationReady && !activeCycle
 
   const coherence = useMemo(
     () => computePackingCoherence(data.cycles, data.packing),
@@ -340,6 +341,20 @@ export default function ScreenCierreRolito() {
               </div>
             </div>
 
+            {activeCycle && (
+              <div style={{
+                padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
+              }}>
+                <p style={{ ...typo.body, color: TOKENS.colors.error, margin: 0, fontWeight: 700 }}>
+                  Hay un ciclo activo en progreso
+                </p>
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
+                  Ciclo #{activeCycle.cycle_number || activeCycle.id} está {activeCycle.state === 'freezing' ? 'congelando' : 'en deshielo'}. Complétalo antes de entregar tu cierre.
+                </p>
+              </div>
+            )}
+
             {error && <MessageBox kind="error" text={error} typo={typo} />}
             {success && <MessageBox kind="success" text={success} typo={typo} />}
 
@@ -360,15 +375,17 @@ export default function ScreenCierreRolito() {
             >
               {closing
                 ? 'Entregando...'
-                : canClose
-                  ? 'ENTREGAR CIERRE AL SUPERVISOR'
-                  : hasBlockers
-                    ? 'Corrige los pendientes para cerrar'
-                    : bagDeclarationRequired && !bagDeclarationReady
-                      ? 'Declara la merma de bolsas para cerrar'
-                      : alreadyClosed
-                        ? 'TURNO YA ENTREGADO'
-                        : 'Completa el checklist para cerrar'}
+                : activeCycle
+                  ? 'Completa el ciclo activo para cerrar'
+                  : canClose
+                    ? 'ENTREGAR CIERRE AL SUPERVISOR'
+                    : hasBlockers
+                      ? 'Corrige los pendientes para cerrar'
+                      : bagDeclarationRequired && !bagDeclarationReady
+                        ? 'Declara la merma de bolsas para cerrar'
+                        : alreadyClosed
+                          ? 'TURNO YA ENTREGADO'
+                          : 'Completa el checklist para cerrar'}
             </button>
 
             <div style={{ height: 24 }} />
