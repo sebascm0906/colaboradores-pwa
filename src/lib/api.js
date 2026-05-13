@@ -2773,13 +2773,16 @@ async function directProduction(method, path, body) {
 
   if (cleanPath === '/pwa-prod/packing-create' && method === 'POST') {
     const shiftId = Number(body?.shift_id || 0)
-    const result = await odooHttp('POST', '/api/production/pack', {}, {
+    const response = await odooHttp('POST', '/api/production/pack', {}, {
       shift_id: shiftId,
       cycle_id: Number(body?.cycle_id || 0),
       product_id: Number(body?.product_id || 0),
       qty_bags: Number(body?.qty_bags || 0),
       production_order_id: Number(body?.production_order_id || 0),
     })
+    const result = response?.result && typeof response.result === 'object'
+      ? response.result
+      : response
     // Backend puede responder shapes mixtos: a veces marca ok:false pero
     // aun asi ya persistio el packing_entry_id. Si existe id real, priorizamos
     // el registro exitoso y dejamos que la UI muestre el banner verde normal.

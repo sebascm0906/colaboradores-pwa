@@ -111,3 +111,44 @@ test('packing-create still throws when backend returns no entry id', async () =>
     },
   )
 })
+
+test('packing-create unwraps jsonrpc result envelope from Odoo pack endpoint', async () => {
+  setSession()
+
+  globalThis.fetch = async () => createJsonResponse(200, {
+    jsonrpc: '2.0',
+    id: null,
+    result: {
+      ok: true,
+      message: 'Empaque registrado. Pendiente de recepcion PT.',
+      data: {
+        packing_entry_id: 495,
+        cycle_id: 191,
+        qty_reported: 1,
+        qty_bags: 1,
+        total_kg: 5.5,
+        posted: false,
+        material_posted: true,
+        material_posting_id: 1755,
+      },
+    },
+  })
+
+  const result = await api('POST', '/pwa-prod/packing-create', {
+    shift_id: 103,
+    cycle_id: 191,
+    product_id: 761,
+    qty_bags: 1,
+    production_order_id: 0,
+  })
+
+  assert.equal(result.id, 495)
+  assert.equal(result.packing_entry_id, 495)
+  assert.equal(result.cycle_id, 191)
+  assert.equal(result.qty_bags, 1)
+  assert.equal(result.total_kg, 5.5)
+
+  const localStore = JSON.parse(globalThis.localStorage.getItem('gfsc.packing_local.v2') || '{}')
+  assert.equal(localStore['103'].entries.length, 1)
+  assert.equal(localStore['103'].entries[0].id, 495)
+})
