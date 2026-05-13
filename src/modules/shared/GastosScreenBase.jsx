@@ -58,7 +58,7 @@ export default function GastosScreenBase({
     try {
       await createExpense({
         name: name.trim(),
-        total_amount: Number(amount),
+        unit_amount: Number(amount),
         date,
         payment_mode: paymentMode === 'company' ? 'company_account' : 'own_account',
         description: description.trim(),

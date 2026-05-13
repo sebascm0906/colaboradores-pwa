@@ -129,16 +129,6 @@ function getCompanyId() {
   return Number(session.company_id || 0) || 0
 }
 
-function getExpenseAccountIdForCompany(companyId) {
-  const map = {
-    1: 64,
-    34: 959,
-    35: 1044,
-    36: 1129,
-  }
-  return map[Number(companyId) || 0] || 0
-}
-
 function isBypass() {
   return getSession()._bypass === true
 }
@@ -1048,10 +1038,9 @@ async function directAdmin(method, path, body) {
     const employeeId = getEmployeeId()
     if (!employeeId) return { success: false, error: 'No employee session' }
 
-    const totalAmount = Number(body?.total_amount || body?.amount || 0)
+    const unitAmount = Number(body?.unit_amount ?? body?.total_amount ?? body?.amount ?? 0)
     const quantity = Number(body?.quantity || 1) || 1
     const companyIdPayload = Number(body?.company_id || companyId || 0)
-    const accountId = Number(body?.account_id || getExpenseAccountIdForCompany(companyIdPayload) || 0)
     const rawDescription = String(body?.description || '').trim()
     const contextParts = []
     if (body?.sucursal) contextParts.push(`[Sucursal: ${String(body.sucursal).trim()}]`)
@@ -1068,10 +1057,8 @@ async function directAdmin(method, path, body) {
         company_id: companyIdPayload || undefined,
         payment_mode: body?.payment_mode || 'company_account',
         quantity,
-        total_amount: totalAmount,
+        unit_amount: unitAmount,
         description,
-        account_id: accountId || undefined,
-        product_id: body?.product_id ? Number(body.product_id) : undefined,
       },
       sudo: 1,
       app: 'pwa_colaboradores',
