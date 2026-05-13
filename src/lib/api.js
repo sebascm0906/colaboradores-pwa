@@ -2780,13 +2780,15 @@ async function directProduction(method, path, body) {
       qty_bags: Number(body?.qty_bags || 0),
       production_order_id: Number(body?.production_order_id || 0),
     })
-    // Backend puede responder { ok, data: { packing_entry_id } } o { id } directo
-    if (result?.ok === false) {
+    // Backend puede responder shapes mixtos: a veces marca ok:false pero
+    // aun asi ya persistio el packing_entry_id. Si existe id real, priorizamos
+    // el registro exitoso y dejamos que la UI muestre el banner verde normal.
+    const raw = result?.data || result
+    const entryId = raw?.id || raw?.packing_entry_id || result?.id || result?.packing_entry_id
+    if (result?.ok === false && !entryId) {
       const msg = result?.error || result?.message || 'No se pudo guardar el empaque en Odoo'
       throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
     }
-    const raw = result?.data || result
-    const entryId = raw?.id || raw?.packing_entry_id
     if (!entryId) {
       const msg = raw?.error || raw?.message || 'No se pudo guardar el empaque en Odoo'
       throw new ApiError(msg, { status: 200, code: 'packing_save_failed' })
