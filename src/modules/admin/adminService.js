@@ -271,11 +271,11 @@ export async function createExpense(payload) {
     delete clean.sucursal_code
   }
 
-  // El backend espera `unit_amount` (hr.expense nativo), no `total_amount`.
-  if (clean.total_amount != null && clean.unit_amount == null) {
-    clean.unit_amount = Number(clean.total_amount)
-    delete clean.total_amount
+  // Esta instancia de Odoo acepta `total_amount`; nunca reenviar `unit_amount`.
+  if (clean.unit_amount != null && clean.total_amount == null) {
+    clean.total_amount = Number(clean.unit_amount)
   }
+  delete clean.unit_amount
 
   return apiCreateExpense(clean)
 }

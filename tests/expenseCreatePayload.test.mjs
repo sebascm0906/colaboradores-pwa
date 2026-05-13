@@ -54,7 +54,7 @@ test.afterEach(() => {
   globalThis.window = originalWindow
 })
 
-test('expense create sends unit_amount and omits account_id and total_amount in create_update payload', async () => {
+test('expense create sends total_amount and omits unit_amount and account_id in create_update payload', async () => {
   const calls = []
 
   globalThis.fetch = async (url, options = {}) => {
@@ -91,8 +91,8 @@ test('expense create sends unit_amount and omits account_id and total_amount in 
   assert.equal(dict.company_id, 34)
   assert.equal(dict.quantity, 1)
   assert.equal(dict.payment_mode, 'company_account')
-  assert.equal(dict.unit_amount, 0)
-  assert.equal('total_amount' in dict, false)
+  assert.equal(dict.total_amount, 0)
+  assert.equal('unit_amount' in dict, false)
   assert.equal('account_id' in dict, false)
   assert.equal('product_id' in dict, false)
 })

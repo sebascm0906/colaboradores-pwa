@@ -1038,7 +1038,7 @@ async function directAdmin(method, path, body) {
     const employeeId = getEmployeeId()
     if (!employeeId) return { success: false, error: 'No employee session' }
 
-    const unitAmount = Number(body?.unit_amount ?? body?.total_amount ?? body?.amount ?? 0)
+    const totalAmount = Number(body?.total_amount ?? body?.unit_amount ?? body?.amount ?? 0)
     const quantity = Number(body?.quantity || 1) || 1
     const companyIdPayload = Number(body?.company_id || companyId || 0)
     const rawDescription = String(body?.description || '').trim()
@@ -1057,7 +1057,7 @@ async function directAdmin(method, path, body) {
         company_id: companyIdPayload || undefined,
         payment_mode: body?.payment_mode || 'company_account',
         quantity,
-        unit_amount: unitAmount,
+        total_amount: totalAmount,
         description,
       },
       sudo: 1,
