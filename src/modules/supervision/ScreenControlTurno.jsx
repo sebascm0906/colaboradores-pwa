@@ -321,7 +321,7 @@ export default function ScreenControlTurno() {
       if (!result.ok) {
         throw new Error(result.error || 'Error cerrando turno')
       }
-      clearOperatorTurnClosed(shift.id)
+      clearOperatorTurnClosed(shift)
       const handoverPendingMsg = result.pt_handover_created || result.pt_blocked
         ? 'Turno cerrado. PT quedó en relevo pendiente y otro almacenista debe aceptarlo para reabrir movimientos.'
         : 'Turno cerrado correctamente'

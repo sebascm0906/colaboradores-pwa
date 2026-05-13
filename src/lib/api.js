@@ -24,6 +24,11 @@ import {
 import { sumRolitoLocationStock } from '../modules/produccion/rolitoBagMath.js'
 import { normalizeChecklistPhotoValue } from '../modules/shared/checklistPhoto.js'
 import {
+  addLocalPackingEntry,
+  getLocalPackingEntries,
+  saveLocalPackingEntries,
+} from '../modules/shared/packingLocalStore.js'
+import {
   collectRouteEmployeeIds,
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
@@ -2766,14 +2771,17 @@ async function directProduction(method, path, body) {
   }
 
   if (cleanPath === '/pwa-prod/packing-create' && method === 'POST') {
+    const shiftId = Number(body?.shift_id || 0)
     const result = await odooHttp('POST', '/api/production/pack', {}, {
-      shift_id: Number(body?.shift_id || 0),
+      shift_id: shiftId,
       cycle_id: Number(body?.cycle_id || 0),
       product_id: Number(body?.product_id || 0),
       qty_bags: Number(body?.qty_bags || 0),
       production_order_id: Number(body?.production_order_id || 0),
     })
-    return result?.data || result
+    const entry = result?.data || result
+    if (shiftId && entry?.id) addLocalPackingEntry(shiftId, entry)
+    return entry
   }
 
     if (cleanPath === '/pwa-prod/packing-entries' && method === 'GET') {
@@ -2787,7 +2795,15 @@ async function directProduction(method, path, body) {
         limit: 200,
         sudo: 1,
       })
-      return pickListResponse(result)
+      const odooEntries = pickListResponse(result)
+      if (odooEntries.length > 0) {
+        // Odoo tiene datos: actualizar cache local y retornar
+        saveLocalPackingEntries(shiftId, odooEntries)
+        return odooEntries
+      }
+      // Odoo devolvio vacio: usar cache local como fallback
+      const localEntries = getLocalPackingEntries(shiftId)
+      return localEntries.length > 0 ? localEntries : odooEntries
     }
 
     if (cleanPath === '/api/production/materials/rolito-bags-stock' && method === 'GET') {
