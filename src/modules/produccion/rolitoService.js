@@ -152,6 +152,39 @@ export function computeAvailableBagMaterials(issues, packingEntries) {
   }))
 }
 
+function relationId(value) {
+  if (Array.isArray(value)) return Number(value[0] || 0) || 0
+  if (value && typeof value === 'object') return Number(value.id || value.product_id || value[0] || 0) || 0
+  return Number(value || 0) || 0
+}
+
+export function findNewMatchingPackingEntry(previousEntries, refreshedEntries, attempt) {
+  const previousIds = new Set(
+    (previousEntries || [])
+      .map(entry => Number(entry?.id || 0))
+      .filter(Boolean)
+  )
+  const productId = Number(attempt?.productId || attempt?.product_id || 0) || 0
+  const cycleId = Number(attempt?.cycleId || attempt?.cycle_id || 0) || 0
+  const qtyBags = Number(attempt?.qtyBags || attempt?.qty_bags || 0) || 0
+
+  if (!productId || !qtyBags) return null
+
+  const matches = (refreshedEntries || []).filter(entry => {
+    const entryId = Number(entry?.id || 0) || 0
+    if (entryId && previousIds.has(entryId)) return false
+    const entryProductId = relationId(entry?.product_id ?? entry?.productId)
+    const entryCycleId = relationId(entry?.cycle_id ?? entry?.cycleId)
+    const entryQtyBags = Number(entry?.qty_bags ?? entry?.qtyBags ?? 0) || 0
+
+    return entryProductId === productId
+      && entryQtyBags === qtyBags
+      && (!cycleId || entryCycleId === cycleId)
+  })
+
+  return matches.sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0))[0] || null
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const pad = (n) => String(n).padStart(2, '0')

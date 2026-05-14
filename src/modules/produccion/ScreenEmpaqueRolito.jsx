@@ -13,6 +13,7 @@ import {
   getShiftOverview,
   getProducts,
   registerPacking,
+  findNewMatchingPackingEntry,
 } from './rolitoService'
 import { getPackingEntries } from './api'
 import { computePackingCoherence } from '../shared/packingCoherence'
@@ -196,47 +197,63 @@ export default function ScreenEmpaqueRolito() {
     }
     setSaving(true)
     setError('')
-    try {
-      // cycle_id se envia siempre — backend debe persistirlo
-      const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
-      if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
-      const packResult = await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
-      // Defensa adicional: si el handler no lanzo pero retorno sin id, lo tratamos como error
-      if (!packResult?.id && !packResult?.packing_entry_id) {
-        const msg = packResult?.error || packResult?.message || packResult?.user_message || 'El empaque no se guardó en el servidor'
-        throw new Error(msg)
-      }
-
-      // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
-      if (voiceContext?.trace_id) {
-        sendVoiceFeedback({
-          trace_id: voiceContext.trace_id,
-          ai_output: voiceContext.ai_output || {},
-          final_output: {
-            product_id: productId,
-            qty_bags: qtyBags,
-            cycle_id: selectedCycleId,
-          },
-          metadata: {
-            context_id: 'form_empaque_rolito',
-            shift_id: shift?.id || null,
-            user_id: session?.employee_id || null,
-          },
-        })
-      }
-
-      setSuccess(`${qtyBags} bolsas registradas (${totalKg} kg)`)
+    const productId = Number(selectedProduct?.product_id || selectedProduct?.id || 0)
+    const previousEntries = entries
+    const finishSuccessfulSave = (nextEntries, message) => {
+      setSuccess(message)
       setQtyBags(0)
-      // Reload entries
-      const ents = await getPackingEntries(shift.id).catch(() => [])
-      setEntries(ents || [])
+      setEntries(nextEntries || [])
       setSelectedProduct(null)
-      const pendingAfterSave = getUnpackedCycles(cycles, ents || [])
+      const pendingAfterSave = getUnpackedCycles(cycles, nextEntries || [])
       setSelectedCycleId(pendingAfterSave[0]?.id || null)
       setVoiceContext(null)
       setVoiceNote('')
       setTimeout(() => setSuccess(''), 3000)
+    }
+    const sendPackingVoiceFeedback = () => {
+      if (!voiceContext?.trace_id) return
+      sendVoiceFeedback({
+        trace_id: voiceContext.trace_id,
+        ai_output: voiceContext.ai_output || {},
+        final_output: {
+          product_id: productId,
+          qty_bags: qtyBags,
+          cycle_id: selectedCycleId,
+        },
+        metadata: {
+          context_id: 'form_empaque_rolito',
+          shift_id: shift?.id || null,
+          user_id: session?.employee_id || null,
+        },
+      })
+    }
+
+    try {
+      // cycle_id se envia siempre — backend debe persistirlo
+      if (!productId) throw new Error('El producto seleccionado no tiene product_id valido')
+      await registerPacking(shift.id, productId, qtyBags, selectedCycleId)
+
+      // Voice feedback best-effort: dispatch fire-and-forget a W122 si hubo voz.
+      sendPackingVoiceFeedback()
+
+      // Reload entries
+      const ents = await getPackingEntries(shift.id).catch(() => [])
+      finishSuccessfulSave(ents || [], `${qtyBags} bolsas registradas (${totalKg} kg)`)
     } catch (e) {
+      const refreshedEntries = await getPackingEntries(shift.id).catch(() => null)
+      if (Array.isArray(refreshedEntries)) {
+        const persistedEntry = findNewMatchingPackingEntry(previousEntries, refreshedEntries, {
+          productId,
+          qtyBags,
+          cycleId: selectedCycleId,
+        })
+        if (persistedEntry) {
+          sendPackingVoiceFeedback()
+          finishSuccessfulSave(refreshedEntries, `${qtyBags} bolsas registradas (${totalKg} kg)`)
+          return
+        }
+        setEntries(refreshedEntries)
+      }
       setError(e.message || 'Error al registrar empaque')
     } finally {
       setSaving(false)

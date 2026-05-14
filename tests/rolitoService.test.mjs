@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computeAvailableBagMaterials } from '../src/modules/produccion/rolitoService.js'
+import {
+  computeAvailableBagMaterials,
+  findNewMatchingPackingEntry,
+} from '../src/modules/produccion/rolitoService.js'
 
 test('computeAvailableBagMaterials consolidates duplicate issues by material even across settlements', () => {
   const issues = [
@@ -226,4 +229,51 @@ test('computeAvailableBagMaterials derives useful return from packing when old s
   assert.equal(rows[0].consumed, 50)
   assert.equal(rows[0].remaining, 48)
   assert.equal(rows[0].damaged, 2)
+})
+
+test('findNewMatchingPackingEntry detects persisted packing after a failed submit response', () => {
+  const previousEntries = [
+    {
+      id: 90,
+      product_id: [777, 'Bolsa 15kg'],
+      cycle_id: [41, 'Ciclo 1'],
+      qty_bags: 10,
+    },
+  ]
+  const refreshedEntries = [
+    {
+      id: 91,
+      product_id: [775, 'Bolsa 3kg'],
+      cycle_id: [42, 'Ciclo 2'],
+      qty_bags: 20,
+    },
+    ...previousEntries,
+  ]
+
+  const match = findNewMatchingPackingEntry(previousEntries, refreshedEntries, {
+    productId: 775,
+    cycleId: 42,
+    qtyBags: 20,
+  })
+
+  assert.equal(match?.id, 91)
+})
+
+test('findNewMatchingPackingEntry does not treat an old matching entry as the failed submit', () => {
+  const previousEntries = [
+    {
+      id: 90,
+      product_id: [775, 'Bolsa 3kg'],
+      cycle_id: [42, 'Ciclo 2'],
+      qty_bags: 20,
+    },
+  ]
+
+  const match = findNewMatchingPackingEntry(previousEntries, previousEntries, {
+    productId: 775,
+    cycleId: 42,
+    qtyBags: 20,
+  })
+
+  assert.equal(match, null)
 })

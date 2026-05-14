@@ -1054,20 +1054,21 @@ async function directAdmin(method, path, body) {
     if (body?.capturista) contextParts.push(`[Capturó: ${String(body.capturista).trim()}]`)
     const description = [rawDescription, contextParts.join(' ')].filter(Boolean).join('\n') || '\n'
 
+    const expenseDict = {
+      name: String(body?.name || '').trim(),
+      date: body?.date || todayStart.slice(0, 10),
+      employee_id: employeeId,
+      company_id: companyIdPayload || undefined,
+      payment_mode: body?.payment_mode || 'company_account',
+      quantity,
+      total_amount: totalAmount,
+      description,
+      product_id: body?.product_id ? Number(body.product_id) : undefined,
+    }
     const result = await createUpdate({
       model: 'hr.expense',
       method: 'create',
-      dict: {
-        name: String(body?.name || '').trim(),
-        date: body?.date || todayStart.slice(0, 10),
-        employee_id: employeeId,
-        company_id: companyIdPayload || undefined,
-        account_id: 2230, // 601.84.01 Otros gastos generales (company 34)
-        payment_mode: body?.payment_mode || 'company_account',
-        quantity,
-        total_amount: totalAmount,
-        description,
-      },
+      dict: expenseDict,
       sudo: 1,
       app: 'pwa_colaboradores',
     })
