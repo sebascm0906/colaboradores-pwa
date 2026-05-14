@@ -8,6 +8,22 @@ const ROLE_LABELS = {
   operador_barra: 'Operador Barra',
 }
 
+function buildShiftMetadata(shiftLike, key = '') {
+  const rawShiftId =
+    typeof shiftLike === 'object'
+      ? shiftLike?.id ?? shiftLike?.shift_id ?? shiftLike?.shift?.id
+      : (String(key || '').startsWith('id:') ? String(key).slice(3) : null)
+  return {
+    shift_id: rawShiftId != null ? String(rawShiftId) : null,
+    shift_state: typeof shiftLike === 'object' ? shiftLike?.state || null : null,
+    shift_name: typeof shiftLike === 'object' ? shiftLike?.name || '' : '',
+    shift_date: typeof shiftLike === 'object' ? shiftLike?.date || shiftLike?.shift_date || '' : '',
+    shift_code: typeof shiftLike === 'object'
+      ? shiftLike?.shift_code ?? shiftLike?.code ?? shiftLike?.turno ?? null
+      : null,
+  }
+}
+
 function normalizeShiftCode(value) {
   const numeric = Number(value)
   if (Number.isFinite(numeric) && numeric > 0) return String(numeric)
@@ -112,6 +128,17 @@ function buildSummaryItem(role, data = {}, key = '') {
   }
 }
 
+function buildAutoClosedRecord(shiftLike, role, key = '') {
+  if (!shouldAutoCloseOperatorTurn(shiftLike, role)) return null
+  const meta = buildShiftMetadata(shiftLike, key)
+  return buildSummaryItem(role, {
+    closed: true,
+    closed_at: null,
+    employee_name: 'Auto-entregado',
+    ...meta,
+  }, key)
+}
+
 export function normalizeOperatorCloseRole(role) {
   const value = String(role || '').toLowerCase()
   if (value.includes('rolito')) return 'operador_rolito'
@@ -119,10 +146,23 @@ export function normalizeOperatorCloseRole(role) {
   return value
 }
 
+export function shouldAutoCloseOperatorTurn(shiftLike, role) {
+  const normalizedRole = normalizeOperatorCloseRole(role)
+  if (normalizedRole !== 'operador_rolito') return false
+  return normalizeShiftCode(
+    shiftLike?.shift_code
+      ?? shiftLike?.code
+      ?? shiftLike?.turno
+      ?? shiftLike?.shift?.shift_code
+  ) === '2'
+}
+
 export function getOperatorCloseRecord(shiftLike, role) {
   const normalizedRole = normalizeOperatorCloseRole(role)
   const { key, data } = readShiftEntry(shiftLike)
-  return buildSummaryItem(normalizedRole, data?.[normalizedRole] || {}, key)
+  const storedRecord = buildSummaryItem(normalizedRole, data?.[normalizedRole] || {}, key)
+  if (storedRecord.closed) return storedRecord
+  return buildAutoClosedRecord(shiftLike, normalizedRole, key) || storedRecord
 }
 
 export function getOperatorCloseState(shiftLike, role, currentShift = null) {
@@ -138,15 +178,20 @@ export function getOperatorCloseState(shiftLike, role, currentShift = null) {
     current_shift_state: currentShift?.state || null,
     matches_current_shift: matchesCurrentShift,
     current_shift_open: currentShiftOpen,
+    auto_closed: shouldAutoCloseOperatorTurn(currentShift || shiftLike, role) && !record.closed_at,
     stale,
     effectively_closed: Boolean(record.closed && !stale),
-    can_reopen: Boolean(record.closed && matchesCurrentShift && currentShiftOpen),
+    can_reopen: Boolean(record.closed && matchesCurrentShift && currentShiftOpen && !shouldAutoCloseOperatorTurn(currentShift || shiftLike, role)),
   }
 }
 
 export function getOperatorCloseSummary(shiftLike) {
   const { key, data } = readShiftEntry(shiftLike)
-  return REQUIRED_OPERATOR_ROLES.map((role) => buildSummaryItem(role, data?.[role] || {}, key))
+  return REQUIRED_OPERATOR_ROLES.map((role) => {
+    const storedRecord = buildSummaryItem(role, data?.[role] || {}, key)
+    if (storedRecord.closed) return storedRecord
+    return buildAutoClosedRecord(shiftLike, role, key) || storedRecord
+  })
 }
 
 export function markOperatorTurnClosed(shiftLike, role, payload = {}) {

@@ -154,6 +154,49 @@ test('clearStaleOperatorTurnClosed resets a closed subturn when a new shift reus
   assert.equal(nextState.effectively_closed, false)
 })
 
+test('turno 2 auto-marks rolito as closed without touching barra', () => {
+  const nightShift = {
+    id: 601,
+    warehouse_id: 1172,
+    date: '2026-05-14',
+    shift_code: 2,
+    state: 'in_progress',
+    name: 'Turno Nocturno',
+  }
+
+  const rolitoState = getOperatorCloseState(nightShift, 'operador_rolito', nightShift)
+  const barraState = getOperatorCloseState(nightShift, 'operador_barra', nightShift)
+  const summary = getOperatorCloseSummary(nightShift)
+
+  assert.equal(rolitoState.closed, true)
+  assert.equal(rolitoState.effectively_closed, true)
+  assert.equal(rolitoState.can_reopen, false)
+  assert.equal(rolitoState.employee_name, 'Auto-entregado')
+  assert.equal(barraState.closed, false)
+  assert.deepEqual(summary.map((item) => [item.role, item.closed]), [
+    ['operador_rolito', true],
+    ['operador_barra', false],
+  ])
+  assert.equal(areRequiredOperatorClosesDone(nightShift), false)
+})
+
+test('turno 1 rolito still requires manual close', () => {
+  const dayShift = {
+    id: 602,
+    warehouse_id: 1172,
+    date: '2026-05-14',
+    shift_code: 1,
+    state: 'in_progress',
+    name: 'Turno Matutino',
+  }
+
+  const rolitoState = getOperatorCloseState(dayShift, 'operador_rolito', dayShift)
+
+  assert.equal(rolitoState.closed, false)
+  assert.equal(rolitoState.effectively_closed, false)
+  assert.equal(rolitoState.can_reopen, false)
+})
+
 test('clearOperatorTurnClosed removes the full shift entry', () => {
   markOperatorTurnClosed(404, 'operador_barra', { employee_name: 'Luis' })
   clearOperatorTurnClosed(404)
