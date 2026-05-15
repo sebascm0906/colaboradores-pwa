@@ -16,7 +16,10 @@ import {
   clearOperatorTurnClosed,
 } from '../shared/operatorTurnCloseStore'
 import BrineReadingModal from './BrineReadingModal'
-import { buildSupervisorOperatorSummary } from './operatorCloseSummary'
+import {
+  buildSupervisorOperatorSummary,
+  buildTurnControlInitialOperatorSummary,
+} from './operatorCloseSummary'
 import {
   buildBrineReadingPayload,
   getInitialBrineReadingForm,
@@ -217,7 +220,7 @@ export default function ScreenControlTurno() {
       )
       setShift(s)
       savePersistedTurnControlShift(s)
-      let nextOperatorSummary = s?.id ? getOperatorCloseSummary(s) : []
+      let nextOperatorSummary = s?.id ? buildTurnControlInitialOperatorSummary(s) : []
       if (s?.id && s.state !== 'draft') {
         try {
           const { summary } = await loadShiftReadiness(s.id, { includeSnapshot: false })

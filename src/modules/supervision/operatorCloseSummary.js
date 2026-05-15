@@ -42,3 +42,7 @@ export function buildSupervisorOperatorSummary(shiftLike, backendSummary = null)
     }
   })
 }
+
+export function buildTurnControlInitialOperatorSummary(shiftLike) {
+  return buildSupervisorOperatorSummary(shiftLike, null)
+}
