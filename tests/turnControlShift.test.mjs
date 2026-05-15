@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { resolveTurnControlShift } from '../src/modules/supervision/turnControlShift.js'
+import {
+  resolveSupervisionShift,
+  resolveTurnControlShift,
+} from '../src/modules/supervision/turnControlShift.js'
 
 test('uses fetched active shift when available', () => {
   const fetchedShift = { id: 801, state: 'in_progress', name: 'Turno 2' }
@@ -34,4 +37,11 @@ test('falls back to persisted active shift when fetch and navigation state are m
   const resolved = resolveTurnControlShift(null, null, persistedShift)
 
   assert.equal(resolved, persistedShift)
+})
+
+test('supervision hub only uses fallback shift when explicitly allowed', () => {
+  const fallbackShift = { id: 805, state: 'draft', name: 'Turno borrador reciente' }
+
+  assert.equal(resolveSupervisionShift(null, fallbackShift, false), null)
+  assert.equal(resolveSupervisionShift(null, fallbackShift, true), fallbackShift)
 })

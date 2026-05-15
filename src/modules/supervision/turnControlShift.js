@@ -15,6 +15,12 @@ export function resolveTurnControlShift(fetchedShift, navigatedShift = null, per
   return null
 }
 
+export function resolveSupervisionShift(fetchedShift, navigatedShift = null, allowFallbackShift = false) {
+  if (fetchedShift?.id) return fetchedShift
+  if (allowFallbackShift && isReusableShift(navigatedShift)) return navigatedShift
+  return null
+}
+
 export function savePersistedTurnControlShift(shift) {
   if (typeof sessionStorage === 'undefined') return
   if (!isReusableShift(shift)) {

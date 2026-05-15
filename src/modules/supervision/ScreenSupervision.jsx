@@ -16,8 +16,7 @@ import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
 import {
-  loadPersistedTurnControlShift,
-  resolveTurnControlShift,
+  resolveSupervisionShift,
   savePersistedTurnControlShift,
 } from './turnControlShift'
 
@@ -100,10 +99,10 @@ export default function ScreenSupervision() {
         getActiveShift(supervisionWarehouseId).catch((e) => { logScreenError('ScreenSupervision', 'getActiveShift', e); return null }),
         listTanks().catch(() => ({ tanks: [] })),
       ])
-      const s = resolveTurnControlShift(
+      const s = resolveSupervisionShift(
         fetchedShift,
         location.state?.fallbackShift,
-        loadPersistedTurnControlShift(),
+        location.state?.allowFallbackShift === true,
       )
       setShift(s)
       savePersistedTurnControlShift(s)

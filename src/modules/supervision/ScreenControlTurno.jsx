@@ -252,6 +252,7 @@ export default function ScreenControlTurno() {
   async function handleCreate(e) {
     e.preventDefault()
     if (!formData.shift_code) return
+    setMsg(null)
     setSubmitting(true)
     try {
       const result = await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
@@ -267,6 +268,7 @@ export default function ScreenControlTurno() {
       navigate('/supervision', {
         state: {
           fallbackShift: result?.shift || null,
+          allowFallbackShift: true,
           flashMessage: {
             type: 'success',
             text: successText,
