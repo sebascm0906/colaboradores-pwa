@@ -255,14 +255,24 @@ export default function ScreenControlTurno() {
     setSubmitting(true)
     try {
       const result = await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
+      const successText = result?.message || (result?.already_existed ? 'El turno ya existia; se cargo correctamente' : 'Turno abierto correctamente')
       setMsg({
         type: 'success',
-        text: result?.already_existed ? 'El turno ya existia; se cargo correctamente' : 'Turno abierto correctamente',
+        text: successText,
       })
       setFormData({ shift_code: '', warehouse_id: 76 })
       setConfirmClose(false)
       setCloseReadiness(null)
-      await loadData()
+      savePersistedTurnControlShift(result?.shift || null)
+      navigate('/supervision', {
+        state: {
+          fallbackShift: result?.shift || null,
+          flashMessage: {
+            type: 'success',
+            text: successText,
+          },
+        },
+      })
     } catch (err) {
       const errorText = String(err?.message || '')
       const isDuplicateShift = errorText.includes('gf_production_shift_gf_production_shift_unique')

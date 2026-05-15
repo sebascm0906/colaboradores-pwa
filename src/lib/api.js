@@ -4891,7 +4891,7 @@ async function directSupervision(method, path, body) {
     const shiftCode = String(body?.shift_code || '1')
     const targetWarehouseId = Number(body?.warehouse_id || warehouseId || 0) || 0
 
-    const result = await odooHttp('POST', '/api/production/shift/open', {}, {
+    const rawResult = await odooHttp('POST', '/api/production/shift/open', {}, {
       date: shiftDate,
       shift_code: shiftCode,
       warehouse_id: targetWarehouseId,
@@ -4900,6 +4900,9 @@ async function directSupervision(method, path, body) {
         ? body.operator_ids.map((id) => Number(id)).filter(Boolean)
         : [],
     })
+    const result = rawResult?.result && typeof rawResult.result === 'object'
+      ? rawResult.result
+      : rawResult
 
     if (!result?.ok) {
       throw new Error(result?.message || 'No se pudo abrir el turno')
@@ -4908,6 +4911,7 @@ async function directSupervision(method, path, body) {
     const data = result.data || {}
     return {
       success: true,
+      message: result.message || '',
       already_existed: Boolean(data.already_existed),
       data: {
         id: Number(data.shift_id || 0) || 0,

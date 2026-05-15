@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, TURNO_LABELS } from '../../tokens'
 import { createBrineReading, getActiveShift } from './api'
@@ -15,7 +15,11 @@ import { listTanks } from '../produccion/barraService'
 import { loadShiftReadiness } from '../shared/shiftReadiness'
 import { logScreenError } from '../shared/logScreenError'
 import { sendVoiceFeedback } from '../shared/voice/voiceFeedback'
-import { savePersistedTurnControlShift } from './turnControlShift'
+import {
+  loadPersistedTurnControlShift,
+  resolveTurnControlShift,
+  savePersistedTurnControlShift,
+} from './turnControlShift'
 
 // Hub de Supervisor — backend-first.
 //
@@ -50,6 +54,7 @@ const STATUS_COLORS = {
 
 export default function ScreenSupervision() {
   const { session } = useSession()
+  const location = useLocation()
   const navigate = useNavigate()
   const [sw, setSw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
@@ -64,6 +69,7 @@ export default function ScreenSupervision() {
   const [formErrors, setFormErrors] = useState({})
   const [savingReading, setSavingReading] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage || null)
   // Voice context (PoC supervisor piloto 1): ultimo envelope W120 para feedback a W122.
   const [voiceContext, setVoiceContext] = useState(null) // {trace_id, ai_output} | null
   const [voiceNote, setVoiceNote] = useState('')
@@ -77,13 +83,28 @@ export default function ScreenSupervision() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- baseline preexistente: efecto run-once on mount; refactor (useCallback) en PR aparte
   useEffect(() => { loadData() }, [])
 
+  useEffect(() => {
+    setFlashMessage(location.state?.flashMessage || null)
+  }, [location.state])
+
+  useEffect(() => {
+    if (!flashMessage) return undefined
+    const timeoutId = window.setTimeout(() => setFlashMessage(null), 3500)
+    return () => window.clearTimeout(timeoutId)
+  }, [flashMessage])
+
   async function loadData() {
     setLoading(true)
     try {
-      const [s, tanksRes] = await Promise.all([
+      const [fetchedShift, tanksRes] = await Promise.all([
         getActiveShift(supervisionWarehouseId).catch((e) => { logScreenError('ScreenSupervision', 'getActiveShift', e); return null }),
         listTanks().catch(() => ({ tanks: [] })),
       ])
+      const s = resolveTurnControlShift(
+        fetchedShift,
+        location.state?.fallbackShift,
+        loadPersistedTurnControlShift(),
+      )
       setShift(s)
       savePersistedTurnControlShift(s)
       setTanks(tanksRes?.tanks || [])
@@ -258,6 +279,20 @@ export default function ScreenSupervision() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg>
           </button>
         </div>
+
+        {flashMessage && (
+          <div style={{
+            marginBottom: 12,
+            padding: '10px 14px',
+            borderRadius: TOKENS.radius.md,
+            background: flashMessage.type === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+            border: `1px solid ${flashMessage.type === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+          }}>
+            <span style={{ ...typo.caption, color: flashMessage.type === 'success' ? TOKENS.colors.success : TOKENS.colors.error }}>
+              {flashMessage.text}
+            </span>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>

@@ -117,6 +117,48 @@ test('supervision shift create reuses the existing unique shift instead of creat
   assert.equal(calls.some((call) => call.url === '/odoo-api/api/create_update'), false)
 })
 
+test('supervision shift create unwraps jsonrpc responses from shift open', async () => {
+  setSession()
+
+  globalThis.fetch = async (url) => {
+    if (url === '/odoo-api/api/production/shift/open') {
+      return createJsonResponse(200, {
+        jsonrpc: '2.0',
+        id: null,
+        result: {
+          ok: true,
+          message: 'Turno abierto',
+          data: {
+            shift_id: 110,
+            name: 'Planta Iguala - 2026-05-15 - Turno 1',
+            date: '2026-05-15',
+            shift_code: '1',
+            state: 'draft',
+            warehouse_id: 76,
+            already_existed: false,
+          },
+        },
+      })
+    }
+
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  const result = await api('POST', '/pwa-sup/shift-create', {
+    date: '2026-05-15',
+    shift_code: 1,
+    warehouse_id: 76,
+  })
+
+  assert.equal(result.success, true)
+  assert.equal(result.message, 'Turno abierto')
+  assert.equal(result.already_existed, false)
+  assert.equal(result.shift.id, 110)
+  assert.equal(result.shift.state, 'draft')
+  assert.equal(result.shift.date, '2026-05-15')
+  assert.equal(result.shift.shift_code, '1')
+})
+
 test('supervision shift create reports a closed existing shift instead of treating it as open', async () => {
   setSession()
   const calls = []
