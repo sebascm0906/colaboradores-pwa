@@ -14,9 +14,9 @@ import {
 } from '../shared/incidentService'
 import {
   clearOperatorTurnClosed,
-  getOperatorCloseSummary,
 } from '../shared/operatorTurnCloseStore'
 import BrineReadingModal from './BrineReadingModal'
+import { buildSupervisorOperatorSummary } from './operatorCloseSummary'
 import {
   buildBrineReadingPayload,
   getInitialBrineReadingForm,
@@ -75,27 +75,7 @@ function isIncidentReadinessItem(item) {
 function buildSupervisorCloseReadiness(rawReadiness, shiftLike) {
   const base = rawReadiness || { canClose: false, blockers: [], warnings: [] }
   const backendSummary = base.summary && typeof base.summary === 'object' ? base.summary : {}
-  const localOperatorSummary = getOperatorCloseSummary(shiftLike)
-  const operatorSummary = localOperatorSummary.map((item) => {
-    const summaryKey = item.role === 'operador_barra'
-      ? 'operator_barra_closed'
-      : item.role === 'operador_rolito'
-        ? 'operator_rolito_closed'
-        : ''
-    const summaryClosedAtKey = item.role === 'operador_barra'
-      ? 'operator_barra_closed_at'
-      : item.role === 'operador_rolito'
-        ? 'operator_rolito_closed_at'
-        : ''
-
-    if (!summaryKey || backendSummary[summaryKey] == null) return item
-
-    return {
-      ...item,
-      closed: Boolean(backendSummary[summaryKey]),
-      closed_at: backendSummary[summaryClosedAtKey] || item.closed_at || null,
-    }
-  })
+  const operatorSummary = buildSupervisorOperatorSummary(shiftLike, backendSummary)
   const operatorBlockers = operatorSummary
     .filter((item) => !item.closed)
     .map((item) => `${item.label} pendiente de cerrar su turno`)
@@ -458,7 +438,7 @@ export default function ScreenControlTurno() {
     async function refreshOperatorSummary() {
       if (!active || !shift?.id) return
       if (shift.state === 'draft') {
-        setOperatorSummary(getOperatorCloseSummary(shift))
+        setOperatorSummary(buildSupervisorOperatorSummary(shift, null))
         return
       }
       try {
