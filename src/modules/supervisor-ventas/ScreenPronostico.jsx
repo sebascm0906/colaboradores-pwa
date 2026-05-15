@@ -493,7 +493,7 @@ export default function ScreenPronostico() {
 
   function handleDateTargetChange(value) {
     if (!isFuturePlanningDate(value)) {
-      flashMsg('Selecciona una fecha de manana en adelante', 4000)
+      flashMsg('Selecciona la fecha de hoy o una fecha futura', 4000)
       return
     }
     setDateTarget(value)
