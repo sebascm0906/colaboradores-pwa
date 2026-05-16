@@ -3,11 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { TOKENS, getTypo } from '../../tokens'
 import { useSession } from '../../App'
 import { logScreenError } from '../shared/logScreenError'
-import { reportMaterial } from '../almacen-pt/materialsService'
+import { resolveRejectedSettlement } from '../almacen-pt/materialsService'
 import { getShiftOverview } from './rolitoService'
 import {
   buildBagReturnDeclarationSummary,
   buildRolitoBagDeclarationItems,
+  buildRolitoBagResolutionPayloads,
   computeRolitoBagDeclarationTotals,
   normalizeBagCount,
   saveBagReturnDeclaration,
@@ -116,18 +117,18 @@ export default function ScreenDeclaracionBolsas() {
     setError('')
 
     try {
-      const linePayloads = totals.lines
-        .filter((line) => line.settlement_id || ((line.shift_id || shift?.id) && line.line_id && line.material_id))
-        .filter((line) => line.damaged > 0)
+      const linePayloads = buildRolitoBagResolutionPayloads(items, damagedByKey)
+        .filter((line) => line.settlementId || ((line.shiftId || shift?.id) && line.lineId && line.materialId))
+        .filter((line) => line.qtyDamaged > 0)
         .map((line) => ({
-          settlementId: line.settlement_id || undefined,
-          shiftId: line.shift_id || shift?.id || undefined,
-          lineId: line.line_id || undefined,
-          materialId: line.material_id || undefined,
+          settlementId: line.settlementId || undefined,
+          shiftId: line.shiftId || shift?.id || undefined,
+          lineId: line.lineId || undefined,
+          materialId: line.materialId || undefined,
           employeeId,
-          qtyDamaged: line.damaged,
-          damageReason: 'broken_bag',
-          damageNotes: notes || `Declaracion de merma rolito - ${line.name}`,
+          qtyReturned: line.qtyReturned,
+          qtyDamaged: line.qtyDamaged,
+          qtyConsumed: line.qtyConsumed,
           notes: notes || `Declaracion de merma rolito - ${line.name}`,
         }))
 
@@ -135,7 +136,7 @@ export default function ScreenDeclaracionBolsas() {
         throw new Error('Captura al menos una bolsa dañada para registrar la merma')
       }
 
-      await Promise.all(linePayloads.map((payload) => reportMaterial(payload)))
+      await Promise.all(linePayloads.map((payload) => resolveRejectedSettlement(payload)))
 
       const summary = buildBagReturnDeclarationSummary({
         shiftId: shift.id,
