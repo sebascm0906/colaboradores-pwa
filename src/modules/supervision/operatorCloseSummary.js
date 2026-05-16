@@ -22,18 +22,23 @@ function getBackendSummaryKeys(role) {
 export function buildSupervisorOperatorSummary(shiftLike, backendSummary = null) {
   const summary = backendSummary && typeof backendSummary === 'object' ? backendSummary : {}
   const localOperatorSummary = getOperatorCloseSummary(shiftLike)
+  const currentShiftId = String(shiftLike?.id ?? shiftLike?.shift_id ?? '')
 
   return localOperatorSummary.map((item) => {
     const keys = getBackendSummaryKeys(item.role)
     if (!keys.closed || summary[keys.closed] == null) return item
 
     const backendClosed = Boolean(summary[keys.closed])
+    const preserveLocalClose =
+      item.closed
+      && String(item.shift_id || '') === currentShiftId
+      && !backendClosed
     const preserveLocalAutoClose =
       item.closed
       && shouldAutoCloseOperatorTurn(shiftLike, item.role)
       && !backendClosed
 
-    if (preserveLocalAutoClose) return item
+    if (preserveLocalAutoClose || preserveLocalClose) return item
 
     return {
       ...item,

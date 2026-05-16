@@ -15,6 +15,13 @@ import {
 } from './bagReturnDeclarationStore'
 import { sumRolitoUsedBags } from './rolitoBagMath'
 
+function isBagDeclarationRoleBlocked(message) {
+  const text = String(message || '').toLowerCase()
+  return text.includes('auxiliar admin')
+    || text.includes('gerente de sucursal de materiales')
+    || text.includes('sobrante ni merma')
+}
+
 export default function ScreenDeclaracionBolsas() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -38,6 +45,7 @@ export default function ScreenDeclaracionBolsas() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [successSummary, setSuccessSummary] = useState(null)
+  const [syncWarning, setSyncWarning] = useState('')
 
   useEffect(() => {
     if (!employeeId) {
@@ -115,6 +123,7 @@ export default function ScreenDeclaracionBolsas() {
 
     setSubmitting(true)
     setError('')
+    setSyncWarning('')
 
     try {
       const linePayloads = buildRolitoBagResolutionPayloads(items, damagedByKey)
@@ -135,8 +144,6 @@ export default function ScreenDeclaracionBolsas() {
       if (!linePayloads.length) {
         throw new Error('Captura al menos una bolsa dañada para registrar la merma')
       }
-
-      await Promise.all(linePayloads.map((payload) => resolveRejectedSettlement(payload)))
 
       const summary = buildBagReturnDeclarationSummary({
         shiftId: shift.id,
@@ -162,6 +169,12 @@ export default function ScreenDeclaracionBolsas() {
           shift_id: line.shift_id || shift.id,
         })),
       })
+      try {
+        await Promise.all(linePayloads.map((payload) => resolveRejectedSettlement(payload)))
+      } catch (backendError) {
+        if (!isBagDeclarationRoleBlocked(backendError?.message)) throw backendError
+        setSyncWarning('La merma quedo declarada para cerrar turno. El ajuste de materiales quedara pendiente para auxiliar admin.')
+      }
       saveBagReturnDeclaration(shift, summary)
       setSuccessSummary(summary)
     } catch (e) {
@@ -178,7 +191,11 @@ export default function ScreenDeclaracionBolsas() {
         <SuccessState
           typo={typo}
           label="Merma declarada"
-          sub={`Se asentaron ${successSummary.total_damaged} bolsas como merma y ${successSummary.total_returned} quedan listas para regreso automatico al cierre`}
+          sub={
+            syncWarning
+              ? `${syncWarning} Se asentaron ${successSummary.total_damaged} bolsas como merma y ${successSummary.total_returned} quedan listas para regreso automatico al cierre`
+              : `Se asentaron ${successSummary.total_damaged} bolsas como merma y ${successSummary.total_returned} quedan listas para regreso automatico al cierre`
+          }
           onBack={() => navigate(backTo, {
             replace: true,
             state: { bagDeclarationUpdatedAt: Date.now() },
