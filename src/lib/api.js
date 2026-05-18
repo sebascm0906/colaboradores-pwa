@@ -617,6 +617,44 @@ async function createBarHarvestScrap({
   }
 }
 
+async function ensureSlotReentersFreezingAfterLegacyHarvest(slotId) {
+  const normalizedSlotId = Number(slotId || 0)
+  if (!normalizedSlotId) return { ok: true, skipped: true }
+
+  try {
+    const slotRes = await readModel('x_ice.brine.slot', {
+      fields: ['id', 'x_state'],
+      domain: [['id', '=', normalizedSlotId]],
+      limit: 1,
+      sudo: 1,
+    })
+    const slot = pickFirstResponse(slotRes)
+    if (slot?.x_state !== 'harvested') {
+      return { ok: true, skipped: true, state: slot?.x_state || '' }
+    }
+
+    await createUpdate({
+      model: 'x_ice.brine.slot',
+      method: 'update',
+      ids: [normalizedSlotId],
+      dict: {
+        x_state: 'freezing',
+        x_freeze_start: odooNow(),
+        x_ready_since: false,
+      },
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+    return { ok: true, skipped: false, state: 'freezing' }
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: true,
+      error: error?.message || 'No se pudo reactivar la canastilla cosechada',
+    }
+  }
+}
+
 // Format JS Date to Odoo datetime format (UTC): 'YYYY-MM-DD HH:MM:SS'
 function odooNow(date = new Date()) {
   const pad = (n) => String(n).padStart(2, '0')
@@ -3354,6 +3392,7 @@ async function directProduction(method, path, body) {
       function: 'action_cosechar',
       sudo: 1, app: 'pwa_colaboradores',
     })
+    await ensureSlotReentersFreezingAfterLegacyHarvest(slotId)
     // Post-step: record operator + brine temp at extraction (non-fatal)
     try {
       const dict = {}
@@ -3406,6 +3445,7 @@ async function directProduction(method, path, body) {
       function: 'action_cosechar',
       sudo: 1, app: 'pwa_colaboradores',
     })
+    const slotReentryStatus = await ensureSlotReentersFreezingAfterLegacyHarvest(slotId)
 
     try {
       const dict = {}
@@ -3495,6 +3535,7 @@ async function directProduction(method, path, body) {
           ok: false,
           harvested: true,
           harvest: { ok: true, data: harvestResult },
+          slot_reentry: slotReentryStatus,
           scrap: scrapStatus,
           scrap_inventory_move: scrapInventoryStatus,
           pt_reception: ptStatus,
@@ -3505,6 +3546,7 @@ async function directProduction(method, path, body) {
       return {
         ok: true,
         harvest: { ok: true, data: harvestResult },
+        slot_reentry: slotReentryStatus,
         scrap: scrapStatus,
         scrap_inventory_move: scrapInventoryStatus,
         pt_reception: ptStatus,
@@ -3521,6 +3563,7 @@ async function directProduction(method, path, body) {
         ok: false,
         harvested: true,
         harvest: { ok: true, data: harvestResult },
+        slot_reentry: slotReentryStatus,
         scrap: scrapStatus,
         scrap_inventory_move: scrapInventoryStatus,
         pt_reception: ptStatus,
