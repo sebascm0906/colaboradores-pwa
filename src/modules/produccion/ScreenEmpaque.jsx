@@ -10,7 +10,7 @@ import { getMyShift, getPackingProducts, createPackingEntry, getPackingEntries }
 import ScreenEmpaqueRolito from './ScreenEmpaqueRolito'
 
 const FALLBACK_ROLITO = [
-  { id: 758, name: 'Rolito 15 KG', weight: 15 },
+  { id: 1495, name: 'Rolito 13 KG', weight: 13 },
   { id: 761, name: 'Rolito 5.5 KG', weight: 5.5 },
   { id: 760, name: 'Rolito 3.8 KG', weight: 3.8 },
 ]

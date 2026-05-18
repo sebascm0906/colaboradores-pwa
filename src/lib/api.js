@@ -2902,7 +2902,7 @@ async function directProduction(method, path, body) {
     if (cleanPath === '/api/production/materials/rolito-bags-stock' && method === 'GET') {
       const locationName = 'PIGU/MP-IGUALA/PROCESO-ROLITO'
       const validMaterialNames = [
-        'MP BOLSA LAURITA ROLITO (15KG)',
+        'MP BOLSA LAURITA ROLITO (13KG)',
         'MP BOLSA LAURITA ROLITO (3KG)',
         'MP BOLSA LAURITA ROLITO (5.5KG)',
       ]

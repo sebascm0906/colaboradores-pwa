@@ -45,20 +45,20 @@ test('rolito bag declaration computes damaged vs returned from MP bag settlement
     {
       settlementId: 91,
       issueId: 77,
-      materialId: 777,
-      productId: 777,
+      materialId: 17,
+      productId: 1496,
       lineId: 2,
       shiftId: 27,
-      name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      name: 'MP BOLSA LAURITA ROLITO (13KG)',
       issued: 100,
       consumed: 45,
       remaining: 55,
     },
   ])
 
-  // damagedByKey usa item.key ('material:777'), no el settlement_id
+  // damagedByKey usa item.key ('material:17'), no el settlement_id
   const totals = computeRolitoBagDeclarationTotals(items, {
-    'material:777': 5,
+    'material:17': 5,
   })
 
   assert.equal(totals.totalIssued, 100)
@@ -67,16 +67,16 @@ test('rolito bag declaration computes damaged vs returned from MP bag settlement
   assert.equal(totals.totalDamaged, 5)
   assert.equal(totals.totalReturned, 50)
 
-  const [payload] = buildRolitoBagResolutionPayloads(items, { 'material:777': 5 })
+  const [payload] = buildRolitoBagResolutionPayloads(items, { 'material:17': 5 })
   assert.deepEqual(payload, {
-    key: 'material:777',
+    key: 'material:17',
     settlementId: 91,
     shiftId: 27,
     lineId: 2,
-    materialId: 777,
+    materialId: 17,
     issueId: 77,
-    productId: 777,
-    name: 'MP BOLSA LAURITA ROLITO (15KG)',
+    productId: 1496,
+    name: 'MP BOLSA LAURITA ROLITO (13KG)',
     issued: 100,
     consumed: 45,
     remaining: 55,

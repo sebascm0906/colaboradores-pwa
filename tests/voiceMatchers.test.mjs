@@ -80,11 +80,11 @@ test('matchByKeyword ignores items with empty/missing name field', () => {
 
 test('matchByFuzzyName returns item when all tokens appear in item.name', () => {
   const products = [
-    { id: 758, name: 'LAURITA BOLSA DE HIELO ROLITO (15KG)' },
+    { id: 1495, name: 'LAURITA BOLSA DE HIELO ROLITO (13KG)' },
     { id: 761, name: 'LAURITA BOLSA DE HIELO ROLITO (5.5KG)' },
   ]
   assert.equal(matchByFuzzyName('laurita 5.5', products).id, 761)
-  assert.equal(matchByFuzzyName('rolito 15kg', products).id, 758)
+  assert.equal(matchByFuzzyName('rolito 13kg', products).id, 1495)
 })
 
 test('matchByFuzzyName returns null when any token is absent', () => {

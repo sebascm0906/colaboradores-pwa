@@ -109,6 +109,55 @@ test('computeAvailableBagMaterials consolidates duplicate issues by material eve
   })
 })
 
+test('computeAvailableBagMaterials orders the active 13kg rolito bag before smaller bags', () => {
+  const issues = [
+    {
+      id: 80,
+      settlement_id: 30,
+      shift_id: 34,
+      line_id: 2,
+      material_id: 12,
+      product_id: 776,
+      material_name: 'MP BOLSA LAURITA ROLITO (5.5KG)',
+      qty_issued: 100,
+      state: 'confirmed',
+      settlement_state: 'draft',
+    },
+    {
+      id: 81,
+      settlement_id: 31,
+      shift_id: 34,
+      line_id: 2,
+      material_id: 17,
+      product_id: 1496,
+      material_name: 'MP BOLSA LAURITA ROLITO (13KG)',
+      qty_issued: 100,
+      state: 'confirmed',
+      settlement_state: 'draft',
+    },
+    {
+      id: 82,
+      settlement_id: 32,
+      shift_id: 34,
+      line_id: 2,
+      material_id: 11,
+      product_id: 775,
+      material_name: 'MP BOLSA LAURITA ROLITO (3KG)',
+      qty_issued: 100,
+      state: 'confirmed',
+      settlement_state: 'draft',
+    },
+  ]
+
+  const rows = computeAvailableBagMaterials(issues, [])
+
+  assert.deepEqual(rows.map((row) => row.name), [
+    'MP BOLSA LAURITA ROLITO (13KG)',
+    'MP BOLSA LAURITA ROLITO (5.5KG)',
+    'MP BOLSA LAURITA ROLITO (3KG)',
+  ])
+})
+
 test('computeAvailableBagMaterials prefers settlement return and damage quantities after rolito bag declaration', () => {
   const issues = [
     {
@@ -116,9 +165,9 @@ test('computeAvailableBagMaterials prefers settlement return and damage quantiti
       settlement_id: 27,
       shift_id: 33,
       line_id: 2,
-      material_id: 10,
-      product_id: 777,
-      material_name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      material_id: 17,
+      product_id: 1496,
+      material_name: 'MP BOLSA LAURITA ROLITO (13KG)',
       qty_issued: 100,
       state: 'confirmed',
       settlement_state: 'reported',
@@ -131,7 +180,7 @@ test('computeAvailableBagMaterials prefers settlement return and damage quantiti
   const packingEntries = [
     {
       id: 950,
-      material_id: 10,
+      material_id: 17,
       material_qty_total: 50,
     },
   ]
@@ -140,15 +189,15 @@ test('computeAvailableBagMaterials prefers settlement return and damage quantiti
 
   assert.equal(rows.length, 1)
   assert.deepEqual(rows[0], {
-    id: 10,
-    key: 'material:10',
+    id: 17,
+    key: 'material:17',
     issueId: 71,
     settlementId: 27,
     shiftId: 33,
     lineId: 2,
-    productId: 777,
-    materialId: 10,
-    name: 'MP BOLSA LAURITA ROLITO (15KG)',
+    productId: 1496,
+    materialId: 17,
+    name: 'MP BOLSA LAURITA ROLITO (13KG)',
     state: 'reported',
     uom: '',
     issued: 100,
@@ -168,9 +217,9 @@ test('computeAvailableBagMaterials ignores zeroed settlement balances until a us
       settlement_id: 28,
       shift_id: 33,
       line_id: 2,
-      material_id: 10,
-      product_id: 777,
-      material_name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      material_id: 17,
+      product_id: 1496,
+      material_name: 'MP BOLSA LAURITA ROLITO (13KG)',
       qty_issued: 100,
       state: 'confirmed',
       settlement_state: 'reported',
@@ -183,7 +232,7 @@ test('computeAvailableBagMaterials ignores zeroed settlement balances until a us
   const packingEntries = [
     {
       id: 951,
-      material_id: 10,
+      material_id: 17,
       material_qty_total: 50,
     },
   ]
@@ -203,9 +252,9 @@ test('computeAvailableBagMaterials derives useful return from packing when old s
       settlement_id: 27,
       shift_id: 33,
       line_id: 2,
-      material_id: 10,
-      product_id: 777,
-      material_name: 'MP BOLSA LAURITA ROLITO (15KG)',
+      material_id: 17,
+      product_id: 1496,
+      material_name: 'MP BOLSA LAURITA ROLITO (13KG)',
       qty_issued: 100,
       state: 'confirmed',
       settlement_state: 'reported',
@@ -218,7 +267,7 @@ test('computeAvailableBagMaterials derives useful return from packing when old s
   const packingEntries = [
     {
       id: 952,
-      material_id: 10,
+      material_id: 17,
       material_qty_total: 50,
     },
   ]
@@ -235,7 +284,7 @@ test('findNewMatchingPackingEntry detects persisted packing after a failed submi
   const previousEntries = [
     {
       id: 90,
-      product_id: [777, 'Bolsa 15kg'],
+      product_id: [1496, 'Bolsa 13kg'],
       cycle_id: [41, 'Ciclo 1'],
       qty_bags: 10,
     },
