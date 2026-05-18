@@ -158,3 +158,72 @@ test('harvest with mermada bars delegates scrap to bar endpoint and sends only g
   assert.equal(result.scrap_inventory_move.data.move_id, 501)
   assert.equal(result.pt_reception.ok, true)
 })
+
+test('harvest with pt reception reenters legacy harvested slots into freezing', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, options, payload })
+
+    if (url === '/odoo-api/api/create_update') {
+      const params = payload.params || {}
+      if (params.model === 'x_ice.brine.slot' && params.method === 'function') {
+        return createJsonResponse(200, {
+          result: {
+            success: true,
+            product_id: 900,
+            product_name: 'MP Barra Grande',
+          },
+        })
+      }
+      if (params.model === 'x_ice.brine.slot' && params.method === 'update') {
+        return createJsonResponse(200, { result: { success: true } })
+      }
+    }
+
+    if (url === '/odoo-api/get_records') {
+      const params = payload.params || {}
+      assert.equal(params.model, 'x_ice.brine.slot')
+      assert.deepEqual(params.domain, [['id', '=', 33]])
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 33,
+            x_state: 'harvested',
+          }],
+        },
+      })
+    }
+
+    if (url === '/odoo-api/api/production/pack') {
+      return createJsonResponse(200, { ok: true, data: { id: 91 } })
+    }
+
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
+  }
+
+  const result = await api('POST', '/pwa-prod/harvest-with-pt-reception', {
+    slot_id: 33,
+    shift_id: 55,
+    temperature: -10.5,
+    slot: { id: 33, name: 'A1', product_id: 900, product_name: 'MP Barra Grande' },
+    tank: { id: 9, display_name: 'Tanque 3 Iguala', line_id: 1, bars_per_basket: 8, kg_per_bar: 50 },
+    line_type: 'barra',
+    product_id: 900,
+    source_product_id: 900,
+    qty_reported: 8,
+  })
+
+  const updateCalls = calls.filter((call) => {
+    const params = call.payload?.params || {}
+    return params.model === 'x_ice.brine.slot' && params.method === 'update'
+  })
+  const reentryCall = updateCalls.find((call) => call.payload.params.dict?.x_state === 'freezing')
+  assert.ok(reentryCall)
+  assert.equal(reentryCall.payload.params.ids[0], 33)
+  assert.equal(reentryCall.payload.params.dict.x_ready_since, false)
+  assert.match(reentryCall.payload.params.dict.x_freeze_start, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+  assert.equal(result.ok, true)
+})
