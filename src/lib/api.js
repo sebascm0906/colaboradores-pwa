@@ -3521,9 +3521,33 @@ async function directProduction(method, path, body) {
           slot_id: slotId,
           machine_id: Number(tank?.id || body?.machine_id || 0) || undefined,
         })
+        const packData = packResult?.data || packResult || {}
+        const packingEntryId = Number(
+          packData?.packing_entry_id
+          || packData?.entry_id
+          || packData?.id
+          || 0
+        )
+        if (!packingEntryId) throw new Error('packing_entry_id requerido para recepcion PT')
+
+        const receptionResult = await odooHttp('POST', '/api/pt_reception/confirm', {}, {
+          shift_id: shiftId,
+          packing_entry_ids: [packingEntryId],
+          received_lines: [{
+            packing_entry_id: packingEntryId,
+            received_qty: qtyReported,
+            notes: receptionPayload.notes,
+          }],
+        })
+        if (receptionResult?.ok === false) {
+          throw new Error(receptionResult?.message || receptionResult?.error || 'No se pudo confirmar recepcion PT')
+        }
         ptStatus.ok = true
         ptStatus.skipped = false
-        ptStatus.data = packResult?.data || packResult || {}
+        ptStatus.data = {
+          pack: packData,
+          reception: receptionResult?.data || receptionResult || {},
+        }
       }
 
       if (!scrapStatus.ok || !scrapInventoryStatus.ok || !ptStatus.ok) {

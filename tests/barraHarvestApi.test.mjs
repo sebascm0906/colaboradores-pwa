@@ -105,7 +105,18 @@ test('harvest with mermada bars delegates scrap to bar endpoint and sends only g
     }
 
     if (url === '/odoo-api/api/production/pack') {
-      return createJsonResponse(200, { ok: true, data: { id: 91 } })
+      return createJsonResponse(200, { ok: true, data: { packing_entry_id: 91 } })
+    }
+
+    if (url === '/odoo-api/api/pt_reception/confirm') {
+      return createJsonResponse(200, {
+        ok: true,
+        data: {
+          processed_count: 1,
+          entries: [{ packing_entry_id: 91, posted: true, pt_received: true }],
+          posting_id: 601,
+        },
+      })
     }
 
     return createJsonResponse(500, { error: `Unexpected ${url}` })
@@ -151,12 +162,22 @@ test('harvest with mermada bars delegates scrap to bar endpoint and sends only g
   assert.equal(packPayload.slot_id, 33)
   assert.equal(packPayload.machine_id, 9)
 
+  const receptionCall = calls.find((call) => call.url === '/odoo-api/api/pt_reception/confirm')
+  assert.ok(receptionCall)
+  assert.deepEqual(receptionCall.payload.packing_entry_ids, [91])
+  assert.deepEqual(receptionCall.payload.received_lines, [{
+    packing_entry_id: 91,
+    received_qty: 6,
+    notes: 'Cosecha barra A1 · Tanque 3 Iguala · 2 mermadas',
+  }])
+
   assert.equal(result.ok, true)
   assert.equal(result.scrap.ok, true)
   assert.equal(result.scrap.data.scrap_id, 77)
   assert.equal(result.scrap_inventory_move.ok, true)
   assert.equal(result.scrap_inventory_move.data.move_id, 501)
   assert.equal(result.pt_reception.ok, true)
+  assert.equal(result.pt_reception.data.reception.posting_id, 601)
 })
 
 test('harvest with pt reception reenters legacy harvested slots into freezing', async () => {
@@ -198,7 +219,18 @@ test('harvest with pt reception reenters legacy harvested slots into freezing', 
     }
 
     if (url === '/odoo-api/api/production/pack') {
-      return createJsonResponse(200, { ok: true, data: { id: 91 } })
+      return createJsonResponse(200, { ok: true, data: { packing_entry_id: 91 } })
+    }
+
+    if (url === '/odoo-api/api/pt_reception/confirm') {
+      return createJsonResponse(200, {
+        ok: true,
+        data: {
+          processed_count: 1,
+          entries: [{ packing_entry_id: 91, posted: true, pt_received: true }],
+          posting_id: 601,
+        },
+      })
     }
 
     return createJsonResponse(500, { error: `Unexpected ${url}` })
