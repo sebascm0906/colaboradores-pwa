@@ -197,6 +197,12 @@ function extractErrorDetails(payload, status = 0) {
   }
 }
 
+function isApiKeyRequiredPayload(payload) {
+  if (!payload || payload.ok !== false) return false
+  const message = String(payload.message || payload.error || payload?.data?.message || '')
+  return /api[_\s-]*key requerida/i.test(message)
+}
+
 function toQueryString(params = {}) {
   const query = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -409,6 +415,12 @@ async function odooJson(path, params = {}) {
     throw new ApiError(message, { status: res.status, code })
   }
 
+  if (isApiKeyRequiredPayload(json)) {
+    expireSession()
+    const { message } = extractErrorDetails(json, 401)
+    throw new ApiError(message, { status: 401, code: 'no_session' })
+  }
+
   return json?.result !== undefined ? json.result : json
 }
 
@@ -491,6 +503,12 @@ async function odooHttp(method, path, query = {}, body) {
   if (!res.ok) {
     const { message, code } = extractErrorDetails(json, res.status)
     throw new ApiError(message, { status: res.status, code })
+  }
+
+  if (isApiKeyRequiredPayload(json)) {
+    expireSession()
+    const { message } = extractErrorDetails(json, 401)
+    throw new ApiError(message, { status: 401, code: 'no_session' })
   }
 
   return json
