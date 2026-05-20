@@ -1,0 +1,349 @@
+{
+  "timestamp": "2026-05-18T12:40:04",
+  "leyva_tag_id": 122,
+  "leyva_tag_name": " LEYVA/FARMAPRONTO",
+  "removed_baja_tag_id_if_present": 226,
+  "assignments": {
+    "51178": {
+      "name": "(L-1) FARMACIA LEYVA ALTAMIRANO",
+      "polygon": 69,
+      "subpolygon": 49,
+      "geom": "Mercado diario - clientes seleccionados / Mercado diario - clientes seleccionados A"
+    },
+    "51188": {
+      "name": "(L-13) FARMACIA LEYVA TUXPAN",
+      "polygon": 25,
+      "subpolygon": 48,
+      "geom": "Huixuco / Tuxpan"
+    },
+    "51182": {
+      "name": "(L-3) FARMACIA LEYVA HIDALGO",
+      "polygon": 13,
+      "subpolygon": 37,
+      "geom": "Iguala SUR / p1"
+    },
+    "51183": {
+      "name": "(L-6) FARMACIA LEYVA ESTUDIANTE",
+      "polygon": 14,
+      "subpolygon": 39,
+      "geom": "Iguala NORTE / Iguala NORTE A"
+    },
+    "51185": {
+      "name": "(L-8) FARMACIA LEYVA OXOO FRESA",
+      "polygon": 13,
+      "subpolygon": 37,
+      "geom": "Iguala SUR / p1"
+    },
+    "51190": {
+      "name": "FARMAPRONTO GALEANA",
+      "polygon": 13,
+      "subpolygon": 38,
+      "geom": "Iguala SUR / p2"
+    },
+    "51189": {
+      "name": "FARMAPRONTO HUERTO",
+      "polygon": 13,
+      "subpolygon": 37,
+      "geom": "Iguala SUR / p1"
+    }
+  },
+  "before": [
+    {
+      "id": 51178,
+      "name": "(L-1) FARMACIA LEYVA ALTAMIRANO",
+      "display_name": "FARMACIAS LEYVAS, (L-1) FARMACIA LEYVA ALTAMIRANO",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.339361,
+      "longitude": -99.540412,
+      "geo_latitude": 18.3393611,
+      "geo_longitude": -99.5404123,
+      "gf_delivery_polygon_id": [
+        69,
+        "Mercado diario - clientes seleccionados"
+      ],
+      "gf_delivery_subpolygon_id": [
+        49,
+        "Mercado diario - clientes seleccionados A"
+      ]
+    },
+    {
+      "id": 51182,
+      "name": "(L-3) FARMACIA LEYVA HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, (L-3) FARMACIA LEYVA HIDALGO",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.344706,
+      "longitude": -99.537508,
+      "geo_latitude": 18.344706,
+      "geo_longitude": -99.5375078,
+      "gf_delivery_polygon_id": [
+        13,
+        "Iguala SUR"
+      ],
+      "gf_delivery_subpolygon_id": [
+        37,
+        "p1"
+      ]
+    },
+    {
+      "id": 51183,
+      "name": "(L-6) FARMACIA LEYVA ESTUDIANTE",
+      "display_name": "FARMACIAS LEYVAS, (L-6) FARMACIA LEYVA ESTUDIANTE",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.34537,
+      "longitude": -99.524644,
+      "geo_latitude": 18.3453698,
+      "geo_longitude": -99.5246436,
+      "gf_delivery_polygon_id": [
+        14,
+        "Iguala NORTE"
+      ],
+      "gf_delivery_subpolygon_id": [
+        39,
+        "Iguala NORTE A"
+      ]
+    },
+    {
+      "id": 51185,
+      "name": "(L-8) FARMACIA LEYVA OXOO FRESA",
+      "display_name": "FARMACIAS LEYVAS, (L-8) FARMACIA LEYVA OXOO FRESA",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.341392,
+      "longitude": -99.531368,
+      "geo_latitude": 18.3413921,
+      "geo_longitude": -99.5313675,
+      "gf_delivery_polygon_id": [
+        13,
+        "Iguala SUR"
+      ],
+      "gf_delivery_subpolygon_id": [
+        37,
+        "p1"
+      ]
+    },
+    {
+      "id": 51188,
+      "name": "(L-13) FARMACIA LEYVA TUXPAN",
+      "display_name": "FARMACIAS LEYVAS, (L-13) FARMACIA LEYVA TUXPAN",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.335648,
+      "longitude": -99.51193,
+      "geo_latitude": 18.3356477,
+      "geo_longitude": -99.5119296,
+      "gf_delivery_polygon_id": [
+        25,
+        "Huixuco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        48,
+        "Tuxpan"
+      ]
+    },
+    {
+      "id": 51189,
+      "name": "FARMAPRONTO HUERTO",
+      "display_name": "FARMAPRONTO, FARMAPRONTO HUERTO",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.337958,
+      "longitude": -99.54203,
+      "geo_latitude": 18.3380066,
+      "geo_longitude": -99.540482,
+      "gf_delivery_polygon_id": [
+        13,
+        "Iguala SUR"
+      ],
+      "gf_delivery_subpolygon_id": [
+        37,
+        "p1"
+      ]
+    },
+    {
+      "id": 51190,
+      "name": "FARMAPRONTO GALEANA",
+      "display_name": "FARMAPRONTO, FARMAPRONTO GALEANA",
+      "active": true,
+      "category_id": [],
+      "latitude": 18.338007,
+      "longitude": -99.540482,
+      "geo_latitude": 18.3379576,
+      "geo_longitude": -99.54203,
+      "gf_delivery_polygon_id": [
+        13,
+        "Iguala SUR"
+      ],
+      "gf_delivery_subpolygon_id": [
+        38,
+        "p2"
+      ]
+    }
+  ],
+  "verified": [
+    {
+      "id": 51178,
+      "name": "FARMACIAS LEYVAS, (L-1) FARMACIA LEYVA ALTAMIRANO",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        69,
+        "Mercado diario - clientes seleccionados"
+      ],
+      "subpolygon": [
+        49,
+        "Mercado diario - clientes seleccionados A"
+      ],
+      "expected_polygon_id": 69,
+      "expected_subpolygon_id": 49,
+      "expected_geom": "Mercado diario - clientes seleccionados / Mercado diario - clientes seleccionados A",
+      "ok": true
+    },
+    {
+      "id": 51182,
+      "name": "FARMACIAS LEYVAS, (L-3) FARMACIA LEYVA HIDALGO",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected_polygon_id": 13,
+      "expected_subpolygon_id": 37,
+      "expected_geom": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 51183,
+      "name": "FARMACIAS LEYVAS, (L-6) FARMACIA LEYVA ESTUDIANTE",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected_polygon_id": 14,
+      "expected_subpolygon_id": 39,
+      "expected_geom": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 51185,
+      "name": "FARMACIAS LEYVAS, (L-8) FARMACIA LEYVA OXOO FRESA",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected_polygon_id": 13,
+      "expected_subpolygon_id": 37,
+      "expected_geom": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 51188,
+      "name": "FARMACIAS LEYVAS, (L-13) FARMACIA LEYVA TUXPAN",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        25,
+        "Huixuco"
+      ],
+      "subpolygon": [
+        48,
+        "Tuxpan"
+      ],
+      "expected_polygon_id": 25,
+      "expected_subpolygon_id": 48,
+      "expected_geom": "Huixuco / Tuxpan",
+      "ok": true
+    },
+    {
+      "id": 51189,
+      "name": "FARMAPRONTO, FARMAPRONTO HUERTO",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected_polygon_id": 13,
+      "expected_subpolygon_id": 37,
+      "expected_geom": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 51190,
+      "name": "FARMAPRONTO, FARMAPRONTO GALEANA",
+      "active": true,
+      "category_ids": [
+        122
+      ],
+      "category_names": [
+        " LEYVA/FARMAPRONTO"
+      ],
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        38,
+        "p2"
+      ],
+      "expected_polygon_id": 13,
+      "expected_subpolygon_id": 38,
+      "expected_geom": "Iguala SUR / p2",
+      "ok": true
+    }
+  ],
+  "all_ok": true
+}

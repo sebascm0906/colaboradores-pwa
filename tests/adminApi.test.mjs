@@ -30,6 +30,36 @@ test('normalizePosCatalogResponse preserves products and pricelist metadata', ()
   })
 })
 
+test('normalizePosCatalogResponse maps Odoo many2one pricelist metadata', () => {
+  const catalog = normalizePosCatalogResponse({
+    data: {
+      pricelist_id: [88, 'Lista cliente mayorista'],
+      products: [{ id: 4, name: 'Bolsa de hielo' }],
+    },
+  })
+
+  assert.deepEqual(catalog, {
+    pricelist_id: 88,
+    pricelist_name: 'Lista cliente mayorista',
+    products: [{ id: 4, name: 'Bolsa de hielo' }],
+  })
+})
+
+test('normalizePosCatalogResponse maps nested pricelist metadata', () => {
+  const catalog = normalizePosCatalogResponse({
+    data: {
+      pricelist: { id: 91, name: 'Lista especial gerente' },
+      products: [{ id: 5, name: 'Molido chico' }],
+    },
+  })
+
+  assert.deepEqual(catalog, {
+    pricelist_id: 91,
+    pricelist_name: 'Lista especial gerente',
+    products: [{ id: 5, name: 'Molido chico' }],
+  })
+})
+
 test('normalizePosProductsResponse returns direct arrays unchanged', () => {
   const products = [{ id: 1, name: 'Hielo 5 kg' }]
   assert.deepEqual(normalizePosProductsResponse(products), products)

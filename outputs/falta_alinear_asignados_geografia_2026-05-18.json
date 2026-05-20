@@ -1,0 +1,1050 @@
+{
+  "timestamp": "2026-05-18T13:15:36",
+  "source_relation": "/Users/sebis/Documents/odoo/gf-pwa-colaboradores/outputs/relacion_clientes_poligonos_actualizada_2026-05-18_v3.json",
+  "updated_count": 22,
+  "updates": [
+    {
+      "partner_id": 51311,
+      "cliente": "MISCELANEA BETOS",
+      "polygon_id": 27,
+      "polygon": "Mezcala",
+      "subpolygon_id": 46,
+      "subpolygon": "Mezcala A",
+      "before_polygon": "",
+      "before_subpolygon": ""
+    },
+    {
+      "partner_id": 58028,
+      "cliente": "MISCELANEA LA ESPERANZA",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "",
+      "before_subpolygon": ""
+    },
+    {
+      "partner_id": 58027,
+      "cliente": "TORTILLERIA NAYELI",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 40,
+      "subpolygon": "Iguala NORTE B",
+      "before_polygon": "",
+      "before_subpolygon": ""
+    },
+    {
+      "partner_id": 55211,
+      "cliente": "BOTANERO VILLA TUXPAN",
+      "polygon_id": 25,
+      "polygon": "Huixuco",
+      "subpolygon_id": 48,
+      "subpolygon": "Tuxpan",
+      "before_polygon": "",
+      "before_subpolygon": ""
+    },
+    {
+      "partner_id": 58049,
+      "cliente": "MICHELADAS SANTO TRAGO PERIFERICO",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58053,
+      "cliente": "MINI FRESH",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58052,
+      "cliente": "MISCELANEA EL PRIETO",
+      "polygon_id": 25,
+      "polygon": "Huixuco",
+      "subpolygon_id": 48,
+      "subpolygon": "Tuxpan",
+      "before_polygon": "Huixuco",
+      "before_subpolygon": "HUITZUCO"
+    },
+    {
+      "partner_id": 58057,
+      "cliente": "MISC. CUEVAS APAXTLA",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58056,
+      "cliente": "MISC. SAN JUDITAS",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58029,
+      "cliente": "CAFE COLIBRI",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 38,
+      "subpolygon": "p2",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58030,
+      "cliente": "CAFE MORELOS",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 38,
+      "subpolygon": "p2",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58038,
+      "cliente": "CAFELLIE",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58032,
+      "cliente": "CAFERENCIA",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58034,
+      "cliente": "COCINA BRENDA",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58036,
+      "cliente": "COCINA ROSITA",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58031,
+      "cliente": "FONDITAS ISSSTE",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "",
+      "before_subpolygon": ""
+    },
+    {
+      "partner_id": 58035,
+      "cliente": "MENUDO DE LA TIA GUDE",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58047,
+      "cliente": "MR CHILE",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58033,
+      "cliente": "PONLE CAFE MORELOS",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58058,
+      "cliente": "TAQUERIA EL BUEN GUSTO",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 38,
+      "subpolygon": "p2",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    },
+    {
+      "partner_id": 58039,
+      "cliente": "TAQUERIA EL RODEO",
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "subpolygon_id": 39,
+      "subpolygon": "Iguala NORTE A",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "NORTE"
+    },
+    {
+      "partner_id": 58037,
+      "cliente": "TREBOL BUFFET",
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "subpolygon_id": 37,
+      "subpolygon": "p1",
+      "before_polygon": "Taxco",
+      "before_subpolygon": "SUR"
+    }
+  ],
+  "before": [
+    {
+      "id": 55211,
+      "name": "BOTANERO VILLA TUXPAN",
+      "display_name": "BOTANERO VILLA TUXPAN",
+      "active": true,
+      "gf_delivery_polygon_id": false,
+      "gf_delivery_subpolygon_id": false,
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        233
+      ]
+    },
+    {
+      "id": 58029,
+      "name": "CAFE COLIBRI",
+      "display_name": "CAFE COLIBRI",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58030,
+      "name": "CAFE MORELOS",
+      "display_name": "CAFE MORELOS",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58038,
+      "name": "CAFELLIE",
+      "display_name": "CAFELLIE",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58032,
+      "name": "CAFERENCIA",
+      "display_name": "CAFERENCIA",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": true,
+      "visit_tuesday": true,
+      "visit_wednesday": true,
+      "visit_thursday": true,
+      "visit_friday": true,
+      "visit_saturday": true,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58034,
+      "name": "COCINA BRENDA",
+      "display_name": "COCINA BRENDA",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": true,
+      "visit_tuesday": true,
+      "visit_wednesday": true,
+      "visit_thursday": true,
+      "visit_friday": true,
+      "visit_saturday": true,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58036,
+      "name": "COCINA ROSITA",
+      "display_name": "COCINA ROSITA",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58031,
+      "name": "FONDITAS ISSSTE",
+      "display_name": "FONDITAS ISSSTE",
+      "active": true,
+      "gf_delivery_polygon_id": false,
+      "gf_delivery_subpolygon_id": false,
+      "visit_monday": true,
+      "visit_tuesday": true,
+      "visit_wednesday": true,
+      "visit_thursday": true,
+      "visit_friday": true,
+      "visit_saturday": true,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58035,
+      "name": "MENUDO DE LA TIA GUDE",
+      "display_name": "MENUDO DE LA TIA GUDE",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": true,
+      "visit_tuesday": true,
+      "visit_wednesday": true,
+      "visit_thursday": true,
+      "visit_friday": true,
+      "visit_saturday": true,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58049,
+      "name": "MICHELADAS SANTO TRAGO PERIFERICO",
+      "display_name": "MICHELADAS SANTO TRAGO PERIFERICO",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": []
+    },
+    {
+      "id": 58053,
+      "name": "MINI FRESH",
+      "display_name": "MINI FRESH",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": true,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": []
+    },
+    {
+      "id": 58057,
+      "name": "MISC. CUEVAS APAXTLA",
+      "display_name": "MISC. CUEVAS APAXTLA",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": []
+    },
+    {
+      "id": 58056,
+      "name": "MISC. SAN JUDITAS",
+      "display_name": "MISC. SAN JUDITAS",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": []
+    },
+    {
+      "id": 51311,
+      "name": "MISCELANEA BETOS",
+      "display_name": "MISCELANEA BETOS",
+      "active": true,
+      "gf_delivery_polygon_id": false,
+      "gf_delivery_subpolygon_id": false,
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        233
+      ]
+    },
+    {
+      "id": 58052,
+      "name": "MISCELANEA EL PRIETO",
+      "display_name": "MISCELANEA EL PRIETO",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        25,
+        "Huixuco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        7,
+        "HUITZUCO"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": []
+    },
+    {
+      "id": 58028,
+      "name": "MISCELANEA LA ESPERANZA",
+      "display_name": "MISCELANEA LA ESPERANZA",
+      "active": true,
+      "gf_delivery_polygon_id": false,
+      "gf_delivery_subpolygon_id": false,
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        119
+      ]
+    },
+    {
+      "id": 58047,
+      "name": "MR CHILE",
+      "display_name": "MR CHILE",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58033,
+      "name": "PONLE CAFE MORELOS",
+      "display_name": "PONLE CAFE MORELOS",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58058,
+      "name": "TAQUERIA EL BUEN GUSTO",
+      "display_name": "TAQUERIA EL BUEN GUSTO",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58039,
+      "name": "TAQUERIA EL RODEO",
+      "display_name": "TAQUERIA EL RODEO",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        2,
+        "NORTE"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    },
+    {
+      "id": 58027,
+      "name": "TORTILLERIA NAYELI",
+      "display_name": "TORTILLERIA NAYELI",
+      "active": true,
+      "gf_delivery_polygon_id": false,
+      "gf_delivery_subpolygon_id": false,
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        119
+      ]
+    },
+    {
+      "id": 58037,
+      "name": "TREBOL BUFFET",
+      "display_name": "TREBOL BUFFET",
+      "active": true,
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        6,
+        "SUR"
+      ],
+      "visit_monday": false,
+      "visit_tuesday": false,
+      "visit_wednesday": false,
+      "visit_thursday": false,
+      "visit_friday": false,
+      "visit_saturday": false,
+      "visit_sunday": false,
+      "category_id": [
+        224
+      ]
+    }
+  ],
+  "verified": [
+    {
+      "id": 55211,
+      "name": "BOTANERO VILLA TUXPAN",
+      "active": true,
+      "polygon": [
+        25,
+        "Huixuco"
+      ],
+      "subpolygon": [
+        48,
+        "Tuxpan"
+      ],
+      "expected": "Huixuco / Tuxpan",
+      "ok": true
+    },
+    {
+      "id": 58029,
+      "name": "CAFE COLIBRI",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        38,
+        "p2"
+      ],
+      "expected": "Iguala SUR / p2",
+      "ok": true
+    },
+    {
+      "id": 58030,
+      "name": "CAFE MORELOS",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        38,
+        "p2"
+      ],
+      "expected": "Iguala SUR / p2",
+      "ok": true
+    },
+    {
+      "id": 58038,
+      "name": "CAFELLIE",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58032,
+      "name": "CAFERENCIA",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 58034,
+      "name": "COCINA BRENDA",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 58036,
+      "name": "COCINA ROSITA",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 58031,
+      "name": "FONDITAS ISSSTE",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58035,
+      "name": "MENUDO DE LA TIA GUDE",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 58049,
+      "name": "MICHELADAS SANTO TRAGO PERIFERICO",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58053,
+      "name": "MINI FRESH",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58057,
+      "name": "MISC. CUEVAS APAXTLA",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58056,
+      "name": "MISC. SAN JUDITAS",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 51311,
+      "name": "MISCELANEA BETOS",
+      "active": true,
+      "polygon": [
+        27,
+        "Mezcala"
+      ],
+      "subpolygon": [
+        46,
+        "Mezcala A"
+      ],
+      "expected": "Mezcala / Mezcala A",
+      "ok": true
+    },
+    {
+      "id": 58052,
+      "name": "MISCELANEA EL PRIETO",
+      "active": true,
+      "polygon": [
+        25,
+        "Huixuco"
+      ],
+      "subpolygon": [
+        48,
+        "Tuxpan"
+      ],
+      "expected": "Huixuco / Tuxpan",
+      "ok": true
+    },
+    {
+      "id": 58028,
+      "name": "MISCELANEA LA ESPERANZA",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58047,
+      "name": "MR CHILE",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58033,
+      "name": "PONLE CAFE MORELOS",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    },
+    {
+      "id": 58058,
+      "name": "TAQUERIA EL BUEN GUSTO",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        38,
+        "p2"
+      ],
+      "expected": "Iguala SUR / p2",
+      "ok": true
+    },
+    {
+      "id": 58039,
+      "name": "TAQUERIA EL RODEO",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        39,
+        "Iguala NORTE A"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE A",
+      "ok": true
+    },
+    {
+      "id": 58027,
+      "name": "TORTILLERIA NAYELI",
+      "active": true,
+      "polygon": [
+        14,
+        "Iguala NORTE"
+      ],
+      "subpolygon": [
+        40,
+        "Iguala NORTE B"
+      ],
+      "expected": "Iguala NORTE / Iguala NORTE B",
+      "ok": true
+    },
+    {
+      "id": 58037,
+      "name": "TREBOL BUFFET",
+      "active": true,
+      "polygon": [
+        13,
+        "Iguala SUR"
+      ],
+      "subpolygon": [
+        37,
+        "p1"
+      ],
+      "expected": "Iguala SUR / p1",
+      "ok": true
+    }
+  ],
+  "all_ok": true
+}

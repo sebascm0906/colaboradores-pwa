@@ -1,0 +1,390 @@
+{
+  "baja_tag_id": 226,
+  "baja_tag_created": false,
+  "write_tag_ok": true,
+  "write_archive_ok": true,
+  "archived_ids": [
+    51181,
+    51186,
+    51449,
+    51410,
+    51396,
+    51389,
+    51395,
+    55261
+  ],
+  "before": [
+    {
+      "id": 51181,
+      "name": "(L-4) FARMACIA LEYVA ALDAMA",
+      "display_name": "FARMACIAS LEYVAS, (L-4) FARMACIA LEYVA ALDAMA",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51186,
+      "name": "(L-9) FARMACIA LEYVA 3 IGUANAS",
+      "display_name": "FARMACIAS LEYVAS, (L-9) FARMACIA LEYVA 3 IGUANAS",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51389,
+      "name": "FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51395,
+      "name": "FARMACIAS LEYVAS-TAXCO PLATEROS",
+      "display_name": "FARMACIAS LEYVAS, FARMACIAS LEYVAS-TAXCO PLATEROS",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51396,
+      "name": "FARMACIA LEYVA MIGUEL HIDALGO TAXCO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA MIGUEL HIDALGO TAXCO",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51410,
+      "name": "FARMACIA LEYVA L",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA L",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51449,
+      "name": "FARMACIA LEYVA CENTRAL DE ABASTOS",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA CENTRAL DE ABASTOS",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 55261,
+      "name": "LEYVAS",
+      "display_name": "FARMACIAS LEYVAS, LEYVAS",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    }
+  ],
+  "after": [
+    {
+      "id": 51181,
+      "name": "(L-4) FARMACIA LEYVA ALDAMA",
+      "display_name": "FARMACIAS LEYVAS, (L-4) FARMACIA LEYVA ALDAMA",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51186,
+      "name": "(L-9) FARMACIA LEYVA 3 IGUANAS",
+      "display_name": "FARMACIAS LEYVAS, (L-9) FARMACIA LEYVA 3 IGUANAS",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51389,
+      "name": "FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51395,
+      "name": "FARMACIAS LEYVAS-TAXCO PLATEROS",
+      "display_name": "FARMACIAS LEYVAS, FARMACIAS LEYVAS-TAXCO PLATEROS",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51396,
+      "name": "FARMACIA LEYVA MIGUEL HIDALGO TAXCO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA MIGUEL HIDALGO TAXCO",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51410,
+      "name": "FARMACIA LEYVA L",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA L",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 51449,
+      "name": "FARMACIA LEYVA CENTRAL DE ABASTOS",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA CENTRAL DE ABASTOS",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    },
+    {
+      "id": 55261,
+      "name": "LEYVAS",
+      "display_name": "FARMACIAS LEYVAS, LEYVAS",
+      "active": false,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": [
+        226
+      ]
+    }
+  ],
+  "kept_from_excel": [
+    {
+      "id": 51178,
+      "name": "(L-1) FARMACIA LEYVA ALTAMIRANO",
+      "display_name": "FARMACIAS LEYVAS, (L-1) FARMACIA LEYVA ALTAMIRANO",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51182,
+      "name": "(L-3) FARMACIA LEYVA HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, (L-3) FARMACIA LEYVA HIDALGO",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51183,
+      "name": "(L-6) FARMACIA LEYVA ESTUDIANTE",
+      "display_name": "FARMACIAS LEYVAS, (L-6) FARMACIA LEYVA ESTUDIANTE",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51185,
+      "name": "(L-8) FARMACIA LEYVA OXOO FRESA",
+      "display_name": "FARMACIAS LEYVAS, (L-8) FARMACIA LEYVA OXOO FRESA",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51188,
+      "name": "(L-13) FARMACIA LEYVA TUXPAN",
+      "display_name": "FARMACIAS LEYVAS, (L-13) FARMACIA LEYVA TUXPAN",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    },
+    {
+      "id": 51420,
+      "name": "FARMACIA LEYVA TAXCO 02",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA TAXCO 02",
+      "active": true,
+      "customer_rank": 1,
+      "parent_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "commercial_partner_id": [
+        55295,
+        "FARMACIAS LEYVAS"
+      ],
+      "category_id": []
+    }
+  ]
+}

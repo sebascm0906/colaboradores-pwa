@@ -1,0 +1,429 @@
+{
+  "timestamp": "2026-05-18T12:38:14",
+  "targets": [
+    "CENTRAL DE ABASTO CUE OXXO-16334",
+    "CENTRALDEABASTOS CUE",
+    "BODEGA AURRERA IGUALA 3911",
+    "LA QUEBRADA CUE",
+    "TAMARINDOS CUE",
+    "SIX TECATE"
+  ],
+  "baja_tag_id": 226,
+  "updated_count": 14,
+  "updated_ids": [
+    13110,
+    13231,
+    31658,
+    31775,
+    31900,
+    32089,
+    32114,
+    32115,
+    51204,
+    51321,
+    51446,
+    51634,
+    51659,
+    51660
+  ],
+  "before_exact": [
+    {
+      "id": 51446,
+      "name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "display_name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "matched_target": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "active": true,
+      "category_id": [
+        226
+      ],
+      "polygon": [
+        47,
+        "TIANGUIS"
+      ],
+      "subpolygon": false,
+      "city": "IGUALA"
+    },
+    {
+      "id": 31900,
+      "name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "display_name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "matched_target": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "Iguala"
+    },
+    {
+      "id": 51634,
+      "name": "CENTRALDEABASTOS CUE",
+      "display_name": "CENTRALDEABASTOS CUE",
+      "matched_target": "CENTRALDEABASTOS CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "IGUALA"
+    },
+    {
+      "id": 32089,
+      "name": "CentraldeAbastos CUE",
+      "display_name": "CentraldeAbastos CUE",
+      "matched_target": "CENTRALDEABASTOS CUE",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "Iguala"
+    },
+    {
+      "id": 13110,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "display_name": "BODEGA AURRERA IGUALA 3911",
+      "matched_target": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [
+        123,
+        49
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": false
+    },
+    {
+      "id": 31658,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "display_name": "BODEGA AURRERA IGUALA 3911",
+      "matched_target": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "San Juan de las Huertas"
+    },
+    {
+      "id": 51204,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "display_name": "BODEGA AURRERA IGUALA 3911",
+      "matched_target": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "ZITACUARO"
+    },
+    {
+      "id": 51659,
+      "name": "LA QUEBRADA CUE",
+      "display_name": "LA QUEBRADA CUE",
+      "matched_target": "LA QUEBRADA CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "IGUALA"
+    },
+    {
+      "id": 32114,
+      "name": "La Quebrada CUE",
+      "display_name": "La Quebrada CUE",
+      "matched_target": "LA QUEBRADA CUE",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "Iguala"
+    },
+    {
+      "id": 51660,
+      "name": "TAMARINDOS CUE",
+      "display_name": "TAMARINDOS CUE",
+      "matched_target": "TAMARINDOS CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "IGUALA"
+    },
+    {
+      "id": 32115,
+      "name": "Tamarindos CUE",
+      "display_name": "Tamarindos CUE",
+      "matched_target": "TAMARINDOS CUE",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "Iguala"
+    },
+    {
+      "id": 13231,
+      "name": "SIX TECATE",
+      "display_name": "SIX TECATE",
+      "matched_target": "SIX TECATE",
+      "active": false,
+      "category_id": [
+        126,
+        31
+      ],
+      "polygon": false,
+      "subpolygon": false,
+      "city": false
+    },
+    {
+      "id": 31775,
+      "name": "SIX TECATE",
+      "display_name": "SIX TECATE",
+      "matched_target": "SIX TECATE",
+      "active": false,
+      "category_id": [],
+      "polygon": false,
+      "subpolygon": false,
+      "city": "Ciudad de Huitzuco"
+    },
+    {
+      "id": 51321,
+      "name": "SIX TECATE",
+      "display_name": "SIX TECATE",
+      "matched_target": "SIX TECATE",
+      "active": true,
+      "category_id": [],
+      "polygon": [
+        25,
+        "Huixuco"
+      ],
+      "subpolygon": [
+        7,
+        "HUITZUCO"
+      ],
+      "city": "CIUDAD DE HUITZUCO"
+    }
+  ],
+  "verified": [
+    {
+      "id": 13110,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [
+        123,
+        226,
+        49
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51204,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 31658,
+      "name": "BODEGA AURRERA IGUALA 3911",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51446,
+      "name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": [
+        47,
+        "TIANGUIS"
+      ],
+      "subpolygon": false
+    },
+    {
+      "id": 31900,
+      "name": "CENTRAL DE ABASTO CUE OXXO-16334",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51634,
+      "name": "CENTRALDEABASTOS CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 32089,
+      "name": "CentraldeAbastos CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51659,
+      "name": "LA QUEBRADA CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 32114,
+      "name": "La Quebrada CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51321,
+      "name": "SIX TECATE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": [
+        25,
+        "Huixuco"
+      ],
+      "subpolygon": [
+        7,
+        "HUITZUCO"
+      ]
+    },
+    {
+      "id": 31775,
+      "name": "SIX TECATE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 13231,
+      "name": "SIX TECATE",
+      "active": false,
+      "category_id": [
+        126,
+        226,
+        31
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 51660,
+      "name": "TAMARINDOS CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    },
+    {
+      "id": 32115,
+      "name": "Tamarindos CUE",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "polygon": false,
+      "subpolygon": false
+    }
+  ],
+  "remaining_active_exact_count": 0,
+  "remaining_active_exact": [],
+  "skipped_similar_names": [
+    {
+      "id": 9981,
+      "name": "SIX TECATE BENEMERITO",
+      "active": false
+    },
+    {
+      "id": 23563,
+      "name": "SIX TECATE BENEMERITO",
+      "active": false
+    },
+    {
+      "id": 33148,
+      "name": "SIX TECATE BENEMERITO",
+      "active": false
+    },
+    {
+      "id": 52693,
+      "name": "SIX TECATE BENEMERITO",
+      "active": true
+    },
+    {
+      "id": 10022,
+      "name": "SIX TECATE LAS YUCAS",
+      "active": false
+    },
+    {
+      "id": 23604,
+      "name": "SIX TECATE LAS YUCAS",
+      "active": false
+    },
+    {
+      "id": 33189,
+      "name": "SIX TECATE LAS YUCAS",
+      "active": false
+    },
+    {
+      "id": 52734,
+      "name": "SIX TECATE LAS YUCAS",
+      "active": true
+    },
+    {
+      "id": 9826,
+      "name": "SIX TECATE ZAMORA",
+      "active": false
+    },
+    {
+      "id": 23408,
+      "name": "SIX TECATE ZAMORA",
+      "active": false
+    },
+    {
+      "id": 32993,
+      "name": "SIX TECATE ZAMORA",
+      "active": false
+    },
+    {
+      "id": 52538,
+      "name": "SIX TECATE ZAMORA",
+      "active": true
+    }
+  ]
+}

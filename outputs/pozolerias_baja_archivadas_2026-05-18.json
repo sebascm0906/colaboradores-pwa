@@ -1,0 +1,108 @@
+{
+  "timestamp": "2026-05-18T12:31:10",
+  "source_file": "/Users/sebis/Downloads/Zonas de Clientes (2).xlsx",
+  "source_zone": "POZOLERIAS",
+  "excel_pozolerias_count": 9,
+  "excel_pozolerias": [
+    {
+      "row": 221,
+      "name": "PAPELERIA Y POZOLERIA ALEX"
+    },
+    {
+      "row": 222,
+      "name": "POZOLERIA GARIBALDI"
+    },
+    {
+      "row": 223,
+      "name": "POZOLERIA LA LUPITA"
+    },
+    {
+      "row": 224,
+      "name": "POZOLERIA LAS PALMAS"
+    },
+    {
+      "row": 225,
+      "name": "POZOLERIA MARY"
+    },
+    {
+      "row": 226,
+      "name": "POZOLERIA POCZO"
+    },
+    {
+      "row": 227,
+      "name": "POZOLERIA SAN MARTIN"
+    },
+    {
+      "row": 228,
+      "name": "POZOLERIA TLACOLOLEROS"
+    },
+    {
+      "row": 229,
+      "name": "POZOLERIA YAQUESITA"
+    }
+  ],
+  "active_odoo_pozol_before_count": 10,
+  "kept_count": 9,
+  "kept": [
+    {
+      "id": 51088,
+      "name": "PAPELERIA Y POZOLERIA ALEX"
+    },
+    {
+      "id": 58045,
+      "name": "POZOLERIA GARIBALDI"
+    },
+    {
+      "id": 58046,
+      "name": "POZOLERIA LA LUPITA"
+    },
+    {
+      "id": 58041,
+      "name": "POZOLERIA LAS PALMAS"
+    },
+    {
+      "id": 58040,
+      "name": "POZOLERIA MARY"
+    },
+    {
+      "id": 51089,
+      "name": "POZOLERIA POCZO"
+    },
+    {
+      "id": 58043,
+      "name": "POZOLERIA SAN MARTIN"
+    },
+    {
+      "id": 58042,
+      "name": "POZOLERIA TLACOLOLEROS"
+    },
+    {
+      "id": 58044,
+      "name": "POZOLERIA YAQUESITA"
+    }
+  ],
+  "baja_tag_id": 226,
+  "archived_count": 1,
+  "archived": [
+    {
+      "id": 51116,
+      "name": "POZOLERIA LA CIMA",
+      "previous_tags": [],
+      "previous_polygon": [
+        46,
+        "RECORRIDOS"
+      ],
+      "previous_subpolygon": false
+    }
+  ],
+  "verified": [
+    {
+      "id": 51116,
+      "name": "POZOLERIA LA CIMA",
+      "active": false,
+      "category_id": [
+        226
+      ]
+    }
+  ]
+}

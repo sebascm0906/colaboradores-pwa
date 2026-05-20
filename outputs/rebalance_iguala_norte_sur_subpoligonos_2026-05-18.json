@@ -1,0 +1,245 @@
+{
+  "timestamp": "2026-05-18T15:30:07",
+  "polygons": [
+    {
+      "polygon_id": 13,
+      "polygon": "Iguala SUR",
+      "axis": "lon",
+      "cut": -99.5387525,
+      "subpolygons": [
+        {
+          "subpolygon_id": 38,
+          "subpolygon": "p2",
+          "vertices": 18,
+          "nudged_vertices": 15
+        },
+        {
+          "subpolygon_id": 37,
+          "subpolygon": "p1",
+          "vertices": 7,
+          "nudged_vertices": 5
+        }
+      ],
+      "changes": [
+        {
+          "id": 51189,
+          "name": "FARMAPRONTO HUERTO",
+          "old_subpolygon": "p1",
+          "new_subpolygon": "p2",
+          "lat": 18.337958,
+          "lon": -99.54203
+        },
+        {
+          "id": 51228,
+          "name": "JUGOLANDIA CUAIS",
+          "old_subpolygon": "p1",
+          "new_subpolygon": "p2",
+          "lat": 18.33848,
+          "lon": -99.54062
+        }
+      ],
+      "counts": {
+        "p2": 21,
+        "p1": 21
+      },
+      "changes_count": 2
+    },
+    {
+      "polygon_id": 14,
+      "polygon": "Iguala NORTE",
+      "axis": "lat",
+      "cut": 18.3556235,
+      "subpolygons": [
+        {
+          "subpolygon_id": 39,
+          "subpolygon": "Iguala NORTE A",
+          "vertices": 6,
+          "nudged_vertices": 4
+        },
+        {
+          "subpolygon_id": 40,
+          "subpolygon": "Iguala NORTE B",
+          "vertices": 13,
+          "nudged_vertices": 6
+        }
+      ],
+      "changes": [
+        {
+          "id": 51072,
+          "name": "ABARROTES LAS VIAS",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.357258,
+          "lon": -99.541312
+        },
+        {
+          "id": 51441,
+          "name": "ABARROTES RAYOS",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.359901,
+          "lon": -99.525979
+        },
+        {
+          "id": 51443,
+          "name": "AGUAS EL GORDO",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.35988,
+          "lon": -99.52828
+        },
+        {
+          "id": 51073,
+          "name": "BUFFET LAS MANANITAS",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.355799,
+          "lon": -99.539852
+        },
+        {
+          "id": 51074,
+          "name": "CASA PARTICULAR JORGE GUILLEN",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358604,
+          "lon": -99.524475
+        },
+        {
+          "id": 51214,
+          "name": "CEVICHERIA EL RINCON DEL MAR",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.356938,
+          "lon": -99.536247
+        },
+        {
+          "id": 51640,
+          "name": "MEXICO 51",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.356171,
+          "lon": -99.53157
+        },
+        {
+          "id": 55247,
+          "name": "MISCELANEA ALEX",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358133,
+          "lon": -99.52426
+        },
+        {
+          "id": 55246,
+          "name": "MISCELANEA GALLARDO",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358683,
+          "lon": -99.524905
+        },
+        {
+          "id": 51078,
+          "name": "MISCELANEA LANSUY",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358161,
+          "lon": -99.542083
+        },
+        {
+          "id": 51079,
+          "name": "MISCELANEA MARISOL",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.357496,
+          "lon": -99.547396
+        },
+        {
+          "id": 51080,
+          "name": "MISCELANEA MARTINEZ 704",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358568,
+          "lon": -99.548186
+        },
+        {
+          "id": 51083,
+          "name": "MISCELANEA MARTINEZ JR",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.358173,
+          "lon": -99.545997
+        },
+        {
+          "id": 51436,
+          "name": "MISCELANEA RAMSES",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.359262,
+          "lon": -99.520594
+        },
+        {
+          "id": 51081,
+          "name": "MISCELANEA RAYOS",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.359999,
+          "lon": -99.525965
+        },
+        {
+          "id": 51437,
+          "name": "MODELORAMA BATALLON BAJO CERO",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.3594,
+          "lon": -99.527389
+        },
+        {
+          "id": 51271,
+          "name": "MOJARRERA JULIA",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.357281,
+          "lon": -99.541117
+        },
+        {
+          "id": 51435,
+          "name": "NIEVES PATI",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.357268,
+          "lon": -99.534333
+        },
+        {
+          "id": 51086,
+          "name": "PANADERIA LA IMPERIAL",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.356067,
+          "lon": -99.534719
+        },
+        {
+          "id": 55241,
+          "name": "VENTA PUBLICO IGUALA",
+          "old_subpolygon": "Iguala NORTE A",
+          "new_subpolygon": "Iguala NORTE B",
+          "lat": 18.357315,
+          "lon": -99.534358
+        }
+      ],
+      "counts": {
+        "Iguala NORTE A": 34,
+        "Iguala NORTE B": 33
+      },
+      "changes_count": 20
+    }
+  ],
+  "final_counts": {
+    "Iguala NORTE": {
+      "Iguala NORTE A": 34,
+      "Iguala NORTE B": 33
+    },
+    "Iguala SUR": {
+      "p2": 21,
+      "p1": 21
+    }
+  }
+}

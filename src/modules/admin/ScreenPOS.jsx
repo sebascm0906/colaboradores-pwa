@@ -17,10 +17,12 @@ import {
   addProductToCart,
   changeCartItemQty,
   getDisplayStock,
+  getProductPrice,
   repriceCartFromCatalog,
   stockLabel,
 } from './posCart'
 import {
+  canRefreshCustomerPricelist,
   normalizeDefaultCustomerResponse,
   normalizeCustomerResults,
   shouldLoadCustomerSuggestions,
@@ -103,9 +105,11 @@ function MobilePOS({ warehouseId }) {
         name: catalog?.pricelist_name || '',
       })
       setCart((prev) => repriceCartFromCatalog(prev, list))
+      return true
     } catch (e) {
       logScreenError('ScreenPOS', 'getPosCatalog', e)
       setError('Error cargando productos')
+      return false
     } finally {
       setLoading(false)
     }
@@ -177,6 +181,11 @@ function MobilePOS({ warehouseId }) {
     setShowCustomerSearch(false)
     setCustomerQuery('')
     setCustomerResults([])
+  }
+
+  function refreshPricelistForCustomer() {
+    if (!canRefreshCustomerPricelist(customer)) return
+    loadProducts(customer.id)
   }
 
   // Payment
@@ -272,7 +281,7 @@ function MobilePOS({ warehouseId }) {
                       position: 'relative',
                     }}>
                     <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, marginBottom: 4, lineHeight: '1.3' }}>{p.name}</p>
-                    <p style={{ ...typo.title, color: TOKENS.colors.blue3, margin: 0 }}>{fmt(p.price || 0)}</p>
+                    <p style={{ ...typo.title, color: TOKENS.colors.blue3, margin: 0 }}>{fmt(getProductPrice(p))}</p>
                     <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                       {stockLabel(stock)}
                     </p>
@@ -297,9 +306,9 @@ function MobilePOS({ warehouseId }) {
             <p style={{ ...typo.overline, color: TOKENS.colors.textLow, marginBottom: 10 }}>CARRITO</p>
 
             {/* Customer chip */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               <div style={{
-                padding: '6px 12px', borderRadius: TOKENS.radius.pill,
+                padding: '6px 12px', borderRadius: TOKENS.radius.pill, minWidth: 0, flex: '1 1 150px',
                 background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.textSoft }}>{customer.name}</span>
@@ -310,6 +319,26 @@ function MobilePOS({ warehouseId }) {
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.blue3 }}>Cambiar cliente</span>
               </button>
+              {canRefreshCustomerPricelist(customer) && (
+                <button
+                  onClick={refreshPricelistForCustomer}
+                  disabled={loading}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: TOKENS.radius.pill,
+                    background: loading ? TOKENS.colors.surface : `${TOKENS.colors.success}18`,
+                    border: `1px solid ${loading ? TOKENS.colors.border : `${TOKENS.colors.success}35`}`,
+                    cursor: loading ? 'wait' : 'pointer',
+                  }}
+                >
+                  <span style={{
+                    ...typo.caption,
+                    color: loading ? TOKENS.colors.textMuted : TOKENS.colors.success,
+                  }}>
+                    {loading ? 'Actualizando...' : 'Actualizar lista'}
+                  </span>
+                </button>
+              )}
             </div>
 
             <div style={{ marginTop: -6, marginBottom: 12 }}>

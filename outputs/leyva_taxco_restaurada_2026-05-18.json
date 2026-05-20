@@ -1,0 +1,45 @@
+{
+  "write_ok": true,
+  "before": [
+    {
+      "id": 51389,
+      "name": "FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "active": false,
+      "customer_rank": 1,
+      "category_id": [
+        226
+      ],
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        42,
+        "Taxco A"
+      ],
+      "partner_latitude": 18.5547933,
+      "partner_longitude": -99.604405
+    }
+  ],
+  "after": [
+    {
+      "id": 51389,
+      "name": "FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "display_name": "FARMACIAS LEYVAS, FARMACIA LEYVA-TAXCO MIGUEL HIDALGO",
+      "active": true,
+      "customer_rank": 1,
+      "category_id": [],
+      "gf_delivery_polygon_id": [
+        26,
+        "Taxco"
+      ],
+      "gf_delivery_subpolygon_id": [
+        42,
+        "Taxco A"
+      ],
+      "partner_latitude": 18.5547933,
+      "partner_longitude": -99.604405
+    }
+  ]
+}

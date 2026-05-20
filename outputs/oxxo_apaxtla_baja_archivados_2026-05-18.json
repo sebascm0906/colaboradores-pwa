@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-05-18T15:47:26",
+  "baja_tag": {
+    "id": 226,
+    "name": "BAJA"
+  },
+  "updated_ids": [
+    51430,
+    51429
+  ],
+  "before": [
+    {
+      "id": 51430,
+      "name": "OXXO DALIAS",
+      "active": true,
+      "category_id": [],
+      "gf_delivery_polygon_id": [
+        10,
+        "Apaxtla"
+      ],
+      "gf_delivery_subpolygon_id": [
+        45,
+        "Apaxtla A"
+      ],
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "street": "LOPEZ MATEOS",
+      "city": "ZITACUARO"
+    },
+    {
+      "id": 51429,
+      "name": "Y GRIEGA CUE OXXO",
+      "active": true,
+      "category_id": [],
+      "gf_delivery_polygon_id": [
+        10,
+        "Apaxtla"
+      ],
+      "gf_delivery_subpolygon_id": [
+        45,
+        "Apaxtla A"
+      ],
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "street": "CARR. IGUALA ALTAMIRANO",
+      "city": "ZITACUARO"
+    }
+  ],
+  "after": [
+    {
+      "id": 51430,
+      "name": "OXXO DALIAS",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "gf_delivery_polygon_id": [
+        10,
+        "Apaxtla"
+      ],
+      "gf_delivery_subpolygon_id": [
+        45,
+        "Apaxtla A"
+      ],
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "street": "LOPEZ MATEOS",
+      "city": "ZITACUARO"
+    },
+    {
+      "id": 51429,
+      "name": "Y GRIEGA CUE OXXO",
+      "active": false,
+      "category_id": [
+        226
+      ],
+      "gf_delivery_polygon_id": [
+        10,
+        "Apaxtla"
+      ],
+      "gf_delivery_subpolygon_id": [
+        45,
+        "Apaxtla A"
+      ],
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "street": "CARR. IGUALA ALTAMIRANO",
+      "city": "ZITACUARO"
+    }
+  ]
+}

@@ -1,0 +1,2610 @@
+{
+  "market_lat": 18.3384798,
+  "market_lon": -99.540685,
+  "market_polygon_id": 69,
+  "market_subpolygon_id": 49,
+  "updated_count": 52,
+  "verified_ok_count": 52,
+  "updated": [
+    {
+      "excel_row": 2,
+      "name": "AGUA DE COCO ANGEL",
+      "marker": "s",
+      "partner_id": 51191,
+      "write_ok": true,
+      "before": {
+        "id": 51191,
+        "name": "AGUA DE COCO ANGEL",
+        "display_name": "AGUA DE COCO ANGEL",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3425686,
+        "partner_longitude": -99.5337303,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          37,
+          "p1"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51191,
+        "name": "AGUA DE COCO ANGEL",
+        "display_name": "AGUA DE COCO ANGEL",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 4,
+      "name": "AGUAS FRANCISCO",
+      "marker": "s",
+      "partner_id": 51193,
+      "write_ok": true,
+      "before": {
+        "id": 51193,
+        "name": "AGUAS FRANCISCO",
+        "display_name": "AGUAS FRANCISCO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3468527,
+        "partner_longitude": -99.547437,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51193,
+        "name": "AGUAS FRANCISCO",
+        "display_name": "AGUAS FRANCISCO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 5,
+      "name": "AGUAS FRESCAS LA MAMI",
+      "marker": "s",
+      "partner_id": 51194,
+      "write_ok": true,
+      "before": {
+        "id": 51194,
+        "name": "AGUAS FRESCAS LA MAMI",
+        "display_name": "AGUAS FRESCAS LA MAMI",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3468527,
+        "partner_longitude": -99.547437,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51194,
+        "name": "AGUAS FRESCAS LA MAMI",
+        "display_name": "AGUAS FRESCAS LA MAMI",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 6,
+      "name": "AGUAS FRESCAS LAS GUERAS",
+      "marker": "s tirado al centro",
+      "partner_id": 51195,
+      "write_ok": true,
+      "before": {
+        "id": 51195,
+        "name": "AGUAS FRESCAS LAS GUERAS",
+        "display_name": "AGUAS FRESCAS LAS GUERAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3374933,
+        "partner_longitude": -99.542225,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51195,
+        "name": "AGUAS FRESCAS LAS GUERAS",
+        "display_name": "AGUAS FRESCAS LAS GUERAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 7,
+      "name": "AGUAS GETSEMANI",
+      "marker": "s",
+      "partner_id": 51196,
+      "write_ok": true,
+      "before": {
+        "id": 51196,
+        "name": "AGUAS GETSEMANI",
+        "display_name": "AGUAS GETSEMANI",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3360178,
+        "partner_longitude": -99.5419747,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51196,
+        "name": "AGUAS GETSEMANI",
+        "display_name": "AGUAS GETSEMANI",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 9,
+      "name": "AGUAS OBREGON",
+      "marker": "s",
+      "partner_id": 51200,
+      "write_ok": true,
+      "before": {
+        "id": 51200,
+        "name": "AGUAS OBREGON",
+        "display_name": "AGUAS OBREGON",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3374933,
+        "partner_longitude": -99.542225,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51200,
+        "name": "AGUAS OBREGON",
+        "display_name": "AGUAS OBREGON",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 10,
+      "name": "ANTOJITOS MEXICANOS",
+      "marker": "s",
+      "partner_id": 51201,
+      "write_ok": true,
+      "before": {
+        "id": 51201,
+        "name": "ANTOJITOS MEXICANOS",
+        "display_name": "ANTOJITOS MEXICANOS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3374933,
+        "partner_longitude": -99.542225,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51201,
+        "name": "ANTOJITOS MEXICANOS",
+        "display_name": "ANTOJITOS MEXICANOS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 13,
+      "name": "CARNICERIA EL PAPAYO",
+      "marker": "s",
+      "partner_id": 51205,
+      "write_ok": true,
+      "before": {
+        "id": 51205,
+        "name": "CARNICERIA EL PAPAYO",
+        "display_name": "CARNICERIA EL PAPAYO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33852,
+        "partner_longitude": -99.54127,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51205,
+        "name": "CARNICERIA EL PAPAYO",
+        "display_name": "CARNICERIA EL PAPAYO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 15,
+      "name": "CEVICHERIA 7 MARES",
+      "marker": "s",
+      "partner_id": 51209,
+      "write_ok": true,
+      "before": {
+        "id": 51209,
+        "name": "CEVICHERIA 7 MARES",
+        "display_name": "CEVICHERIA 7 MARES",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51209,
+        "name": "CEVICHERIA 7 MARES",
+        "display_name": "CEVICHERIA 7 MARES",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 16,
+      "name": "CEVICHERIA ACAPULCO",
+      "marker": "s",
+      "partner_id": 51210,
+      "write_ok": true,
+      "before": {
+        "id": 51210,
+        "name": "CEVICHERIA ACAPULCO",
+        "display_name": "CEVICHERIA ACAPULCO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3455554,
+        "partner_longitude": -99.539733,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51210,
+        "name": "CEVICHERIA ACAPULCO",
+        "display_name": "CEVICHERIA ACAPULCO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 17,
+      "name": "CEVICHERIA EL PESCADITO",
+      "marker": "s",
+      "partner_id": 51212,
+      "write_ok": true,
+      "before": {
+        "id": 51212,
+        "name": "CEVICHERIA EL PESCADITO",
+        "display_name": "CEVICHERIA EL PESCADITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3382996,
+        "partner_longitude": -99.5411307,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51212,
+        "name": "CEVICHERIA EL PESCADITO",
+        "display_name": "CEVICHERIA EL PESCADITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 18,
+      "name": "CEVICHERIA EL PESCADOR",
+      "marker": "s",
+      "partner_id": 51213,
+      "write_ok": true,
+      "before": {
+        "id": 51213,
+        "name": "CEVICHERIA EL PESCADOR",
+        "display_name": "CEVICHERIA EL PESCADOR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3386036,
+        "partner_longitude": -99.541364,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51213,
+        "name": "CEVICHERIA EL PESCADOR",
+        "display_name": "CEVICHERIA EL PESCADOR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 19,
+      "name": "CEVICHERIA LA OLA",
+      "marker": "s",
+      "partner_id": 51215,
+      "write_ok": true,
+      "before": {
+        "id": 51215,
+        "name": "CEVICHERIA LA OLA",
+        "display_name": "CEVICHERIA LA OLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51215,
+        "name": "CEVICHERIA LA OLA",
+        "display_name": "CEVICHERIA LA OLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 20,
+      "name": "CEVICHERIA LAS BRISAS",
+      "marker": "s",
+      "partner_id": 51216,
+      "write_ok": true,
+      "before": {
+        "id": 51216,
+        "name": "CEVICHERIA LAS BRISAS",
+        "display_name": "CEVICHERIA LAS BRISAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51216,
+        "name": "CEVICHERIA LAS BRISAS",
+        "display_name": "CEVICHERIA LAS BRISAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 21,
+      "name": "CEVICHERIA MARINO",
+      "marker": "s",
+      "partner_id": 51217,
+      "write_ok": true,
+      "before": {
+        "id": 51217,
+        "name": "CEVICHERIA MARINO",
+        "display_name": "CEVICHERIA MARINO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3377269,
+        "partner_longitude": -99.539995,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          37,
+          "p1"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51217,
+        "name": "CEVICHERIA MARINO",
+        "display_name": "CEVICHERIA MARINO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 22,
+      "name": "CEVICHERIA PLAYA AZUL",
+      "marker": "s",
+      "partner_id": 51218,
+      "write_ok": true,
+      "before": {
+        "id": 51218,
+        "name": "CEVICHERIA PLAYA AZUL",
+        "display_name": "CEVICHERIA PLAYA AZUL",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3387592,
+        "partner_longitude": -99.541224,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51218,
+        "name": "CEVICHERIA PLAYA AZUL",
+        "display_name": "CEVICHERIA PLAYA AZUL",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 23,
+      "name": "CEVICHERIA SAMMY",
+      "marker": "s",
+      "partner_id": 51219,
+      "write_ok": true,
+      "before": {
+        "id": 51219,
+        "name": "CEVICHERIA SAMMY",
+        "display_name": "CEVICHERIA SAMMY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3382554,
+        "partner_longitude": -99.540726,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          37,
+          "p1"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51219,
+        "name": "CEVICHERIA SAMMY",
+        "display_name": "CEVICHERIA SAMMY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 24,
+      "name": "CHAMOYADAS HUERTO",
+      "marker": "s",
+      "partner_id": 51220,
+      "write_ok": true,
+      "before": {
+        "id": 51220,
+        "name": "CHAMOYADAS HUERTO",
+        "display_name": "CHAMOYADAS HUERTO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51220,
+        "name": "CHAMOYADAS HUERTO",
+        "display_name": "CHAMOYADAS HUERTO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 25,
+      "name": "COCOS EL HUERTO",
+      "marker": "s",
+      "partner_id": 51221,
+      "write_ok": true,
+      "before": {
+        "id": 51221,
+        "name": "COCOS EL HUERTO",
+        "display_name": "COCOS EL HUERTO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383608,
+        "partner_longitude": -99.540741,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51221,
+        "name": "COCOS EL HUERTO",
+        "display_name": "COCOS EL HUERTO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 26,
+      "name": "FONDA JUANITA",
+      "marker": "s",
+      "partner_id": 51223,
+      "write_ok": true,
+      "before": {
+        "id": 51223,
+        "name": "FONDA JUANITA",
+        "display_name": "FONDA JUANITA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3379834,
+        "partner_longitude": -99.540923,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          3,
+          "Retail / Moderno"
+        ]
+      },
+      "after": {
+        "id": 51223,
+        "name": "FONDA JUANITA",
+        "display_name": "FONDA JUANITA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          3,
+          "Retail / Moderno"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 27,
+      "name": "HAMBURGUESAS Y TORTAS LA SABROSITA",
+      "marker": "s",
+      "partner_id": 51226,
+      "write_ok": true,
+      "before": {
+        "id": 51226,
+        "name": "HAMBURGUESAS Y TORTAS LA SABROSITA",
+        "display_name": "HAMBURGUESAS Y TORTAS LA SABROSITA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3384798,
+        "partner_longitude": -99.540685,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51226,
+        "name": "HAMBURGUESAS Y TORTAS LA SABROSITA",
+        "display_name": "HAMBURGUESAS Y TORTAS LA SABROSITA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 29,
+      "name": "JUGOLANDIA KARLA",
+      "marker": "s",
+      "partner_id": 51229,
+      "write_ok": true,
+      "before": {
+        "id": 51229,
+        "name": "JUGOLANDIA KARLA",
+        "display_name": "JUGOLANDIA KARLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3385504,
+        "partner_longitude": -99.540685,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51229,
+        "name": "JUGOLANDIA KARLA",
+        "display_name": "JUGOLANDIA KARLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 30,
+      "name": "JUGOLANDIA LA CHINA",
+      "marker": "s",
+      "partner_id": 51197,
+      "write_ok": true,
+      "before": {
+        "id": 51197,
+        "name": "JUGOLANDIA LA CHINA",
+        "display_name": "JUGOLANDIA LA CHINA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.34462,
+        "partner_longitude": -99.5398,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51197,
+        "name": "JUGOLANDIA LA CHINA",
+        "display_name": "JUGOLANDIA LA CHINA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 31,
+      "name": "JUGOLANDIA LUZ",
+      "marker": "s",
+      "partner_id": 51199,
+      "write_ok": true,
+      "before": {
+        "id": 51199,
+        "name": "JUGOLANDIA LUZ",
+        "display_name": "JUGOLANDIA LUZ",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3374933,
+        "partner_longitude": -99.542225,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51199,
+        "name": "JUGOLANDIA LUZ",
+        "display_name": "JUGOLANDIA LUZ",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 32,
+      "name": "JUGOLANDIA TERE",
+      "marker": "s",
+      "partner_id": 51230,
+      "write_ok": true,
+      "before": {
+        "id": 51230,
+        "name": "JUGOLANDIA TERE",
+        "display_name": "JUGOLANDIA TERE",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3384798,
+        "partner_longitude": -99.540685,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51230,
+        "name": "JUGOLANDIA TERE",
+        "display_name": "JUGOLANDIA TERE",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 33,
+      "name": "JUGOLANDIA YAMARUT",
+      "marker": "s",
+      "partner_id": 51231,
+      "write_ok": true,
+      "before": {
+        "id": 51231,
+        "name": "JUGOLANDIA YAMARUT",
+        "display_name": "JUGOLANDIA YAMARUT",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383655,
+        "partner_longitude": -99.540771,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51231,
+        "name": "JUGOLANDIA YAMARUT",
+        "display_name": "JUGOLANDIA YAMARUT",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 34,
+      "name": "JUGOS EL GUERO",
+      "marker": "s",
+      "partner_id": 51269,
+      "write_ok": true,
+      "before": {
+        "id": 51269,
+        "name": "JUGOS EL GUERO",
+        "display_name": "JUGOS EL GUERO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3394002,
+        "partner_longitude": -99.5292677,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          37,
+          "p1"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51269,
+        "name": "JUGOS EL GUERO",
+        "display_name": "JUGOS EL GUERO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 36,
+      "name": "MOJARRERA BARTOLA",
+      "marker": "s",
+      "partner_id": 51233,
+      "write_ok": true,
+      "before": {
+        "id": 51233,
+        "name": "MOJARRERA BARTOLA",
+        "display_name": "MOJARRERA BARTOLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3377116,
+        "partner_longitude": -99.542048,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51233,
+        "name": "MOJARRERA BARTOLA",
+        "display_name": "MOJARRERA BARTOLA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 37,
+      "name": "MOJARRERA EVA",
+      "marker": "s",
+      "partner_id": 54510,
+      "write_ok": true,
+      "before": {
+        "id": 54510,
+        "name": "MOJARRERA EVA",
+        "display_name": "MOJARRERA EVA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ]
+      },
+      "after": {
+        "id": 54510,
+        "name": "MOJARRERA EVA",
+        "display_name": "MOJARRERA EVA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 38,
+      "name": "MOJARRERA IRIS",
+      "marker": "s",
+      "partner_id": 51234,
+      "write_ok": true,
+      "before": {
+        "id": 51234,
+        "name": "MOJARRERA IRIS",
+        "display_name": "MOJARRERA IRIS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3454584,
+        "partner_longitude": -99.539706,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51234,
+        "name": "MOJARRERA IRIS",
+        "display_name": "MOJARRERA IRIS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 39,
+      "name": "MOJARRERA JUANA",
+      "marker": "s",
+      "partner_id": 51235,
+      "write_ok": true,
+      "before": {
+        "id": 51235,
+        "name": "MOJARRERA JUANA",
+        "display_name": "MOJARRERA JUANA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3360178,
+        "partner_longitude": -99.5419747,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51235,
+        "name": "MOJARRERA JUANA",
+        "display_name": "MOJARRERA JUANA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 41,
+      "name": "PESCADERIA CHAVEZ",
+      "marker": "s",
+      "partner_id": 51239,
+      "write_ok": true,
+      "before": {
+        "id": 51239,
+        "name": "PESCADERIA CHAVEZ",
+        "display_name": "PESCADERIA CHAVEZ",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3364178,
+        "partner_longitude": -99.542567,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51239,
+        "name": "PESCADERIA CHAVEZ",
+        "display_name": "PESCADERIA CHAVEZ",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 42,
+      "name": "PESCADERIA CHELY",
+      "marker": "s",
+      "partner_id": 51240,
+      "write_ok": true,
+      "before": {
+        "id": 51240,
+        "name": "PESCADERIA CHELY",
+        "display_name": "PESCADERIA CHELY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.35445,
+        "partner_longitude": -99.547361,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51240,
+        "name": "PESCADERIA CHELY",
+        "display_name": "PESCADERIA CHELY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 43,
+      "name": "PESCADERIA EL CALAMARCITO",
+      "marker": "s",
+      "partner_id": 51241,
+      "write_ok": true,
+      "before": {
+        "id": 51241,
+        "name": "PESCADERIA EL CALAMARCITO",
+        "display_name": "PESCADERIA EL CALAMARCITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3384943,
+        "partner_longitude": -99.541117,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51241,
+        "name": "PESCADERIA EL CALAMARCITO",
+        "display_name": "PESCADERIA EL CALAMARCITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 44,
+      "name": "PESCADERIA EMMANUEL",
+      "marker": "s",
+      "partner_id": 51242,
+      "write_ok": true,
+      "before": {
+        "id": 51242,
+        "name": "PESCADERIA EMMANUEL",
+        "display_name": "PESCADERIA EMMANUEL",
+        "active": true,
+        "customer_rank": 2,
+        "partner_latitude": 18.33842,
+        "partner_longitude": -99.541288,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51242,
+        "name": "PESCADERIA EMMANUEL",
+        "display_name": "PESCADERIA EMMANUEL",
+        "active": true,
+        "customer_rank": 2,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 45,
+      "name": "PESCADERIA NANCY",
+      "marker": "s",
+      "partner_id": 51243,
+      "write_ok": true,
+      "before": {
+        "id": 51243,
+        "name": "PESCADERIA NANCY",
+        "display_name": "PESCADERIA NANCY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3385037,
+        "partner_longitude": -99.541219,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51243,
+        "name": "PESCADERIA NANCY",
+        "display_name": "PESCADERIA NANCY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 46,
+      "name": "TACOS AL PASTOR",
+      "marker": "s",
+      "partner_id": 51248,
+      "write_ok": true,
+      "before": {
+        "id": 51248,
+        "name": "TACOS AL PASTOR",
+        "display_name": "TACOS AL PASTOR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3544169,
+        "partner_longitude": -99.5271085,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51248,
+        "name": "TACOS AL PASTOR",
+        "display_name": "TACOS AL PASTOR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 47,
+      "name": "TACOS DE CANASTA CHIVIS",
+      "marker": "s",
+      "partner_id": 51250,
+      "write_ok": true,
+      "before": {
+        "id": 51250,
+        "name": "TACOS DE CANASTA CHIVIS",
+        "display_name": "TACOS DE CANASTA CHIVIS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3392003,
+        "partner_longitude": -99.5413201,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51250,
+        "name": "TACOS DE CANASTA CHIVIS",
+        "display_name": "TACOS DE CANASTA CHIVIS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 48,
+      "name": "TAQUERIA ALBINA",
+      "marker": "s",
+      "partner_id": 51251,
+      "write_ok": true,
+      "before": {
+        "id": 51251,
+        "name": "TAQUERIA ALBINA",
+        "display_name": "TAQUERIA ALBINA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3572033,
+        "partner_longitude": -99.534348,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51251,
+        "name": "TAQUERIA ALBINA",
+        "display_name": "TAQUERIA ALBINA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 49,
+      "name": "TAQUERIA DANY",
+      "marker": "s",
+      "partner_id": 51252,
+      "write_ok": true,
+      "before": {
+        "id": 51252,
+        "name": "TAQUERIA DANY",
+        "display_name": "TAQUERIA DANY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.338055,
+        "partner_longitude": -99.540848,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51252,
+        "name": "TAQUERIA DANY",
+        "display_name": "TAQUERIA DANY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 50,
+      "name": "TAQUERIA EL CUNADO",
+      "marker": "s",
+      "partner_id": 51254,
+      "write_ok": true,
+      "before": {
+        "id": 51254,
+        "name": "TAQUERIA EL CUNADO",
+        "display_name": "TAQUERIA EL CUNADO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3393175,
+        "partner_longitude": -99.540792,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51254,
+        "name": "TAQUERIA EL CUNADO",
+        "display_name": "TAQUERIA EL CUNADO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 51,
+      "name": "TAQUERIA ESCARLET",
+      "marker": "s",
+      "partner_id": 51255,
+      "write_ok": true,
+      "before": {
+        "id": 51255,
+        "name": "TAQUERIA ESCARLET",
+        "display_name": "TAQUERIA ESCARLET",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51255,
+        "name": "TAQUERIA ESCARLET",
+        "display_name": "TAQUERIA ESCARLET",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 52,
+      "name": "TAQUERIA JULIO",
+      "marker": "s",
+      "partner_id": 51259,
+      "write_ok": true,
+      "before": {
+        "id": 51259,
+        "name": "TAQUERIA JULIO",
+        "display_name": "TAQUERIA JULIO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.352378,
+        "partner_longitude": -99.539547,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51259,
+        "name": "TAQUERIA JULIO",
+        "display_name": "TAQUERIA JULIO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 53,
+      "name": "TAQUERIA LINDA",
+      "marker": "s",
+      "partner_id": 51253,
+      "write_ok": true,
+      "before": {
+        "id": 51253,
+        "name": "TAQUERIA LINDA",
+        "display_name": "TAQUERIA LINDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.338055,
+        "partner_longitude": -99.540731,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          37,
+          "p1"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51253,
+        "name": "TAQUERIA LINDA",
+        "display_name": "TAQUERIA LINDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 54,
+      "name": "TAQUERIA LIZBETH",
+      "marker": "s",
+      "partner_id": 51260,
+      "write_ok": true,
+      "before": {
+        "id": 51260,
+        "name": "TAQUERIA LIZBETH",
+        "display_name": "TAQUERIA LIZBETH",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3394164,
+        "partner_longitude": -99.541217,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51260,
+        "name": "TAQUERIA LIZBETH",
+        "display_name": "TAQUERIA LIZBETH",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 55,
+      "name": "TAQUERIA MARTHA",
+      "marker": "s",
+      "partner_id": 51256,
+      "write_ok": true,
+      "before": {
+        "id": 51256,
+        "name": "TAQUERIA MARTHA",
+        "display_name": "TAQUERIA MARTHA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3391994,
+        "partner_longitude": -99.5406574,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51256,
+        "name": "TAQUERIA MARTHA",
+        "display_name": "TAQUERIA MARTHA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 56,
+      "name": "TAQUERIA MARY",
+      "marker": "s",
+      "partner_id": 54508,
+      "write_ok": true,
+      "before": {
+        "id": 54508,
+        "name": "TAQUERIA MARY",
+        "display_name": "TAQUERIA MARY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.35800956831422,
+        "partner_longitude": -99.54650799923068,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ]
+      },
+      "after": {
+        "id": 54508,
+        "name": "TAQUERIA MARY",
+        "display_name": "TAQUERIA MARY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 57,
+      "name": "TAQUERIA MIRANDA",
+      "marker": "s",
+      "partner_id": 51261,
+      "write_ok": true,
+      "before": {
+        "id": 51261,
+        "name": "TAQUERIA MIRANDA",
+        "display_name": "TAQUERIA MIRANDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3394412,
+        "partner_longitude": -99.541048,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51261,
+        "name": "TAQUERIA MIRANDA",
+        "display_name": "TAQUERIA MIRANDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 58,
+      "name": "TAQUERIA MUNDO",
+      "marker": "s",
+      "partner_id": 51262,
+      "write_ok": true,
+      "before": {
+        "id": 51262,
+        "name": "TAQUERIA MUNDO",
+        "display_name": "TAQUERIA MUNDO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3383337,
+        "partner_longitude": -99.541261,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51262,
+        "name": "TAQUERIA MUNDO",
+        "display_name": "TAQUERIA MUNDO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 59,
+      "name": "TAQUERIA SABINA ALMAZAN",
+      "marker": "s",
+      "partner_id": 51263,
+      "write_ok": true,
+      "before": {
+        "id": 51263,
+        "name": "TAQUERIA SABINA ALMAZAN",
+        "display_name": "TAQUERIA SABINA ALMAZAN",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3391994,
+        "partner_longitude": -99.5406574,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51263,
+        "name": "TAQUERIA SABINA ALMAZAN",
+        "display_name": "TAQUERIA SABINA ALMAZAN",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 61,
+      "name": "TORTERIA NEYMAR",
+      "marker": "s",
+      "partner_id": 51272,
+      "write_ok": true,
+      "before": {
+        "id": 51272,
+        "name": "TORTERIA NEYMAR",
+        "display_name": "TORTERIA NEYMAR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3572678,
+        "partner_longitude": -99.541117,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51272,
+        "name": "TORTERIA NEYMAR",
+        "display_name": "TORTERIA NEYMAR",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    },
+    {
+      "excel_row": 62,
+      "name": "VENTA SANDALIAS",
+      "marker": "s",
+      "partner_id": 51266,
+      "write_ok": true,
+      "before": {
+        "id": 51266,
+        "name": "VENTA SANDALIAS",
+        "display_name": "VENTA SANDALIAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.3394029,
+        "partner_longitude": -99.54122,
+        "gf_delivery_polygon_id": [
+          13,
+          "Iguala SUR"
+        ],
+        "gf_delivery_subpolygon_id": [
+          38,
+          "p2"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "after": {
+        "id": 51266,
+        "name": "VENTA SANDALIAS",
+        "display_name": "VENTA SANDALIAS",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          2,
+          "Centros de Consumo (HORECA)"
+        ]
+      },
+      "verified_ok": true
+    }
+  ]
+}

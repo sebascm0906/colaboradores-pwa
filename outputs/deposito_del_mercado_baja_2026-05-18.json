@@ -1,0 +1,57 @@
+{
+  "baja_id": 226,
+  "tag_ok": true,
+  "archive_ok": true,
+  "before": {
+    "id": 51222,
+    "name": "DEPOSITO DEL MERCADO",
+    "display_name": "DEPOSITO DEL MERCADO",
+    "active": true,
+    "customer_rank": 1,
+    "category_id": [
+      124,
+      232
+    ],
+    "partner_latitude": 18.3385504,
+    "partner_longitude": -99.540685,
+    "gf_delivery_polygon_id": [
+      69,
+      "Mercado diario - clientes seleccionados"
+    ],
+    "gf_delivery_subpolygon_id": [
+      49,
+      "Mercado diario - clientes seleccionados A"
+    ],
+    "channel_id": [
+      2,
+      "Centros de Consumo (HORECA)"
+    ]
+  },
+  "after": {
+    "id": 51222,
+    "name": "DEPOSITO DEL MERCADO",
+    "display_name": "DEPOSITO DEL MERCADO",
+    "active": false,
+    "customer_rank": 1,
+    "category_id": [
+      226,
+      124,
+      232
+    ],
+    "partner_latitude": 18.3385504,
+    "partner_longitude": -99.540685,
+    "gf_delivery_polygon_id": [
+      69,
+      "Mercado diario - clientes seleccionados"
+    ],
+    "gf_delivery_subpolygon_id": [
+      49,
+      "Mercado diario - clientes seleccionados A"
+    ],
+    "channel_id": [
+      2,
+      "Centros de Consumo (HORECA)"
+    ]
+  },
+  "active_market_match_after": []
+}

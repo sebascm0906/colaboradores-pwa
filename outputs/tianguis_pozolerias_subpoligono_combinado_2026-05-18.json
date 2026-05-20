@@ -1,0 +1,982 @@
+{
+  "timestamp": "2026-05-18T13:07:39",
+  "parent_polygon_id": 23,
+  "subpolygon_id": 41,
+  "parent_before": {
+    "id": 23,
+    "name": "Tianguis",
+    "code": "106",
+    "delivery_zone_id": [
+      1,
+      "Iguala"
+    ],
+    "geojson": "{\"type\": \"Feature\", \"geometry\": {\"type\": \"Polygon\", \"coordinates\": [[[-99.52973789261269, 18.361545115634414], [-99.5249850182383, 18.361524750421598], [-99.52523178146767, 18.36700290605805], [-99.52882594154762, 18.367237098427005], [-99.52973789261269, 18.361545115634414]]]}, \"properties\": {}}",
+    "color": "#ff6600"
+  },
+  "sub_before": {
+    "id": 41,
+    "name": "Tianguis A",
+    "code": "106A",
+    "polygon_id": [
+      23,
+      "Tianguis"
+    ],
+    "delivery_zone_id": [
+      1,
+      "Iguala"
+    ],
+    "geojson": "{\"type\": \"Feature\", \"geometry\": {\"type\": \"Polygon\", \"coordinates\": [[[-99.5297318151, 18.3615517659], [-99.5249905967, 18.3615318245], [-99.5252371115, 18.3669956429], [-99.5288215369, 18.3672292396], [-99.5297318151, 18.3615517659]]]}, \"properties\": {}}",
+    "color": "#16a34a",
+    "sequence_letter": "A"
+  },
+  "parent_geojson_after": {
+    "type": "Feature",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -99.5491664276,
+            18.3454928912
+          ],
+          [
+            -99.5331333421,
+            18.3388099631
+          ],
+          [
+            -99.5238396387,
+            18.3632607588
+          ],
+          [
+            -99.5259880169,
+            18.3678735308
+          ],
+          [
+            -99.527663597,
+            18.3690286862
+          ],
+          [
+            -99.5454873956,
+            18.3603532549
+          ],
+          [
+            -99.5491664276,
+            18.3454928912
+          ]
+        ]
+      ]
+    },
+    "properties": {}
+  },
+  "sub_geojson_after": {
+    "type": "Feature",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            -99.5483803242,
+            18.3461109861
+          ],
+          [
+            -99.5331977029,
+            18.3398078898
+          ],
+          [
+            -99.5247041211,
+            18.3627580957
+          ],
+          [
+            -99.5266021001,
+            18.3670842895
+          ],
+          [
+            -99.5281528711,
+            18.3681565561
+          ],
+          [
+            -99.5445257228,
+            18.3600790555
+          ],
+          [
+            -99.5483803242,
+            18.3461109861
+          ]
+        ]
+      ]
+    },
+    "properties": {}
+  },
+  "pozoleria_count": 9,
+  "tianguis_active_count": 48,
+  "updated_pozoleria_ids": [
+    51088,
+    58045,
+    58046,
+    58041,
+    58040,
+    51089,
+    58043,
+    58042,
+    58044
+  ],
+  "verified": [
+    {
+      "id": 51474,
+      "name": "ABARROTES CENTRO TOMATAL",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51192,
+      "name": "AGUAS DE COCO II ANDRES OCAMPO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51463,
+      "name": "AGUAS FRESCAS CHINO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51461,
+      "name": "AGUAS FRESCAS DONA MINE",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51467,
+      "name": "AGUAS FRESCAS EL HUAMUCHIL",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51468,
+      "name": "AGUAS FRESCAS KARINA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51492,
+      "name": "AGUAS FRESCAS YURI",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51490,
+      "name": "AGUAS Y REFRESCOS VICTOR",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51488,
+      "name": "ANTOJITOS MEXICANOS CHEL.A",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51489,
+      "name": "ANTOJITOS MEXICANOS LA TERRAZA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51487,
+      "name": "BANOS PUBLICOS MI OFICINA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51444,
+      "name": "BAR LAS DELICIAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51485,
+      "name": "BISUTERIA ANGEL",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51484,
+      "name": "BONETERIA ESTA CHINITO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51460,
+      "name": "CECINA DE YECAPIXTLA LOS COMPADRES",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51454,
+      "name": "CECINA DE YECAPIXTLA LOS CUNADOS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51447,
+      "name": "CERVEFRIO CENTRAL DE ABASTOS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51462,
+      "name": "COCINA ECONOMICA DONA JOSE",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51455,
+      "name": "COOPERATIVA BACHILLERES",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51466,
+      "name": "DISENOS HERNANDEZ",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51470,
+      "name": "DISTRIBUIDORA DE COLCHAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51457,
+      "name": "FRUTERIA LAS ESCALERAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51452,
+      "name": "GRUPO LALA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51459,
+      "name": "JOYERIA JAQUELIN",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51465,
+      "name": "JUGOS Y LICUADOS LUISA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51471,
+      "name": "MICHELADAS ELIAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51445,
+      "name": "MISC. TAMARINDOS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51161,
+      "name": "MISCELANEA JR",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": false,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51480,
+      "name": "MISCELANEA PAU",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51477,
+      "name": "MOCHILAS RODRIGUEZ",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51450,
+      "name": "MODELORAMA C. DE ABASTO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51481,
+      "name": "NOVEDADES DONA YOLA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51472,
+      "name": "PALETERIA IGUALA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51088,
+      "name": "PAPELERIA Y POZOLERIA ALEX",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51482,
+      "name": "PESCADERIA CHAVES",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58045,
+      "name": "POZOLERIA GARIBALDI",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58046,
+      "name": "POZOLERIA LA LUPITA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58041,
+      "name": "POZOLERIA LAS PALMAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58040,
+      "name": "POZOLERIA MARY",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51089,
+      "name": "POZOLERIA POCZO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58043,
+      "name": "POZOLERIA SAN MARTIN",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58042,
+      "name": "POZOLERIA TLACOLOLEROS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 58044,
+      "name": "POZOLERIA YAQUESITA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51479,
+      "name": "SOPAS Y PALOMAS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51473,
+      "name": "TACOS CHONITO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51458,
+      "name": "TACOS Y AGUAS LA GUERA ROSSY",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51464,
+      "name": "TAQUERIA CHELA II",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51469,
+      "name": "TAQUERIA DONA CUQUITA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51476,
+      "name": "TAQUERIA EL AMIGO MUNDO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51478,
+      "name": "TAQUERIA EMILYS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51475,
+      "name": "TAQUERIA HUGO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51451,
+      "name": "TAQUERIA KANDY",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51382,
+      "name": "TAQUERIA LOS PRIMOS",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51493,
+      "name": "TAQUERIA REY",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51491,
+      "name": "VENTA DE ROPA",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51448,
+      "name": "VINOS Y LICORES EL MEZCALERO",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    },
+    {
+      "id": 51483,
+      "name": "ZAPATOS ANGY",
+      "polygon": [
+        23,
+        "Tianguis"
+      ],
+      "subpolygon": [
+        41,
+        "Tianguis + Pozolerias Jueves"
+      ],
+      "jueves": true,
+      "inside_subpolygon": true,
+      "ok_assignment": true
+    }
+  ],
+  "all_pozolerias_assigned": true,
+  "all_points_inside_subpolygon": true
+}

@@ -1,0 +1,771 @@
+{
+  "updated": [
+    {
+      "name": "MISC. MIRIAM",
+      "id": 51351,
+      "source": "coord_usuario",
+      "lat": 18.297706949333726,
+      "lon": -99.45989391652947,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 51351,
+        "name": "MISC. MIRIAM",
+        "display_name": "MISC. MIRIAM",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          1,
+          "Tradicional"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "after": {
+        "id": 51351,
+        "name": "MISC. MIRIAM",
+        "display_name": "MISC. MIRIAM",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.29770694933378,
+        "partner_longitude": -99.4598939165297,
+        "gf_delivery_polygon_id": [
+          25,
+          "Huixuco"
+        ],
+        "gf_delivery_subpolygon_id": [
+          1,
+          "TEPECUA"
+        ],
+        "channel_id": [
+          1,
+          "Tradicional"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "chosen_polygon": "Huixuco",
+      "chosen_subpolygon": "TEPECUA",
+      "chosen_subpolygon_code": "119B",
+      "all_sub_hits": [
+        "119B TEPECUA"
+      ],
+      "all_poly_hits": [
+        "119 Huixuco"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 2871.6,
+          "name": "TEPECUA",
+          "code": "119B"
+        },
+        {
+          "distance_m": 4720.0,
+          "name": "Tuxpan",
+          "code": "119C"
+        },
+        {
+          "distance_m": 5275.6,
+          "name": "HUITZUCO",
+          "code": "119A"
+        }
+      ]
+    },
+    {
+      "name": "AGUAS ALAMEDA",
+      "id": 54512,
+      "source": "centro_mercado_median",
+      "lat": 18.3384798,
+      "lon": -99.540685,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 54512,
+        "name": "AGUAS ALAMEDA",
+        "display_name": "AGUAS ALAMEDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "after": {
+        "id": 54512,
+        "name": "AGUAS ALAMEDA",
+        "display_name": "AGUAS ALAMEDA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "chosen_polygon": "Mercado diario - clientes seleccionados",
+      "chosen_subpolygon": "Mercado diario - clientes seleccionados A",
+      "chosen_subpolygon_code": "123A",
+      "all_sub_hits": [
+        "123A Mercado diario - clientes seleccionados A"
+      ],
+      "all_poly_hits": [
+        "101 Iguala SUR",
+        "123 Mercado diario - clientes seleccionados"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 778.9,
+          "name": "p1",
+          "code": "101A"
+        },
+        {
+          "distance_m": 917.8,
+          "name": "Mercado diario - clientes seleccionados A",
+          "code": "123A"
+        },
+        {
+          "distance_m": 1029.1,
+          "name": "Mercado A",
+          "code": "104A"
+        }
+      ]
+    },
+    {
+      "name": "AGUAS HIDALGO",
+      "id": 54511,
+      "source": "centro_mercado_median",
+      "lat": 18.3384798,
+      "lon": -99.540685,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 54511,
+        "name": "AGUAS HIDALGO",
+        "display_name": "AGUAS HIDALGO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "after": {
+        "id": 54511,
+        "name": "AGUAS HIDALGO",
+        "display_name": "AGUAS HIDALGO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "chosen_polygon": "Mercado diario - clientes seleccionados",
+      "chosen_subpolygon": "Mercado diario - clientes seleccionados A",
+      "chosen_subpolygon_code": "123A",
+      "all_sub_hits": [
+        "123A Mercado diario - clientes seleccionados A"
+      ],
+      "all_poly_hits": [
+        "101 Iguala SUR",
+        "123 Mercado diario - clientes seleccionados"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 778.9,
+          "name": "p1",
+          "code": "101A"
+        },
+        {
+          "distance_m": 917.8,
+          "name": "Mercado diario - clientes seleccionados A",
+          "code": "123A"
+        },
+        {
+          "distance_m": 1029.1,
+          "name": "Mercado A",
+          "code": "104A"
+        }
+      ]
+    },
+    {
+      "name": "MOJARRERA EVA",
+      "id": 54510,
+      "source": "centro_mercado_median",
+      "lat": 18.3384798,
+      "lon": -99.540685,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 54510,
+        "name": "MOJARRERA EVA",
+        "display_name": "MOJARRERA EVA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "after": {
+        "id": 54510,
+        "name": "MOJARRERA EVA",
+        "display_name": "MOJARRERA EVA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.33847980000006,
+        "partner_longitude": -99.54068500000024,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "chosen_polygon": "Mercado diario - clientes seleccionados",
+      "chosen_subpolygon": "Mercado diario - clientes seleccionados A",
+      "chosen_subpolygon_code": "123A",
+      "all_sub_hits": [
+        "123A Mercado diario - clientes seleccionados A"
+      ],
+      "all_poly_hits": [
+        "101 Iguala SUR",
+        "123 Mercado diario - clientes seleccionados"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 778.9,
+          "name": "p1",
+          "code": "101A"
+        },
+        {
+          "distance_m": 917.8,
+          "name": "Mercado diario - clientes seleccionados A",
+          "code": "123A"
+        },
+        {
+          "distance_m": 1029.1,
+          "name": "Mercado A",
+          "code": "104A"
+        }
+      ]
+    },
+    {
+      "name": "TAQUERIA MARY",
+      "id": 54508,
+      "source": "coord_usuario",
+      "lat": 18.358009568314163,
+      "lon": -99.54650799923044,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 54508,
+        "name": "TAQUERIA MARY",
+        "display_name": "TAQUERIA MARY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "after": {
+        "id": 54508,
+        "name": "TAQUERIA MARY",
+        "display_name": "TAQUERIA MARY",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.35800956831422,
+        "partner_longitude": -99.54650799923068,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "chosen_polygon": "Iguala NORTE",
+      "chosen_subpolygon": "Iguala NORTE A",
+      "chosen_subpolygon_code": "102A",
+      "all_sub_hits": [
+        "102A Iguala NORTE A"
+      ],
+      "all_poly_hits": [
+        "102 Iguala NORTE"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 669.6,
+          "name": "Iguala NORTE A",
+          "code": "102A"
+        },
+        {
+          "distance_m": 1396.2,
+          "name": "Mercado A",
+          "code": "104A"
+        },
+        {
+          "distance_m": 1476.0,
+          "name": "Mercado diario - clientes seleccionados A",
+          "code": "123A"
+        }
+      ]
+    },
+    {
+      "name": "TAQUERIA VILLA1000",
+      "id": 54509,
+      "source": "coord_usuario",
+      "lat": 18.355902346672224,
+      "lon": -99.53681502985643,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 54509,
+        "name": "TAQUERIA VILLA1000",
+        "display_name": "TAQUERIA VILLA1000",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": [
+          69,
+          "Mercado diario - clientes seleccionados"
+        ],
+        "gf_delivery_subpolygon_id": [
+          49,
+          "Mercado diario - clientes seleccionados A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "after": {
+        "id": 54509,
+        "name": "TAQUERIA VILLA1000",
+        "display_name": "TAQUERIA VILLA1000",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.35590234667228,
+        "partner_longitude": -99.53681502985665,
+        "gf_delivery_polygon_id": [
+          14,
+          "Iguala NORTE"
+        ],
+        "gf_delivery_subpolygon_id": [
+          39,
+          "Iguala NORTE A"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          124,
+          232
+        ]
+      },
+      "chosen_polygon": "Iguala NORTE",
+      "chosen_subpolygon": "Iguala NORTE A",
+      "chosen_subpolygon_code": "102A",
+      "all_sub_hits": [
+        "102A Iguala NORTE A",
+        "123A Mercado diario - clientes seleccionados A"
+      ],
+      "all_poly_hits": [
+        "102 Iguala NORTE",
+        "123 Mercado diario - clientes seleccionados"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 952.8,
+          "name": "Mercado A",
+          "code": "104A"
+        },
+        {
+          "distance_m": 1064.2,
+          "name": "Mercado diario - clientes seleccionados A",
+          "code": "123A"
+        },
+        {
+          "distance_m": 1300.2,
+          "name": "Tianguis A",
+          "code": "106A"
+        }
+      ]
+    },
+    {
+      "name": "RESTAURANTE BARBA NEGRA",
+      "id": 55213,
+      "source": "coord_usuario",
+      "lat": 18.357684556645992,
+      "lon": -99.48122430340284,
+      "write_ok": true,
+      "geom_status": "OK",
+      "before": {
+        "id": 55213,
+        "name": "RESTAURANTE BARBA NEGRA",
+        "display_name": "RESTAURANTE BARBA NEGRA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "after": {
+        "id": 55213,
+        "name": "RESTAURANTE BARBA NEGRA",
+        "display_name": "RESTAURANTE BARBA NEGRA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.35768455664605,
+        "partner_longitude": -99.48122430340308,
+        "gf_delivery_polygon_id": [
+          25,
+          "Huixuco"
+        ],
+        "gf_delivery_subpolygon_id": [
+          48,
+          "Tuxpan"
+        ],
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "chosen_polygon": "Huixuco",
+      "chosen_subpolygon": "Tuxpan",
+      "chosen_subpolygon_code": "119C",
+      "all_sub_hits": [
+        "119C Tuxpan"
+      ],
+      "all_poly_hits": [
+        "119 Huixuco"
+      ],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 2323.4,
+          "name": "Tuxpan",
+          "code": "119C"
+        },
+        {
+          "distance_m": 4951.5,
+          "name": "Tianguis A",
+          "code": "106A"
+        },
+        {
+          "distance_m": 5980.3,
+          "name": "p1",
+          "code": "101A"
+        }
+      ]
+    },
+    {
+      "name": "RESTAURANTE EL COQUITO",
+      "id": 55212,
+      "source": "coord_usuario",
+      "lat": 18.364138032100694,
+      "lon": -99.47862625823058,
+      "write_ok": true,
+      "geom_status": "OUTSIDE",
+      "before": {
+        "id": 55212,
+        "name": "RESTAURANTE EL COQUITO",
+        "display_name": "RESTAURANTE EL COQUITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "after": {
+        "id": 55212,
+        "name": "RESTAURANTE EL COQUITO",
+        "display_name": "RESTAURANTE EL COQUITO",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.36413803210075,
+        "partner_longitude": -99.47862625823082,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "chosen_polygon": "",
+      "chosen_subpolygon": "",
+      "chosen_subpolygon_code": "",
+      "all_sub_hits": [],
+      "all_poly_hits": [],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 2975.0,
+          "name": "Tuxpan",
+          "code": "119C"
+        },
+        {
+          "distance_m": 5179.3,
+          "name": "Tianguis A",
+          "code": "106A"
+        },
+        {
+          "distance_m": 6533.9,
+          "name": "p1",
+          "code": "101A"
+        }
+      ]
+    },
+    {
+      "name": "RESTAURANTE LA HUERTA",
+      "id": 55210,
+      "source": "coord_usuario",
+      "lat": 18.710130026863908,
+      "lon": -99.39137354682433,
+      "write_ok": true,
+      "geom_status": "OUTSIDE",
+      "before": {
+        "id": 55210,
+        "name": "RESTAURANTE LA HUERTA",
+        "display_name": "RESTAURANTE LA HUERTA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 0.0,
+        "partner_longitude": 0.0,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "after": {
+        "id": 55210,
+        "name": "RESTAURANTE LA HUERTA",
+        "display_name": "RESTAURANTE LA HUERTA",
+        "active": true,
+        "customer_rank": 1,
+        "partner_latitude": 18.71013002686397,
+        "partner_longitude": -99.39137354682455,
+        "gf_delivery_polygon_id": false,
+        "gf_delivery_subpolygon_id": false,
+        "channel_id": [
+          5,
+          "Hogar"
+        ],
+        "category_id": [
+          233
+        ]
+      },
+      "chosen_polygon": "",
+      "chosen_subpolygon": "",
+      "chosen_subpolygon_code": "",
+      "all_sub_hits": [],
+      "all_poly_hits": [],
+      "nearest_subpolygon": [
+        {
+          "distance_m": 31966.7,
+          "name": "Taxco A",
+          "code": "108A"
+        },
+        {
+          "distance_m": 40839.4,
+          "name": "Iguala NORTE B",
+          "code": "102B"
+        },
+        {
+          "distance_m": 41107.7,
+          "name": "Tianguis A",
+          "code": "106A"
+        }
+      ]
+    }
+  ],
+  "failed": [],
+  "pending_without_coordinates": [
+    {
+      "name": "MISCELANEA BETOS",
+      "matches": [
+        {
+          "id": 51311,
+          "name": "MISCELANEA BETOS",
+          "display_name": "MISCELANEA BETOS",
+          "active": true,
+          "customer_rank": 1,
+          "partner_latitude": 0.0,
+          "partner_longitude": 0.0,
+          "gf_delivery_polygon_id": false,
+          "gf_delivery_subpolygon_id": false,
+          "channel_id": [
+            1,
+            "Tradicional"
+          ],
+          "category_id": [
+            233
+          ]
+        }
+      ]
+    },
+    {
+      "name": "BOTANERO VILLA TUXPAN",
+      "matches": [
+        {
+          "id": 55211,
+          "name": "BOTANERO VILLA TUXPAN",
+          "display_name": "BOTANERO VILLA TUXPAN",
+          "active": true,
+          "customer_rank": 1,
+          "partner_latitude": 0.0,
+          "partner_longitude": 0.0,
+          "gf_delivery_polygon_id": false,
+          "gf_delivery_subpolygon_id": false,
+          "channel_id": [
+            5,
+            "Hogar"
+          ],
+          "category_id": [
+            233
+          ]
+        }
+      ]
+    }
+  ]
+}
