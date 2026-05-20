@@ -457,26 +457,25 @@ export default function AdminPosForm() {
             >
               Cambiar
             </button>
-            {canRefreshCustomerPricelist(customer) && (
-              <button
-                type="button"
-                onClick={refreshPricelistForCustomer}
-                disabled={loading}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: TOKENS.radius.md,
-                  background: loading ? TOKENS.colors.surface : `${TOKENS.colors.success}18`,
-                  border: `1px solid ${loading ? TOKENS.colors.border : `${TOKENS.colors.success}35`}`,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: loading ? TOKENS.colors.textMuted : TOKENS.colors.success,
-                  fontFamily: "'DM Sans', sans-serif",
-                  cursor: loading ? 'wait' : 'pointer',
-                }}
-              >
-                {loading ? 'Actualizando...' : 'Actualizar lista'}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={refreshPricelistForCustomer}
+              disabled={loading || !canRefreshCustomerPricelist(customer)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: TOKENS.radius.md,
+                background: loading ? TOKENS.colors.surface : `${TOKENS.colors.success}18`,
+                border: `1px solid ${loading ? TOKENS.colors.border : `${TOKENS.colors.success}35`}`,
+                fontSize: 11,
+                fontWeight: 600,
+                color: loading ? TOKENS.colors.textMuted : TOKENS.colors.success,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: loading ? 'wait' : canRefreshCustomerPricelist(customer) ? 'pointer' : 'not-allowed',
+                opacity: canRefreshCustomerPricelist(customer) ? 1 : 0.55,
+              }}
+            >
+              {loading ? 'Actualizando...' : 'Actualizar lista'}
+            </button>
           </div>
 
           <div style={{ marginBottom: 12 }}>
