@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast'
 import { normalizeSessionRoleContext } from './lib/roleContext'
 import { api } from './lib/api'
 import { clearGrupoFrioLocalState } from './lib/clearLocalState'
+import { handleExpiredSession } from './lib/sessionExpiration'
 import { clearStaleOperatorTurnClosed, getOperatorCloseState } from './modules/shared/operatorTurnCloseStore'
 import { getModuleById } from './modules/registry'
 import { resolveModuleContextRole, getEffectiveJobKeys } from './lib/roleContext'
@@ -336,8 +337,10 @@ export default function App() {
   // Limpieza completa de estado operativo conocido — phone-loss data retention.
   useEffect(() => {
     function onSessionExpired() {
-      try { clearGrupoFrioLocalState() } catch { /* ignore */ }
-      setSession(null)
+      handleExpiredSession({
+        clearLocalState: clearGrupoFrioLocalState,
+        setSession,
+      })
     }
     window.addEventListener('gf:session-expired', onSessionExpired)
     return () => window.removeEventListener('gf:session-expired', onSessionExpired)
