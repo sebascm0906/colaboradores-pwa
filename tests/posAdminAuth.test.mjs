@@ -445,6 +445,50 @@ test('pos customer search filters customers to the Iguala analytic unit', async 
   assert.equal(result.data[0].id, 44)
 })
 
+test('pos customer search includes new contacts without customer_rank', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'account.analytic.account') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 201, name: '[IGU] Iguala', code: 'IGU' }] },
+      })
+    }
+
+    assert.equal(params.model, 'res.partner')
+    assert.equal(
+      params.domain.some((term) => Array.isArray(term) && term[0] === 'customer_rank'),
+      false,
+      'customer search should not require customer_rank',
+    )
+
+    const hasNameSearch = params.domain.some((term) => (
+      Array.isArray(term) && term[0] === 'name' && term[1] === 'ilike' && term[2] === 'nuevo'
+    ))
+    return createJsonResponse(200, {
+      result: {
+        response: hasNameSearch
+          ? [{ id: 61100, name: 'Contacto Nuevo', customer_rank: 0, x_analytic_un_id: [201, '[IGU] Iguala'] }]
+          : [],
+      },
+    })
+  }
+
+  const result = await api('GET', '/pwa-admin/customers?q=nuevo&company_id=34')
+
+  assert.equal(result.data.length, 1)
+  assert.equal(result.data[0].id, 61100)
+})
+
 test('pos customer search includes phone, mobile, email, vat and ref fields', async () => {
   setSession()
 

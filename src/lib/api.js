@@ -857,7 +857,6 @@ function posCustomerAnalyticDomain(analyticUnitId) {
 function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
   const baseDomain = [
     ['active', '=', true],
-    ['customer_rank', '>', 0],
     ...posCustomerAnalyticDomain(analyticUnitId),
   ]
   return companyId
