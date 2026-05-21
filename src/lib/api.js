@@ -725,6 +725,23 @@ function buildPosCustomerBaseDomains(companyId) {
     : [baseDomain]
 }
 
+function buildPosCustomerIdBaseDomains(companyId) {
+  const baseDomain = [['active', '=', true]]
+  return companyId
+    ? [
+        [...baseDomain, ['company_id', '=', companyId]],
+        [...baseDomain, ['company_id', '=', false]],
+      ]
+    : [baseDomain]
+}
+
+function parsePosCustomerIdQuery(query) {
+  const normalized = String(query || '').trim()
+  if (/^\d+$/.test(normalized)) return Number(normalized)
+  const idMatch = normalized.match(/\bid\s*:?\s*(\d+)\b/i)
+  return idMatch ? Number(idMatch[1]) : 0
+}
+
 function addUniquePosCustomers(target, rows = []) {
   const seen = new Set(target.map((row) => Number(row?.id || 0)).filter(Boolean))
   for (const row of rows) {
@@ -758,6 +775,18 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
       addUniquePosCustomers(rows, await readPosCustomerRows(baseDomain, safeLimit - rows.length))
     }
   } else {
+    const exactId = parsePosCustomerIdQuery(query)
+    if (exactId) {
+      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0))
+      for (const baseDomain of idBaseDomains) {
+        if (rows.length >= safeLimit) break
+        addUniquePosCustomers(
+          rows,
+          await readPosCustomerRows([...baseDomain, ['id', '=', exactId]], safeLimit - rows.length),
+        )
+      }
+    }
+
     const searchFields = ['name', 'vat', 'ref', 'phone', 'mobile']
     for (const baseDomain of baseDomains) {
       if (rows.length >= safeLimit) break

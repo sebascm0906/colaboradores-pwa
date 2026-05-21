@@ -245,3 +245,57 @@ test('pos customer search splits text search into safe simple domains', async ()
     }],
   })
 })
+
+test('pos customer search can find a customer by exact Odoo id', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    assert.equal(params.model, 'res.partner')
+    assert.equal(params.domain.includes('|'), false, 'customer id search used an OR domain')
+
+    const isExactIdSearch = params.domain.some((term) => (
+      Array.isArray(term) && term[0] === 'id' && term[1] === '=' && term[2] === 61100
+    ))
+    return createJsonResponse(200, {
+      result: {
+        response: isExactIdSearch
+          ? [{ id: 61100, name: 'Cliente ID 61100', property_product_pricelist: [81, 'Lista cliente'] }]
+          : [],
+      },
+    })
+  }
+
+  const result = await api('GET', '/pwa-admin/customers?q=ID:%2061100&company_id=34')
+
+  assert.equal(
+    calls.some((call) => call.payload?.params?.domain?.some((term) => (
+      Array.isArray(term) && term[0] === 'id' && term[1] === '=' && term[2] === 61100
+    ))),
+    true,
+  )
+  assert.deepEqual(result, {
+    ok: true,
+    message: 'OK',
+    data: [{
+      id: 61100,
+      name: 'Cliente ID 61100',
+      email: '',
+      phone: '',
+      mobile: '',
+      vat: '',
+      ref: '',
+      is_company: false,
+      pricelist_id: 81,
+      pricelist_name: 'Lista cliente',
+    }],
+  })
+})
