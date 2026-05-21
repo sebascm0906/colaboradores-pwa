@@ -17,6 +17,7 @@ import {
   addProductToCart,
   changeCartItemQty,
   getDisplayStock,
+  getProductPrice,
   repriceCartFromCatalog,
   stockLabel,
 } from './posCart'
@@ -272,7 +273,7 @@ function MobilePOS({ warehouseId }) {
                       position: 'relative',
                     }}>
                     <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, marginBottom: 4, lineHeight: '1.3' }}>{p.name}</p>
-                    <p style={{ ...typo.title, color: TOKENS.colors.blue3, margin: 0 }}>{fmt(p.price || 0)}</p>
+                    <p style={{ ...typo.title, color: TOKENS.colors.blue3, margin: 0 }}>{fmt(getProductPrice(p))}</p>
                     <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                       {stockLabel(stock)}
                     </p>

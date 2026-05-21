@@ -17,6 +17,7 @@ import {
   addProductToCart,
   changeCartItemQty,
   getDisplayStock,
+  getProductPrice,
   repriceCartFromCatalog,
   stockLabel,
 } from '../posCart'
@@ -361,7 +362,7 @@ export default function AdminPosForm() {
                     </p>
                     <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 6 }}>
                       <span style={{ fontSize: 15, fontWeight: 700, color: TOKENS.colors.blue3 }}>
-                        {fmt(p.price || p.list_price || 0)}
+                        {fmt(getProductPrice(p))}
                       </span>
                       <span style={{ fontSize: 10, fontWeight: 600, color: TOKENS.colors.textMuted }}>
                         {stockLabel(stock)}

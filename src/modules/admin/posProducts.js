@@ -16,11 +16,36 @@ export function buildPosCatalogPath({ warehouseId, companyId, partnerId } = {}) 
   })}`
 }
 
+function normalizeRelation(value) {
+  if (Array.isArray(value)) {
+    return {
+      id: Number(value[0] || 0) || false,
+      name: String(value[1] || '').trim(),
+    }
+  }
+  if (value && typeof value === 'object') {
+    return {
+      id: Number(value.id || 0) || false,
+      name: String(value.name || value.display_name || '').trim(),
+    }
+  }
+  return {
+    id: Number(value || 0) || false,
+    name: '',
+  }
+}
+
 export function normalizePosCatalogResponse(payload) {
   const data = payload?.data ?? payload ?? {}
+  const pricelist = normalizeRelation(
+    data?.pricelist_id
+    || data?.pricelist
+    || data?.price_list
+    || data?.priceList,
+  )
   return {
-    pricelist_id: data?.pricelist_id || false,
-    pricelist_name: data?.pricelist_name || '',
+    pricelist_id: pricelist.id,
+    pricelist_name: String(data?.pricelist_name || pricelist.name || '').trim(),
     products: normalizePosProductsResponse(payload),
   }
 }

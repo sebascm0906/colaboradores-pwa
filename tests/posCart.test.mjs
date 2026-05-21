@@ -5,6 +5,7 @@ import {
   addProductToCart,
   changeCartItemQty,
   repriceCartFromCatalog,
+  getProductPrice,
   stockLabel,
 } from '../src/modules/admin/posCart.js'
 
@@ -25,6 +26,21 @@ test('addProductToCart allows a product with zero stock', () => {
       stock: 0,
     },
   ])
+})
+
+test('getProductPrice prefers pricelist price_unit over list_price', () => {
+  assert.equal(getProductPrice({ price_unit: 70, list_price: 85 }), 70)
+})
+
+test('addProductToCart uses price_unit returned by the selected customer catalog', () => {
+  const cart = addProductToCart([], {
+    id: 10,
+    name: 'Hielo',
+    price_unit: 70,
+    list_price: 85,
+  })
+
+  assert.equal(cart[0].price_unit, 70)
 })
 
 test('changeCartItemQty allows quantity above visible stock', () => {
@@ -96,6 +112,22 @@ test('repriceCartFromCatalog updates each line with the selected customer prices
       stock: 3,
     },
   ])
+})
+
+test('repriceCartFromCatalog uses price_unit from the selected customer catalog', () => {
+  const repriced = repriceCartFromCatalog([
+    {
+      product_id: 10,
+      name: 'Hielo 5kg',
+      qty: 2,
+      price_unit: 85,
+      stock: 10,
+    },
+  ], [
+    { id: 10, price_unit: 70, list_price: 85, stock: 8 },
+  ])
+
+  assert.equal(repriced[0].price_unit, 70)
 })
 
 test('repriceCartFromCatalog keeps the old line values when the product is missing from the new catalog', () => {

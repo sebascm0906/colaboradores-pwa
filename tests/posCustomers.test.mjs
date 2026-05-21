@@ -24,6 +24,23 @@ test('normalizeCustomerResults unwraps direct arrays and nested data arrays', ()
   assert.deepEqual(normalizeCustomerResults({ data: { customers } }), customers)
 })
 
+test('normalizeCustomerResults maps Odoo customer relation shapes to id and name', () => {
+  assert.deepEqual(
+    normalizeCustomerResults({
+      data: {
+        customers: [
+          { partner_id: [44, 'Cliente con tarifa'], vat: 'RFC123' },
+          { customer_id: 45, display_name: 'Cliente display' },
+        ],
+      },
+    }),
+    [
+      { partner_id: [44, 'Cliente con tarifa'], vat: 'RFC123', id: 44, name: 'Cliente con tarifa' },
+      { customer_id: 45, display_name: 'Cliente display', id: 45, name: 'Cliente display' },
+    ],
+  )
+})
+
 test('normalizeCustomerResults falls back to an empty array for unknown shapes', () => {
   assert.deepEqual(normalizeCustomerResults({ ok: true }), [])
   assert.deepEqual(normalizeCustomerResults(null), [])
@@ -34,6 +51,13 @@ test('normalizeDefaultCustomerResponse unwraps customer payloads', () => {
   assert.deepEqual(normalizeDefaultCustomerResponse(customer), customer)
   assert.deepEqual(normalizeDefaultCustomerResponse({ data: customer }), customer)
   assert.deepEqual(normalizeDefaultCustomerResponse({ data: { customer } }), customer)
+})
+
+test('normalizeDefaultCustomerResponse maps Odoo relation shapes', () => {
+  assert.deepEqual(
+    normalizeDefaultCustomerResponse({ data: { customer: { partner_id: [11, 'Publico Mostrador'] } } }),
+    { partner_id: [11, 'Publico Mostrador'], id: 11, name: 'Publico Mostrador' },
+  )
 })
 
 test('normalizeDefaultCustomerResponse returns null for empty shapes', () => {

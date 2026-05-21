@@ -2,6 +2,16 @@ export function getDisplayStock(product) {
   return Number(product?.stock ?? product?.qty_available ?? 0)
 }
 
+export function getProductPrice(product) {
+  return Number(
+    product?.price_unit
+    ?? product?.price
+    ?? product?.list_price
+    ?? product?.lst_price
+    ?? 0,
+  )
+}
+
 export function addProductToCart(cart = [], product = {}) {
   const stock = getDisplayStock(product)
   const existing = cart.find((item) => item.product_id === product.id)
@@ -20,7 +30,7 @@ export function addProductToCart(cart = [], product = {}) {
       product_id: product.id,
       name: product.name,
       qty: 1,
-      price_unit: Number(product.price || product.list_price || 0),
+      price_unit: getProductPrice(product),
       stock,
     },
   ]
@@ -36,7 +46,7 @@ export function repriceCartFromCatalog(cart = [], products = []) {
     if (!updated) return item
     return {
       ...item,
-      price_unit: Number(updated.price || updated.list_price || 0),
+      price_unit: getProductPrice(updated),
       stock: getDisplayStock(updated),
     }
   })

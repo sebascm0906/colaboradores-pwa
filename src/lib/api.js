@@ -228,6 +228,14 @@ function toMany2oneId(value) {
   return Number(value || 0)
 }
 
+function toMany2oneName(value) {
+  if (Array.isArray(value)) return String(value[1] || '').trim()
+  if (value && typeof value === 'object') {
+    return String(value.name || value.display_name || value.product_name || '').trim()
+  }
+  return ''
+}
+
 function localDateString(date = new Date()) {
   const value = date instanceof Date ? date : new Date(date)
   const pad = (n) => String(n).padStart(2, '0')
@@ -565,6 +573,215 @@ const IGUALA_BARRA_PT_LOCATION_ID = 1519
 const IGUALA_MERMA_LOCATION_ID = 1173
 const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
+
+function shapePosCustomer(row = {}) {
+  const pricelist = row.property_product_pricelist || row.pricelist_id
+  return {
+    id: Number(row.id || 0),
+    name: row.name || row.display_name || '',
+    email: row.email || '',
+    phone: row.phone || row.mobile || '',
+    mobile: row.mobile || '',
+    vat: row.vat || '',
+    ref: row.ref || '',
+    is_company: Boolean(row.is_company),
+    pricelist_id: toMany2oneId(pricelist) || null,
+    pricelist_name: toMany2oneName(pricelist),
+  }
+}
+
+async function readPosPricelist(companyId, partnerId = 0) {
+  if (partnerId) {
+    const partnerRows = pickListResponse(await readModelSorted('res.partner', {
+      fields: ['id', 'property_product_pricelist', 'pricelist_id'],
+      domain: [['id', '=', partnerId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    const partnerPricelist = partnerRows[0]?.property_product_pricelist || partnerRows[0]?.pricelist_id
+    if (toMany2oneId(partnerPricelist)) {
+      return {
+        id: toMany2oneId(partnerPricelist),
+        name: toMany2oneName(partnerPricelist),
+      }
+    }
+  }
+
+  const pricelistRows = pickListResponse(await readModelSorted('product.pricelist', {
+    fields: ['id', 'name', 'display_name'],
+    domain: companyId
+      ? ['|', ['company_id', '=', companyId], ['company_id', '=', false]]
+      : [],
+    sort_column: 'id',
+    sort_desc: false,
+    limit: 1,
+    sudo: 1,
+  }))
+  const pricelist = pricelistRows[0] || null
+  return pricelist
+    ? { id: Number(pricelist.id || 0) || null, name: pricelist.display_name || pricelist.name || '' }
+    : { id: null, name: '' }
+}
+
+async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {}) {
+  const requestedWarehouseId = Number(warehouseId || 0)
+  if (!requestedWarehouseId) {
+    throw new ApiError("Debe enviar 'warehouse_id'.", { status: 400, code: 'warehouse_required' })
+  }
+
+  const warehouseRows = pickListResponse(await readModelSorted('stock.warehouse', {
+    fields: ['id', 'company_id', 'lot_stock_id'],
+    domain: [['id', '=', requestedWarehouseId]],
+    sort_column: 'id',
+    sort_desc: false,
+    limit: 1,
+    sudo: 1,
+  }))
+  const warehouse = warehouseRows[0]
+  if (!warehouse?.id) {
+    throw new ApiError('Almacen no encontrado.', { status: 404, code: 'warehouse_not_found' })
+  }
+
+  const resolvedCompanyId = Number(companyId || toMany2oneId(warehouse.company_id) || 0)
+  const lotStockId = toMany2oneId(warehouse.lot_stock_id)
+  const pricelist = await readPosPricelist(resolvedCompanyId, Number(partnerId || 0))
+
+  const productRows = pickListResponse(await readModelSorted('product.product', {
+    fields: ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'],
+    domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
+    sort_column: 'name',
+    sort_desc: false,
+    limit: 400,
+    sudo: 1,
+  }))
+  const productIds = productRows.map((row) => Number(row.id || 0)).filter(Boolean)
+
+  const quantRows = lotStockId && productIds.length
+    ? pickListResponse(await readModelSorted('stock.quant', {
+        fields: ['id', 'product_id', 'quantity', 'reserved_quantity'],
+        domain: [
+          ['location_id', 'child_of', lotStockId],
+          ['product_id', 'in', productIds],
+        ],
+        sort_column: 'product_id',
+        sort_desc: false,
+        limit: 2000,
+        sudo: 1,
+      }))
+    : []
+
+  const stockByProduct = new Map()
+  for (const quant of quantRows) {
+    const productId = toMany2oneId(quant?.product_id)
+    if (!productId) continue
+    const available = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
+    stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + available)
+  }
+
+  return {
+    ok: true,
+    message: 'OK',
+    data: {
+      company_id: resolvedCompanyId,
+      warehouse_id: Number(warehouse.id),
+      pricelist_id: pricelist.id || false,
+      pricelist_name: pricelist.name || '',
+      products: productRows.map((product) => {
+        const price = Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
+        const stock = Math.max(0, stockByProduct.get(Number(product.id)) || 0)
+        return {
+          id: Number(product.id),
+          name: product.display_name || product.name || '',
+          price,
+          price_unit: price,
+          stock,
+          barcode: product.barcode || '',
+          weight: Number(product.weight || 0) || 0,
+          sale_ok: Boolean(product.sale_ok),
+          available_in_pos: Boolean(product.available_in_pos),
+        }
+      }),
+    },
+  }
+}
+
+function buildPosCustomerDomain(companyId, q = '') {
+  const domain = [
+    ['active', '=', true],
+    ['customer_rank', '>', 0],
+  ]
+  if (companyId) {
+    domain.push('|', ['company_id', '=', companyId], ['company_id', '=', false])
+  }
+  const query = String(q || '').trim()
+  if (query) {
+    domain.push(
+      '|', '|', '|', '|', '|',
+      ['name', 'ilike', query],
+      ['display_name', 'ilike', query],
+      ['vat', 'ilike', query],
+      ['ref', 'ilike', query],
+      ['phone', 'ilike', query],
+      ['mobile', 'ilike', query],
+    )
+  }
+  return domain
+}
+
+async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
+  const rows = pickListResponse(await readModelSorted('res.partner', {
+    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id'],
+    domain: buildPosCustomerDomain(Number(companyId || 0), q),
+    sort_column: 'name',
+    sort_desc: false,
+    limit: Math.min(Number(limit || 30) || 30, 100),
+    sudo: 1,
+  }))
+  return {
+    ok: true,
+    message: 'OK',
+    data: rows.map(shapePosCustomer),
+  }
+}
+
+async function getDefaultPosCustomerFromModels(companyId) {
+  const baseCompanyId = Number(companyId || 0)
+  const fields = ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id']
+  const exactRows = pickListResponse(await readModelSorted('res.partner', {
+    fields,
+    domain: [...buildPosCustomerDomain(baseCompanyId), ['name', '=ilike', 'VENTA PUBLICO IGUALA']],
+    sort_column: 'name',
+    sort_desc: false,
+    limit: 1,
+    sudo: 1,
+  }))
+  let partner = exactRows[0]
+  if (!partner) {
+    const fallbackRows = pickListResponse(await readModelSorted('res.partner', {
+      fields,
+      domain: [
+        ...buildPosCustomerDomain(baseCompanyId),
+        '|', '|',
+        ['name', 'ilike', 'PUBLICO'],
+        ['name', 'ilike', 'PUBLIC'],
+        ['name', 'ilike', 'MOSTRADOR'],
+      ],
+      sort_column: 'name',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    partner = fallbackRows[0]
+  }
+
+  return {
+    ok: true,
+    message: 'OK',
+    data: partner ? shapePosCustomer(partner) : null,
+  }
+}
 
 async function createBarHarvestScrap({
   product = {},
@@ -920,25 +1137,23 @@ async function directAdmin(method, path, body) {
 
   if (cleanPath === '/pwa-admin/pos-products' && method === 'GET') {
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    return odooHttp('GET', '/pwa-admin/pos-products', {
-      warehouse_id: reqWarehouseId || undefined,
-      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
-      partner_id: Number(query.get('partner_id') || 0) || undefined,
+    return getPosCatalogFromModels({
+      warehouseId: reqWarehouseId,
+      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
+      partnerId: Number(query.get('partner_id') || 0) || undefined,
     })
   }
 
   if (cleanPath === '/pwa-admin/customers' && method === 'GET') {
-    return odooHttp('GET', '/pwa-admin/customers', {
+    return searchPosCustomersFromModels({
       q: query.get('q') || undefined,
-      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
+      companyId: Number(query.get('company_id') || companyId || 0) || undefined,
       limit: Number(query.get('limit') || 30) || undefined,
     })
   }
 
   if (cleanPath === '/pwa-admin/default-customer' && method === 'GET') {
-    return odooHttp('GET', '/pwa-admin/default-customer', {
-      company_id: Number(query.get('company_id') || companyId || 0) || undefined,
-    })
+    return getDefaultPosCustomerFromModels(Number(query.get('company_id') || companyId || 0) || undefined)
   }
 
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
