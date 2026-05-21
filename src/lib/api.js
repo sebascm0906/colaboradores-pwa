@@ -630,100 +630,6 @@ async function readPosPricelist(companyId, partnerId = 0) {
     : { id: null, name: '' }
 }
 
-async function readPosPricelistItems(pricelistId) {
-  const id = Number(pricelistId || 0)
-  if (!id) return []
-  try {
-    return pickListResponse(await readModelSorted('product.pricelist.item', {
-      fields: [
-        'id',
-        'pricelist_id',
-        'applied_on',
-        'product_id',
-        'product_tmpl_id',
-        'categ_id',
-        'min_quantity',
-        'compute_price',
-        'fixed_price',
-        'percent_price',
-        'price_discount',
-        'price_surcharge',
-        'price_round',
-        'price_min_margin',
-        'price_max_margin',
-      ],
-      domain: [['pricelist_id', '=', id]],
-      sort_column: 'min_quantity',
-      sort_desc: true,
-      limit: 1000,
-      sudo: 1,
-    }))
-  } catch (_) {
-    return []
-  }
-}
-
-function getPricelistRuleSpecificity(rule = {}, product = {}) {
-  const productId = Number(product?.id || 0)
-  const templateId = toMany2oneId(product?.product_tmpl_id)
-  const categoryId = toMany2oneId(product?.categ_id)
-  const ruleProductId = toMany2oneId(rule?.product_id)
-  const ruleTemplateId = toMany2oneId(rule?.product_tmpl_id)
-  const ruleCategoryId = toMany2oneId(rule?.categ_id)
-
-  if (ruleProductId) return ruleProductId === productId ? 40 : 0
-  if (ruleTemplateId) return ruleTemplateId === templateId ? 30 : 0
-  if (ruleCategoryId) return ruleCategoryId === categoryId ? 20 : 0
-  return 10
-}
-
-function computePriceFromRule(basePrice, rule = {}) {
-  const base = Number(basePrice || 0) || 0
-  const computePrice = String(rule?.compute_price || '').trim()
-  if (computePrice === 'fixed') {
-    const fixed = Number(rule?.fixed_price)
-    return Number.isFinite(fixed) ? fixed : base
-  }
-  if (computePrice === 'percentage') {
-    const percent = Number(rule?.percent_price || 0) || 0
-    return base * (1 - (percent / 100))
-  }
-  if (computePrice === 'formula') {
-    const discount = Number(rule?.price_discount || 0) || 0
-    const surcharge = Number(rule?.price_surcharge || 0) || 0
-    const rounded = Number(rule?.price_round || 0) || 0
-    const minMargin = Number(rule?.price_min_margin || 0) || 0
-    const maxMargin = Number(rule?.price_max_margin || 0) || 0
-    let price = base * (1 - discount) + surcharge
-    if (rounded > 0) price = Math.round(price / rounded) * rounded
-    if (minMargin > 0) price = Math.max(price, base + minMargin)
-    if (maxMargin > 0) price = Math.min(price, base + maxMargin)
-    return price
-  }
-  return base
-}
-
-function getPosProductPrice(product = {}, pricelistItems = []) {
-  const basePrice = Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
-  let bestRule = null
-  let bestScore = 0
-
-  for (const rule of pricelistItems) {
-    const minQuantity = Number(rule?.min_quantity || 0) || 0
-    if (minQuantity > 1) continue
-    const specificity = getPricelistRuleSpecificity(rule, product)
-    if (specificity <= 0) continue
-    const score = specificity + Math.min(minQuantity, 1)
-    if (score > bestScore) {
-      bestScore = score
-      bestRule = rule
-    }
-  }
-
-  const price = bestRule ? computePriceFromRule(basePrice, bestRule) : basePrice
-  return Number.isFinite(price) ? Math.max(0, price) : basePrice
-}
-
 async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {}) {
   const requestedWarehouseId = Number(warehouseId || 0)
   if (!requestedWarehouseId) {
@@ -748,7 +654,7 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
   const pricelist = await readPosPricelist(resolvedCompanyId, Number(partnerId || 0))
 
   const productRows = pickListResponse(await readModelSorted('product.product', {
-    fields: ['id', 'display_name', 'name', 'product_tmpl_id', 'categ_id', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'],
+    fields: ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'],
     domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
     sort_column: 'name',
     sort_desc: false,
@@ -779,8 +685,6 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
     stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + available)
   }
 
-  const pricelistItems = await readPosPricelistItems(pricelist.id)
-
   return {
     ok: true,
     message: 'OK',
@@ -790,7 +694,7 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
       pricelist_id: pricelist.id || false,
       pricelist_name: pricelist.name || '',
       products: productRows.map((product) => {
-        const price = getPosProductPrice(product, pricelistItems)
+        const price = Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
         const stock = Math.max(0, stockByProduct.get(Number(product.id)) || 0)
         return {
           id: Number(product.id),

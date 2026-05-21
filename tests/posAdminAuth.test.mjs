@@ -98,30 +98,11 @@ test('pos catalog loads from model reads without requiring the strict admin endp
           response: [{
             id: 901,
             display_name: 'Bolsa hielo 5 kg',
-            product_tmpl_id: [1901, 'Bolsa hielo 5 kg'],
-            categ_id: [501, 'Hielo'],
             list_price: 85,
             barcode: '750000000001',
             weight: 5,
             sale_ok: true,
             available_in_pos: true,
-          }],
-        },
-      })
-    }
-    if (url === '/odoo-api/get_records_sorted' && payload?.params?.model === 'product.pricelist.item') {
-      assert.deepEqual(payload.params.domain, [['pricelist_id', '=', 105]])
-      return createJsonResponse(200, {
-        result: {
-          response: [{
-            id: 801,
-            pricelist_id: [105, 'Mostrador Iguala'],
-            product_id: [901, 'Bolsa hielo 5 kg'],
-            product_tmpl_id: false,
-            categ_id: false,
-            min_quantity: 0,
-            compute_price: 'fixed',
-            fixed_price: 70,
           }],
         },
       })
@@ -144,9 +125,12 @@ test('pos catalog loads from model reads without requiring the strict admin endp
   const catalog = await api('GET', '/pwa-admin/pos-products?warehouse_id=89&company_id=34')
 
   assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/pos-products'), false)
+  assert.equal(calls.some((call) => call.payload?.params?.model === 'product.pricelist.item'), false)
+  const productCall = calls.find((call) => call.payload?.params?.model === 'product.product')
+  assert.deepEqual(productCall.payload.params.fields, ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'])
   assert.deepEqual(
     calls.map((call) => call.payload?.params?.model).filter(Boolean),
-    ['stock.warehouse', 'product.pricelist', 'product.product', 'stock.quant', 'product.pricelist.item'],
+    ['stock.warehouse', 'product.pricelist', 'product.product', 'stock.quant'],
   )
   assert.deepEqual(catalog, {
     ok: true,
@@ -159,8 +143,8 @@ test('pos catalog loads from model reads without requiring the strict admin endp
       products: [{
         id: 901,
         name: 'Bolsa hielo 5 kg',
-        price: 70,
-        price_unit: 70,
+        price: 85,
+        price_unit: 85,
         stock: 8,
         barcode: '750000000001',
         weight: 5,
@@ -197,9 +181,6 @@ test('pos catalog reads pricelists with domains accepted by get_records_sorted',
       })
     }
     if (params.model === 'product.product') {
-      return createJsonResponse(200, { result: { response: [] } })
-    }
-    if (params.model === 'product.pricelist.item') {
       return createJsonResponse(200, { result: { response: [] } })
     }
     return createJsonResponse(200, { result: { response: [] } })
