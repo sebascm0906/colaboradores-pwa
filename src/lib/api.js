@@ -579,7 +579,7 @@ const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
 const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 
 function shapePosCustomer(row = {}) {
-  const pricelist = row.property_product_pricelist || row.pricelist_id
+  const pricelist = row.pricelist_id || row.property_product_pricelist
   return {
     id: Number(row.id || 0),
     name: row.name || row.display_name || '',
@@ -623,7 +623,7 @@ async function readPosPricelist(companyId, partnerId = 0) {
       limit: 1,
       sudo: 1,
     }))
-    const partnerPricelist = partnerRows[0]?.property_product_pricelist || partnerRows[0]?.pricelist_id
+    const partnerPricelist = partnerRows[0]?.pricelist_id || partnerRows[0]?.property_product_pricelist
     if (toMany2oneId(partnerPricelist)) {
       return {
         id: toMany2oneId(partnerPricelist),

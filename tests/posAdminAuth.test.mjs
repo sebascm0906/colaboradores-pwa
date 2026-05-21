@@ -282,6 +282,59 @@ test('pos catalog applies fixed prices from the selected customer pricelist', as
   assert.equal(catalog.data.products[0].price_unit, 70)
 })
 
+test('pos catalog prefers customer pricelist_id over property_product_pricelist', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'stock.warehouse') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 89, company_id: [34, 'GLACIEM'], lot_stock_id: [1519, 'CIGU/Existencias'] }] },
+      })
+    }
+    if (params.model === 'res.partner') {
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 51183,
+            property_product_pricelist: [1, 'Predeterminado (MXN)'],
+            pricelist_id: [92, 'IGUALA LEYVAS (MXN)'],
+          }],
+        },
+      })
+    }
+    if (params.model === 'product.pricelist') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 92, name: 'IGUALA LEYVAS (MXN)', display_name: 'IGUALA LEYVAS (MXN)' }] },
+      })
+    }
+    if (params.model === 'product.product') {
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+    if (params.model === 'stock.quant') {
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+    if (params.model === 'product.pricelist.item') {
+      assert.deepEqual(params.domain, [['pricelist_id', '=', 92]])
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+    return createJsonResponse(500, { error: `Unexpected model ${params.model}` })
+  }
+
+  const catalog = await api('GET', '/pwa-admin/pos-products?warehouse_id=89&company_id=34&partner_id=51183')
+
+  assert.equal(catalog.data.pricelist_id, 92)
+  assert.equal(catalog.data.pricelist_name, 'IGUALA LEYVAS (MXN)')
+})
+
 test('pos customer search splits text search into safe simple domains', async () => {
   setSession()
 
