@@ -573,6 +573,10 @@ const IGUALA_BARRA_PT_LOCATION_ID = 1519
 const IGUALA_MERMA_LOCATION_ID = 1173
 const IGUALA_COMPANY_ID = 35
 const UNIT_UOM_ID = 1
+const POS_CUSTOMER_ANALYTIC_PLAN_ID = 2
+const POS_CUSTOMER_ANALYTIC_CODE = 'IGU'
+const POS_CUSTOMER_ANALYTIC_NAME = 'Iguala'
+const POS_CUSTOMER_ANALYTIC_FIELD = 'x_analytic_un_id'
 
 function shapePosCustomer(row = {}) {
   const pricelist = row.property_product_pricelist || row.pricelist_id
@@ -823,10 +827,38 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
   }
 }
 
-function buildPosCustomerBaseDomains(companyId) {
+async function resolvePosCustomerAnalyticUnitId() {
+  const domains = [
+    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['code', '=', POS_CUSTOMER_ANALYTIC_CODE]],
+    [['plan_id', '=', POS_CUSTOMER_ANALYTIC_PLAN_ID], ['name', 'ilike', POS_CUSTOMER_ANALYTIC_NAME]],
+  ]
+  for (const domain of domains) {
+    const rows = pickListResponse(await readModelSorted('account.analytic.account', {
+      fields: ['id', 'name', 'code'],
+      domain,
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    const analyticUnitId = Number(rows[0]?.id || 0)
+    if (analyticUnitId) return analyticUnitId
+  }
+  return 0
+}
+
+function posCustomerAnalyticDomain(analyticUnitId) {
+  const resolvedAnalyticUnitId = Number(analyticUnitId || 0)
+  return resolvedAnalyticUnitId
+    ? [[POS_CUSTOMER_ANALYTIC_FIELD, '=', resolvedAnalyticUnitId]]
+    : [['id', '=', 0]]
+}
+
+function buildPosCustomerBaseDomains(companyId, analyticUnitId) {
   const baseDomain = [
     ['active', '=', true],
     ['customer_rank', '>', 0],
+    ...posCustomerAnalyticDomain(analyticUnitId),
   ]
   return companyId
     ? [
@@ -836,8 +868,11 @@ function buildPosCustomerBaseDomains(companyId) {
     : [baseDomain]
 }
 
-function buildPosCustomerIdBaseDomains(companyId) {
-  const baseDomain = [['active', '=', true]]
+function buildPosCustomerIdBaseDomains(companyId, analyticUnitId) {
+  const baseDomain = [
+    ['active', '=', true],
+    ...posCustomerAnalyticDomain(analyticUnitId),
+  ]
   return companyId
     ? [
         [...baseDomain, ['company_id', '=', companyId]],
@@ -865,7 +900,7 @@ function addUniquePosCustomers(target, rows = []) {
 
 async function readPosCustomerRows(domain, limit) {
   return pickListResponse(await readModelSorted('res.partner', {
-    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id'],
+    fields: ['id', 'name', 'display_name', 'email', 'phone', 'mobile', 'vat', 'ref', 'is_company', 'property_product_pricelist', 'pricelist_id', POS_CUSTOMER_ANALYTIC_FIELD],
     domain,
     sort_column: 'name',
     sort_desc: false,
@@ -876,7 +911,8 @@ async function readPosCustomerRows(domain, limit) {
 
 async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
   const safeLimit = Math.min(Number(limit || 30) || 30, 100)
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0))
+  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
+  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
   const query = String(q || '').trim()
   const rows = []
 
@@ -888,7 +924,7 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
   } else {
     const exactId = parsePosCustomerIdQuery(query)
     if (exactId) {
-      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0))
+      const idBaseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
       for (const baseDomain of idBaseDomains) {
         if (rows.length >= safeLimit) break
         addUniquePosCustomers(
@@ -920,7 +956,8 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
 
 async function getDefaultPosCustomerFromModels(companyId) {
   const baseCompanyId = Number(companyId || 0)
-  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId)
+  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
+  const baseDomains = buildPosCustomerBaseDomains(baseCompanyId, analyticUnitId)
   let partner = null
   for (const baseDomain of baseDomains) {
     const exactRows = await readPosCustomerRows([...baseDomain, ['name', '=ilike', 'VENTA PUBLICO IGUALA']], 1)
