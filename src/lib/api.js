@@ -590,6 +590,25 @@ function shapePosCustomer(row = {}) {
   }
 }
 
+const POS_PRODUCT_FIELDS = ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos']
+const POS_PRICELIST_ITEM_FIELDS = [
+  'id',
+  'pricelist_id',
+  'applied_on',
+  'product_id',
+  'product_tmpl_id',
+  'categ_id',
+  'min_quantity',
+  'compute_price',
+  'fixed_price',
+  'percent_price',
+  'price_discount',
+  'price_surcharge',
+  'price_round',
+  'price_min_margin',
+  'price_max_margin',
+]
+
 async function readPosPricelist(companyId, partnerId = 0) {
   if (partnerId) {
     const partnerRows = pickListResponse(await readModelSorted('res.partner', {
@@ -630,6 +649,104 @@ async function readPosPricelist(companyId, partnerId = 0) {
     : { id: null, name: '' }
 }
 
+async function readPosProducts() {
+  const { result } = await readWithOptionalFieldFallback(readModelSorted, 'product.product', {
+    requiredFields: POS_PRODUCT_FIELDS,
+    optionalFieldGroups: [['categ_id'], ['product_tmpl_id']],
+    domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
+    sort_column: 'name',
+    sort_desc: false,
+    limit: 400,
+    sudo: 1,
+  })
+  return pickListResponse(result)
+}
+
+async function readPosPricelistItems(pricelistId) {
+  const resolvedPricelistId = Number(pricelistId || 0)
+  if (!resolvedPricelistId) return []
+  return pickListResponse(await readModelSorted('product.pricelist.item', {
+    fields: POS_PRICELIST_ITEM_FIELDS,
+    domain: [['pricelist_id', '=', resolvedPricelistId]],
+    sort_column: 'min_quantity',
+    sort_desc: true,
+    limit: 1000,
+    sudo: 1,
+  }))
+}
+
+function productBasePrice(product = {}) {
+  return Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
+}
+
+function pricelistItemSpecificity(item = {}, product = {}) {
+  const appliedOn = String(item.applied_on || '')
+  const productId = Number(product.id || 0)
+  const productTemplateId = toMany2oneId(product.product_tmpl_id)
+  const categoryId = toMany2oneId(product.categ_id)
+
+  if ((appliedOn === '0_product_variant' || appliedOn.includes('variant')) && toMany2oneId(item.product_id) === productId) {
+    return 4
+  }
+  if ((appliedOn === '1_product' || appliedOn.includes('product')) && toMany2oneId(item.product_tmpl_id) === productTemplateId) {
+    return 3
+  }
+  if ((appliedOn === '2_product_category' || appliedOn.includes('category')) && toMany2oneId(item.categ_id) === categoryId) {
+    return 2
+  }
+  if (appliedOn === '3_global' || appliedOn === 'global') {
+    return 1
+  }
+  return 0
+}
+
+function selectPricelistItem(items = [], product = {}) {
+  let selected = null
+  let selectedScore = 0
+  for (const item of items) {
+    const minQuantity = Number(item.min_quantity || 0) || 0
+    if (minQuantity > 1) continue
+    const score = pricelistItemSpecificity(item, product)
+    if (!score) continue
+    if (
+      !selected
+      || score > selectedScore
+      || (score === selectedScore && minQuantity > (Number(selected.min_quantity || 0) || 0))
+    ) {
+      selected = item
+      selectedScore = score
+    }
+  }
+  return selected
+}
+
+function applyPricelistItemPrice(product = {}, item = null) {
+  const basePrice = productBasePrice(product)
+  if (!item) return basePrice
+
+  const computePrice = String(item.compute_price || '').toLowerCase()
+  if (computePrice === 'fixed') {
+    return Number(item.fixed_price ?? basePrice) || 0
+  }
+  if (computePrice === 'percentage') {
+    const percent = Number(item.percent_price || 0) || 0
+    return Math.max(0, basePrice * (1 - (percent / 100)))
+  }
+  if (computePrice === 'formula') {
+    const discount = Number(item.price_discount || 0) || 0
+    const surcharge = Number(item.price_surcharge || 0) || 0
+    const round = Number(item.price_round || 0) || 0
+    const minMargin = Number(item.price_min_margin || 0) || 0
+    const maxMargin = Number(item.price_max_margin || 0) || 0
+    let price = basePrice * (1 - (discount / 100)) + surcharge
+    if (round > 0) price = Math.round(price / round) * round
+    if (minMargin > 0) price = Math.max(price, basePrice + minMargin)
+    if (maxMargin > 0) price = Math.min(price, basePrice + maxMargin)
+    return Math.max(0, price)
+  }
+  return basePrice
+}
+
 async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {}) {
   const requestedWarehouseId = Number(warehouseId || 0)
   if (!requestedWarehouseId) {
@@ -653,14 +770,7 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
   const lotStockId = toMany2oneId(warehouse.lot_stock_id)
   const pricelist = await readPosPricelist(resolvedCompanyId, Number(partnerId || 0))
 
-  const productRows = pickListResponse(await readModelSorted('product.product', {
-    fields: ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'],
-    domain: [['sale_ok', '=', true], ['available_in_pos', '=', true]],
-    sort_column: 'name',
-    sort_desc: false,
-    limit: 400,
-    sudo: 1,
-  }))
+  const productRows = await readPosProducts()
   const productIds = productRows.map((row) => Number(row.id || 0)).filter(Boolean)
 
   const quantRows = lotStockId && productIds.length
@@ -684,6 +794,7 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
     const available = (Number(quant?.quantity || 0) || 0) - (Number(quant?.reserved_quantity || 0) || 0)
     stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + available)
   }
+  const pricelistItems = await readPosPricelistItems(pricelist.id)
 
   return {
     ok: true,
@@ -694,7 +805,7 @@ async function getPosCatalogFromModels({ warehouseId, companyId, partnerId } = {
       pricelist_id: pricelist.id || false,
       pricelist_name: pricelist.name || '',
       products: productRows.map((product) => {
-        const price = Number(product.price_unit ?? product.list_price ?? product.lst_price ?? 0) || 0
+        const price = applyPricelistItemPrice(product, selectPricelistItem(pricelistItems, product))
         const stock = Math.max(0, stockByProduct.get(Number(product.id)) || 0)
         return {
           id: Number(product.id),
@@ -787,7 +898,7 @@ async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = 
       }
     }
 
-    const searchFields = ['name', 'vat', 'ref', 'phone', 'mobile']
+    const searchFields = ['name', 'email', 'vat', 'ref', 'phone', 'mobile']
     for (const baseDomain of baseDomains) {
       if (rows.length >= safeLimit) break
       for (const field of searchFields) {

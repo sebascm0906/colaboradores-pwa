@@ -119,18 +119,32 @@ test('pos catalog loads from model reads without requiring the strict admin endp
         },
       })
     }
+    if (url === '/odoo-api/get_records_sorted' && payload?.params?.model === 'product.pricelist.item') {
+      return createJsonResponse(200, { result: { response: [] } })
+    }
     return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
 
   const catalog = await api('GET', '/pwa-admin/pos-products?warehouse_id=89&company_id=34')
 
   assert.equal(calls.some((call) => call.url === '/odoo-api/pwa-admin/pos-products'), false)
-  assert.equal(calls.some((call) => call.payload?.params?.model === 'product.pricelist.item'), false)
   const productCall = calls.find((call) => call.payload?.params?.model === 'product.product')
-  assert.deepEqual(productCall.payload.params.fields, ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos'])
+  assert.deepEqual(productCall.payload.params.fields, [
+    'id',
+    'display_name',
+    'name',
+    'list_price',
+    'lst_price',
+    'barcode',
+    'weight',
+    'sale_ok',
+    'available_in_pos',
+    'categ_id',
+    'product_tmpl_id',
+  ])
   assert.deepEqual(
     calls.map((call) => call.payload?.params?.model).filter(Boolean),
-    ['stock.warehouse', 'product.pricelist', 'product.product', 'stock.quant'],
+    ['stock.warehouse', 'product.pricelist', 'product.product', 'stock.quant', 'product.pricelist.item'],
   )
   assert.deepEqual(catalog, {
     ok: true,
@@ -192,6 +206,82 @@ test('pos catalog reads pricelists with domains accepted by get_records_sorted',
   assert.deepEqual(pricelistCall.payload.params.domain, [['company_id', '=', 34]])
 })
 
+test('pos catalog applies fixed prices from the selected customer pricelist', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    const params = payload?.params || {}
+    if (params.model === 'stock.warehouse') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 89, company_id: [34, 'GLACIEM'], lot_stock_id: [1519, 'CIGU/Existencias'] }] },
+      })
+    }
+    if (params.model === 'res.partner') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 61100, property_product_pricelist: [81, 'Especial cliente'] }] },
+      })
+    }
+    if (params.model === 'product.pricelist') {
+      return createJsonResponse(200, {
+        result: { response: [{ id: 81, name: 'Especial cliente', display_name: 'Especial cliente' }] },
+      })
+    }
+    if (params.model === 'product.product') {
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 901,
+            display_name: 'Bolsa hielo 5 kg',
+            product_tmpl_id: [501, 'Bolsa hielo 5 kg'],
+            categ_id: [77, 'Bolsa'],
+            list_price: 85,
+            barcode: '750000000001',
+            weight: 5,
+            sale_ok: true,
+            available_in_pos: true,
+          }],
+        },
+      })
+    }
+    if (params.model === 'stock.quant') {
+      return createJsonResponse(200, { result: { response: [] } })
+    }
+    if (params.model === 'product.pricelist.item') {
+      assert.deepEqual(params.domain, [['pricelist_id', '=', 81]])
+      return createJsonResponse(200, {
+        result: {
+          response: [{
+            id: 7001,
+            pricelist_id: [81, 'Especial cliente'],
+            applied_on: '1_product',
+            product_tmpl_id: [501, 'Bolsa hielo 5 kg'],
+            min_quantity: 1,
+            compute_price: 'fixed',
+            fixed_price: 70,
+          }],
+        },
+      })
+    }
+    return createJsonResponse(500, { error: `Unexpected model ${params.model}` })
+  }
+
+  const catalog = await api('GET', '/pwa-admin/pos-products?warehouse_id=89&company_id=34&partner_id=61100')
+
+  assert.equal(calls.some((call) => call.payload?.params?.model === 'product.pricelist.item'), true)
+  assert.equal(catalog.data.pricelist_id, 81)
+  assert.equal(catalog.data.pricelist_name, 'Especial cliente')
+  assert.equal(catalog.data.products[0].price, 70)
+  assert.equal(catalog.data.products[0].price_unit, 70)
+})
+
 test('pos customer search splits text search into safe simple domains', async () => {
   setSession()
 
@@ -244,6 +334,39 @@ test('pos customer search splits text search into safe simple domains', async ()
       pricelist_name: 'Mostrador',
     }],
   })
+})
+
+test('pos customer search includes phone, mobile, email, vat and ref fields', async () => {
+  setSession()
+
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    const payload = options.body ? JSON.parse(options.body) : null
+    calls.push({ url, payload })
+
+    if (url !== '/odoo-api/get_records_sorted') {
+      return createJsonResponse(500, { error: `Unexpected ${url}` })
+    }
+
+    return createJsonResponse(200, { result: { response: [] } })
+  }
+
+  await api('GET', '/pwa-admin/customers?q=6110&company_id=34')
+
+  const searchedFields = new Set()
+  for (const call of calls) {
+    const domain = call.payload?.params?.domain || []
+    for (const term of domain) {
+      if (Array.isArray(term) && term[1] === 'ilike' && term[2] === '6110') {
+        searchedFields.add(term[0])
+      }
+    }
+  }
+
+  assert.deepEqual(
+    [...searchedFields].sort(),
+    ['email', 'mobile', 'name', 'phone', 'ref', 'vat'],
+  )
 })
 
 test('pos customer search can find a customer by exact Odoo id', async () => {
