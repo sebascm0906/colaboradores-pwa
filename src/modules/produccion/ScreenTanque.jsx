@@ -200,16 +200,19 @@ export default function ScreenTanque() {
     } else if (tempThreshold != null && temp > tempThreshold) {
       warnings.push({ key: 'temp_high', msg: `Temperatura ${temp}°C > ${tempThreshold}°C. Backend rechazará.`, blocking: true })
     }
-    // 2) Sal — solo si el tanque reporta umbral
+    // 2) Sal — vigencia por TURNO, no por día calendario.
+    // Comparamos contra activeShift.date (fecha operativa del turno, queda fija
+    // aunque el reloj cruce medianoche en Turno 2). Si no hay turno activo,
+    // caemos al día actual como fallback. Mensaje atribuye la tarea al supervisor.
     if (saltThreshold != null) {
       const saltVal = tank?.salt_level || 0
       if (!tank?.salt_level_updated_at) {
-        warnings.push({ key: 'salt_missing', msg: 'Sin revisión de sal del día. Registra la lectura antes de extraer.', blocking: true })
+        warnings.push({ key: 'salt_missing', msg: 'Falta registro de nivel de sal del turno actual. Debe registrarlo el supervisor de producción.', blocking: true })
       } else {
         const updatedDate = getReadingLocalDateKey(tank.salt_level_updated_at)
-        const today = getTodayDateKey()
-        if (updatedDate < today) {
-          warnings.push({ key: 'salt_old', msg: 'La revisión de sal no es de hoy. Registra una nueva lectura.', blocking: true })
+        const referenceDate = activeShift?.date || getTodayDateKey()
+        if (updatedDate !== referenceDate) {
+          warnings.push({ key: 'salt_old', msg: 'La lectura de sal no corresponde al turno actual. Debe registrarla el supervisor de producción.', blocking: true })
         } else if (saltVal < saltThreshold) {
           warnings.push({ key: 'salt_low', msg: `Sal ${saltVal} ${saltUnit} < mínimo ${saltThreshold}. Backend rechazará.`, blocking: true })
         }

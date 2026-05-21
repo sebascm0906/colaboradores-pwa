@@ -23,7 +23,13 @@ export function getReadingLocalDateKey(value = '', timezoneOffsetMinutes = new D
   return formatDateKey(localTime, true)
 }
 
-export function getBrineReadingStatus(tank = {}, today = getTodayDateKey()) {
+// referenceDate: fecha contra la cual validamos vigencia de la lectura.
+// - En el flujo de operador de barra debe ser activeShift.date (no calendario)
+//   para que la lectura del supervisor no expire a medianoche durante Turno 2.
+// - En apertura de turno (supervisor) se usa shift.date del turno que se abre,
+//   forzando una nueva lectura por cada turno nuevo.
+// - Si no se pasa, se usa el día calendario actual como fallback compatible.
+export function getBrineReadingStatus(tank = {}, referenceDate = getTodayDateKey()) {
   const saltLevel = Number(tank?.salt_level || 0)
   const updatedAt = getReadingLocalDateKey(tank?.salt_level_updated_at)
   const minSalt = tank?.min_salt_level_for_harvest != null
@@ -31,7 +37,7 @@ export function getBrineReadingStatus(tank = {}, today = getTodayDateKey()) {
     : null
 
   if (!saltLevel || !updatedAt) return { kind: 'missing', label: 'Sin lectura' }
-  if (updatedAt !== today) return { kind: 'stale', label: 'Lectura vencida' }
+  if (updatedAt !== referenceDate) return { kind: 'stale', label: 'Lectura vencida' }
   if (minSalt != null && saltLevel < minSalt) return { kind: 'low', label: 'Sal baja' }
   return { kind: 'ok', label: 'Al dia' }
 }

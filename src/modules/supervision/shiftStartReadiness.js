@@ -15,8 +15,13 @@ export function getShiftStartReadiness({ shift, energyReadings = [], tanks = [],
     blockers.push('No hay tanques activos disponibles para validar salmuera')
   }
 
+  // Vigencia por TURNO: si el turno tiene fecha operativa, validamos contra
+  // shift.date (no contra el calendario actual). Así una lectura del supervisor
+  // no expira a medianoche durante Turno 2 nocturno y, en el siguiente turno
+  // nuevo, sí se exige otra lectura porque shift.date avanza al nuevo día.
+  const referenceDate = shift?.date || today
   const tankReadiness = tanks.map((tank) => {
-    const status = getBrineReadingStatus(tank, today)
+    const status = getBrineReadingStatus(tank, referenceDate)
     return {
       tankId: tank.id,
       tankName: tank.display_name || tank.name || `Tanque ${tank.id}`,

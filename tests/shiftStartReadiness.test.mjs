@@ -78,3 +78,51 @@ test('getShiftStartReadiness treats an empty active tank list as blocked', () =>
   assert.equal(readiness.canStart, false)
   assert.equal(readiness.blockers.includes('No hay tanques activos disponibles para validar salmuera'), true)
 })
+
+// ── Vigencia por turno (fix bug medianoche Turno 2) ───────────────────────────
+
+test('getShiftStartReadiness validates brine reading against shift.date (not calendar today)', () => {
+  // Escenario: Turno 2 nocturno con shift.date=2026-05-18, lectura supervisor
+  // a las 14:00 (date=2026-05-18). El reloj cruza medianoche y el operador
+  // sigue trabajando: today=2026-05-19 pero el turno sigue siendo el del 18.
+  // La lectura NO debe considerarse vencida.
+  const readiness = getShiftStartReadiness({
+    shift: { id: 99, state: 'draft', date: '2026-05-18' },
+    energyReadings: [{ reading_type: 'start', kwh_value: 120 }],
+    tanks: [{
+      id: 1,
+      salt_level: 70,
+      // Lectura a las 14:00 hora local de 2026-05-18 (en UTC eso es 20:00).
+      salt_level_updated_at: '2026-05-18 20:00:00',
+      min_salt_level_for_harvest: 65,
+      display_name: 'Tanque 1',
+    }],
+    today: '2026-05-19', // ya cruzamos medianoche
+  })
+
+  assert.equal(readiness.canStart, true, 'el turno debe seguir abierto-able pese al cambio de día')
+  assert.equal(readiness.tankReadiness[0].ready, true)
+  assert.equal(readiness.tankReadiness[0].status, 'ok')
+})
+
+test('getShiftStartReadiness requires a fresh reading for a new shift on a new day', () => {
+  // Escenario: nuevo Turno 1 al día siguiente. La lectura vieja
+  // (de shift.date anterior) no aplica para este turno nuevo.
+  const readiness = getShiftStartReadiness({
+    shift: { id: 100, state: 'draft', date: '2026-05-19' },
+    energyReadings: [{ reading_type: 'start', kwh_value: 120 }],
+    tanks: [{
+      id: 1,
+      salt_level: 70,
+      salt_level_updated_at: '2026-05-18 20:00:00', // ayer
+      min_salt_level_for_harvest: 65,
+      display_name: 'Tanque 1',
+    }],
+    today: '2026-05-19',
+  })
+
+  assert.equal(readiness.canStart, false)
+  assert.equal(readiness.tankReadiness[0].ready, false)
+  assert.equal(readiness.tankReadiness[0].status, 'stale')
+  assert.ok(readiness.blockers.includes('Faltan lecturas de sal en tanques activos'))
+})
