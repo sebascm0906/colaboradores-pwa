@@ -1472,14 +1472,18 @@ async function directAdmin(method, path, body) {
     if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
     const employeeScope = await resolveAngelicaJaimesSalesScope()
     if (employeeScope.enabled) {
-      if (employeeScope.userIds.length) {
+      if (employeeScope.analyticAccountId && employeeScope.userIds.length) {
+        domain.push('|', ['x_analytic_account_id', '=', employeeScope.analyticAccountId], ['user_id', 'in', employeeScope.userIds])
+      } else if (employeeScope.analyticAccountId) {
+        domain.push(['x_analytic_account_id', '=', employeeScope.analyticAccountId])
+      } else if (employeeScope.userIds.length) {
         domain.push(['user_id', 'in', employeeScope.userIds])
       } else {
         domain.push(['id', '=', 0])
       }
     }
     const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'user_id', 'payment_method', 'x_studio_mtodo_de_pago'],
+      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'user_id', 'x_analytic_account_id', 'payment_method', 'x_studio_mtodo_de_pago'],
       domain,
       sort_column: 'date_order',
       sort_desc: true,

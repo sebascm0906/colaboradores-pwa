@@ -644,12 +644,22 @@ test('today sales for Angelica Jaimes are scoped to employees sharing her analyt
       assert.equal(
         params.domain.some((term) => (
           Array.isArray(term)
+          && term[0] === 'x_analytic_account_id'
+          && term[1] === '='
+          && term[2] === 820
+        )),
+        true,
+        'today sales did not filter by the shared sale analytic account',
+      )
+      assert.equal(
+        params.domain.some((term) => (
+          Array.isArray(term)
           && term[0] === 'user_id'
           && term[1] === 'in'
           && JSON.stringify(term[2]) === JSON.stringify([21, 22])
         )),
         true,
-        'today sales did not filter by users from the shared analytic account',
+        'today sales did not keep user fallback for the shared analytic account',
       )
       return createJsonResponse(200, {
         result: {
