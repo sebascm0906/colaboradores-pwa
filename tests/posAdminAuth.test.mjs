@@ -589,7 +589,7 @@ test('pos customer search can find a customer by exact Odoo id', async () => {
   })
 })
 
-test('today sales for Angelica Jaimes are scoped to employees sharing her analytic account', async () => {
+test('today sales delegates employee scope to the Odoo backend endpoint', async () => {
   setSession({
     employee_id: 700,
     name: 'Angélica Jaimes',
@@ -601,92 +601,41 @@ test('today sales for Angelica Jaimes are scoped to employees sharing her analyt
   const calls = []
   globalThis.fetch = async (url, options = {}) => {
     const payload = options.body ? JSON.parse(options.body) : null
-    calls.push({ url, payload })
+    calls.push({ url, options, payload })
 
-    if (url !== '/odoo-api/get_records_sorted') {
-      return createJsonResponse(500, { error: `Unexpected ${url}` })
-    }
-
-    const params = payload?.params || {}
-    if (params.model === 'hr.employee') {
-      const byEmployeeId = params.domain.some((term) => (
-        Array.isArray(term) && term[0] === 'id' && term[1] === '=' && term[2] === 700
-      ))
-      const byAnalyticAccount = params.domain.some((term) => (
-        Array.isArray(term) && term[0] === 'x_analytic_account_id' && term[1] === '=' && term[2] === 820
-      ))
-
-      if (byEmployeeId) {
-        return createJsonResponse(200, {
-          result: {
-            response: [{
-              id: 700,
-              name: 'Angélica Jaimes',
-              user_id: [21, 'angelica'],
-              x_analytic_account_id: [820, '[IGU] Iguala'],
-            }],
-          },
-        })
-      }
-      if (byAnalyticAccount) {
-        return createJsonResponse(200, {
-          result: {
-            response: [
-              { id: 700, name: 'Angélica Jaimes', user_id: [21, 'angelica'], x_analytic_account_id: [820, '[IGU] Iguala'] },
-              { id: 701, name: 'Auxiliar Iguala', user_id: [22, 'auxiliar'], x_analytic_account_id: [820, '[IGU] Iguala'] },
-            ],
-          },
-        })
-      }
-    }
-
-    if (params.model === 'sale.order') {
-      assert.equal(
-        params.domain.some((term) => (
-          Array.isArray(term)
-          && term[0] === 'x_analytic_account_id'
-          && term[1] === '='
-          && term[2] === 820
-        )),
-        true,
-        'today sales did not filter by the shared sale analytic account',
-      )
-      assert.equal(
-        params.domain.some((term) => (
-          Array.isArray(term)
-          && term[0] === 'user_id'
-          && term[1] === 'in'
-          && JSON.stringify(term[2]) === JSON.stringify([21, 22])
-        )),
-        true,
-        'today sales did not keep user fallback for the shared analytic account',
-      )
+    if (url === '/odoo-api/pwa-admin/today-sales?warehouse_id=89&company_id=34') {
       return createJsonResponse(200, {
-        result: {
-          response: [{
+        ok: true,
+        message: 'OK',
+        data: {
+          count: 1,
+          items: [{
             id: 9001,
             name: 'S0001',
-            partner_id: [44, 'Cliente Iguala'],
-            amount_total: 120,
+            customer: 'Cliente Iguala',
+            total: 120,
             state: 'sale',
             date_order: '2026-05-22 09:30:00',
-            warehouse_id: [89, 'CIGU'],
-            user_id: [21, 'angelica'],
+            warehouse_id: 89,
           }],
         },
       })
     }
 
-    return createJsonResponse(500, { error: `Unexpected model ${params.model}` })
+    return createJsonResponse(500, { error: `Unexpected ${url}` })
   }
 
   const result = await api('GET', '/pwa-admin/today-sales?warehouse_id=89&company_id=34')
 
+  const call = calls.find((entry) => entry.url.startsWith('/odoo-api/pwa-admin/today-sales'))
+  assert.ok(call, 'today sales did not call the Odoo backend endpoint')
+  assert.equal(call.options.headers['Api-Key'], 'stale-api-key')
+  assert.equal(call.options.headers['X-GF-Employee-Token'], 'employee-token-test')
   assert.equal(
-    calls.some((call) => call.payload?.params?.model === 'hr.employee'),
-    true,
-    'today sales did not resolve employees by analytic account',
+    calls.some((entry) => entry.payload?.params?.model === 'sale.order'),
+    false,
+    'today sales should not read sale.order through the generic endpoint',
   )
-  assert.equal(result.length, 1)
-  assert.equal(result[0].id, 9001)
+  assert.equal(result.data.items.length, 1)
+  assert.equal(result.data.items[0].id, 9001)
 })

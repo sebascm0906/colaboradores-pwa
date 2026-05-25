@@ -1468,41 +1468,11 @@ async function directAdmin(method, path, body) {
   if (cleanPath === '/pwa-admin/today-sales' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
     const reqWarehouseId = Number(query.get('warehouse_id') || warehouseId || 0)
-    const domain = [['date_order', '>=', todayStart], ['date_order', '<=', todayEnd]]
-    if (reqWarehouseId) domain.push(['warehouse_id', '=', reqWarehouseId])
-    const employeeScope = await resolveAngelicaJaimesSalesScope()
-    if (employeeScope.enabled) {
-      if (employeeScope.analyticAccountId && employeeScope.userIds.length) {
-        domain.push('|', ['x_analytic_account_id', '=', employeeScope.analyticAccountId], ['user_id', 'in', employeeScope.userIds])
-      } else if (employeeScope.analyticAccountId) {
-        domain.push(['x_analytic_account_id', '=', employeeScope.analyticAccountId])
-      } else if (employeeScope.userIds.length) {
-        domain.push(['user_id', 'in', employeeScope.userIds])
-      } else {
-        domain.push(['id', '=', 0])
-      }
-    }
-    const result = await readModelSorted('sale.order', {
-      fields: ['id', 'name', 'partner_id', 'amount_total', 'state', 'date_order', 'warehouse_id', 'user_id', 'x_analytic_account_id', 'payment_method', 'x_studio_mtodo_de_pago'],
-      domain,
-      sort_column: 'date_order',
-      sort_desc: true,
-      limit: 100,
-      sudo: 1,
+    const reqCompanyId = Number(query.get('company_id') || companyId || 0)
+    return odooHttp('GET', '/pwa-admin/today-sales', {
+      warehouse_id: reqWarehouseId || undefined,
+      company_id: reqCompanyId || undefined,
     })
-    return pickListResponse(result).map((row) => ({
-      id: row.id,
-      name: row.name,
-      folio: row.name,
-      customer: row.partner_id?.[1] || '',
-      total: Number(row.amount_total || 0),
-      state: row.state || 'draft',
-      date_order: row.date_order || null,
-      warehouse_id: row.warehouse_id?.[0] || reqWarehouseId || 0,
-      user_id: row.user_id?.[0] || 0,
-      user_name: row.user_id?.[1] || '',
-      payment_method: row.payment_method || row.x_studio_mtodo_de_pago || '',
-    }))
   }
 
   if (cleanPath === '/pwa-admin/today-expenses' && method === 'GET') {
