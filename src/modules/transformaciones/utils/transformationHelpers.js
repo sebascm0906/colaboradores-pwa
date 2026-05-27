@@ -13,7 +13,7 @@ const ROLE_SCOPE_CONFIG = {
     backTo: '/entregas',
     outputUomLabel: 'piezas',
     apiBase: '/pwa-entregas',
-    defaultWarehouseId: 0,
+    defaultWarehouseId: 89,
   },
   koldcup: {
     title: 'Produccion KOLDCUP',
@@ -40,6 +40,7 @@ export function resolveTransformationWarehouseId(session = {}, roleScope) {
   return Number(
     session?.warehouse_id
     || session?.plant_warehouse_id
+    || session?.default_source_warehouse_id
     || getRoleScopeConfig(roleScope).defaultWarehouseId
     || 0
   ) || 0

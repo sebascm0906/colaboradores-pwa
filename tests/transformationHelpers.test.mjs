@@ -94,6 +94,13 @@ test('resolveTransformationWarehouseId falls back to PT default warehouse', () =
 test('resolveTransformationWarehouseId prefers session warehouse fields', () => {
   assert.equal(resolveTransformationWarehouseId({ warehouse_id: 90 }, 'pt'), 90)
   assert.equal(resolveTransformationWarehouseId({ plant_warehouse_id: 77 }, 'pt'), 77)
+  assert.equal(resolveTransformationWarehouseId({ default_source_warehouse_id: 89 }, 'entregas'), 89)
+})
+
+test('resolveTransformationWarehouseId falls back to CIGU warehouse for entregas', () => {
+  const warehouseId = resolveTransformationWarehouseId({}, 'entregas')
+
+  assert.equal(warehouseId, 89)
 })
 
 test('validateTransformationDraft requires recipe, input product, and positive quantities', () => {
