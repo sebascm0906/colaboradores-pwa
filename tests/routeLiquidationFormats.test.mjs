@@ -124,3 +124,44 @@ test('one page summary includes visits and reloads', () => {
   assert.match(html, /Recargas/)
   assert.match(html, /REC-001/)
 })
+
+test('one page summary includes planned and visited customer list with visit time', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    stops: [
+      {
+        id: 1,
+        sequence: 2,
+        customer_name: 'Cliente Visitado',
+        planned_time: '10:00',
+        actual_start_time: '2026-05-27 10:18:00',
+        result_status: 'visited',
+      },
+      {
+        id: 2,
+        sequence: 1,
+        customer: 'Cliente Planeado',
+        scheduled_time: '09:30',
+        result_status: 'not_visited',
+      },
+    ],
+  })
+
+  assert.equal(vm.formats.summary.visitList.empty, false)
+  assert.deepEqual(vm.formats.summary.visitList.rows.map((row) => row.customer), [
+    'Cliente Planeado',
+    'Cliente Visitado',
+  ])
+  assert.equal(vm.formats.summary.visitList.rows[0].visitTime, '')
+  assert.equal(vm.formats.summary.visitList.rows[0].status, 'Sin visita')
+  assert.equal(vm.formats.summary.visitList.rows[1].visitTime, '10:18')
+  assert.equal(vm.formats.summary.visitList.rows[1].status, 'Visitado')
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /Lista de visitas/)
+  assert.match(html, /Cliente Planeado/)
+  assert.match(html, /Sin visita/)
+  assert.match(html, /Cliente Visitado/)
+  assert.match(html, /10:18/)
+})

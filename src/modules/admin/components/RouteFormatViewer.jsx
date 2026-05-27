@@ -271,6 +271,19 @@ function SummaryReport({ format }) {
         <SummaryMetric label="Diferencia" value={formatRouteMoney(format.liquidation.totals.difference)} />
       </div>
 
+      <ReportSectionTitle title="Lista de visitas" />
+      {format.visitList.empty ? (
+        <EmptyReport text="Sin lista de visitas disponible." />
+      ) : (
+        <Table headers={['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado']} rows={format.visitList.rows.map((row) => [
+          row.sequence || '-',
+          row.customer,
+          row.plannedTime || '-',
+          row.visitTime || '-',
+          row.status,
+        ])} />
+      )}
+
       <ReportSectionTitle title="Inventario y corte" />
       {format.inventory.empty ? (
         <EmptyReport text="Sin inventario disponible." />

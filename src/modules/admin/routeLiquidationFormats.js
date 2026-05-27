@@ -91,6 +91,19 @@ function rawReloads(detail = {}) {
   return candidates.find(Array.isArray) || []
 }
 
+function rawVisitRows(detail = {}) {
+  const candidates = [
+    detail.stops,
+    detail.stop_ids,
+    detail.visit_lines,
+    detail.visits,
+    detail.route_stops,
+    detail.planned_visits_lines,
+  ]
+  const rows = candidates.find(Array.isArray) || []
+  return rows.filter((row) => row && typeof row === 'object')
+}
+
 function normalizeLine(line = {}) {
   const product = text(line.product_name || line.product || line.product_id, 'Producto')
   const loaded = number(line.qty_loaded ?? line.loaded ?? line.product_uom_qty ?? line.quantity)
@@ -120,6 +133,56 @@ function normalizeReload(row = {}) {
     quantity,
     folio: text(row.folio || row.name || row.reference || row.move_name, 'Recarga'),
     time: text(row.time || row.date || row.create_date || row.scheduled_date, ''),
+  }
+}
+
+function shortTime(value) {
+  const raw = text(value)
+  const match = raw.match(/(\d{1,2}):(\d{2})/)
+  if (!match) return raw
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
+function isVisitedStop(row = {}) {
+  const status = text(row.result_status || row.status || row.state).toLowerCase()
+  if (row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time) return true
+  if (status.includes('not_visited') || status.includes('no visit') || status.includes('skipped')) return false
+  return status.includes('visited') || status.includes('done') || status.includes('completed')
+}
+
+function normalizeVisitRow(row = {}) {
+  const customerId = row.customer_id?.[0] || row.customer_id || row.partner_id?.[0] || row.partner_id || ''
+  const visited = isVisitedStop(row)
+  const visitTime = shortTime(row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time)
+
+  return {
+    id: row.id || customerId || text(row.customer_name || row.customer || row.partner_name),
+    sequence: firstNumber(row.sequence, row.stop_sequence, row.order),
+    customer: text(
+      row.customer_name || row.partner_name || row.customer || row.partner || row.customer_id || row.partner_id,
+      customerId ? `Cliente #${customerId}` : 'Cliente',
+    ),
+    plannedTime: shortTime(row.planned_time || row.scheduled_time || row.expected_time || row.time_window || row.window || ''),
+    visitTime: visited ? visitTime : '',
+    status: visited ? 'Visitado' : 'Sin visita',
+  }
+}
+
+function normalizeVisitList(detail = {}) {
+  const rows = rawVisitRows(detail)
+    .map(normalizeVisitRow)
+    .sort((a, b) => {
+      if (a.sequence !== b.sequence) return a.sequence - b.sequence
+      return a.customer.localeCompare(b.customer, 'es')
+    })
+
+  return {
+    rows,
+    totals: {
+      planned: rows.length,
+      visited: rows.filter((row) => row.visitTime).length,
+    },
+    empty: rows.length === 0,
   }
 }
 
@@ -284,6 +347,7 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
       count: sales.rows.length,
       unavailable: sales.unavailable,
     },
+    visitList: normalizeVisitList(detail),
     inventory: {
       rows: lines.map((line) => ({
         id: line.id,
@@ -399,6 +463,18 @@ function formatSummaryRows(format) {
       ['Folio', 'Producto', 'Cant.', 'Hora'],
       format.reloads.rows.map((row) => [row.folio, row.product, row.quantity, row.time || '-']),
     )
+  const visitTable = format.visitList.empty
+    ? '<p class="empty">Sin lista de visitas disponible.</p>'
+    : table(
+      ['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado'],
+      format.visitList.rows.map((row) => [
+        row.sequence || '-',
+        row.customer,
+        row.plannedTime || '-',
+        row.visitTime || '-',
+        row.status,
+      ]),
+    )
 
   return `
     ${metricGrid([
@@ -411,6 +487,8 @@ function formatSummaryRows(format) {
       { label: 'Recargas', value: format.reloads.totals.quantity },
       { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
     ])}
+    <h2>Lista de visitas</h2>
+    ${visitTable}
     <h2>Inventario y corte</h2>
     ${inventoryTable}
     <h2>Recargas</h2>
