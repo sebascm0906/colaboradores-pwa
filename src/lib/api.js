@@ -2209,7 +2209,7 @@ async function directAdmin(method, path, body) {
   // shapes correctos. Los stubs fueron removidos — ahora ruteamos directo.
   if (cleanPath === '/pwa-admin/liquidaciones/pending' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    return odooJson('/pwa-admin/liquidaciones/pending', {
+    return odooHttp('GET', '/pwa-admin/liquidaciones/pending', {
       company_id: Number(query.get('company_id') || companyId || 0) || undefined,
       warehouse_id: Number(query.get('warehouse_id') || warehouseId || 0) || undefined,
     })
@@ -2217,20 +2217,20 @@ async function directAdmin(method, path, body) {
 
   if (cleanPath === '/pwa-admin/liquidaciones/detail' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    return odooJson('/pwa-admin/liquidaciones/detail', {
+    return odooHttp('GET', '/pwa-admin/liquidaciones/detail', {
       plan_id: Number(query.get('plan_id') || 0),
     })
   }
 
   if (cleanPath === '/pwa-admin/liquidaciones/validate' && method === 'POST') {
-    return odooJson('/pwa-admin/liquidaciones/validate', {
+    return odooHttp('POST', '/pwa-admin/liquidaciones/validate', {}, {
       plan_id: Number(body?.plan_id || 0),
     })
   }
 
   if (cleanPath === '/pwa-admin/liquidaciones/history' && method === 'GET') {
     const query = new URLSearchParams(path.split('?')[1] || '')
-    return odooJson('/pwa-admin/liquidaciones/history', {
+    return odooHttp('GET', '/pwa-admin/liquidaciones/history', {
       company_id: Number(query.get('company_id') || companyId || 0) || undefined,
       warehouse_id: Number(query.get('warehouse_id') || warehouseId || 0) || undefined,
       date_from: query.get('date_from') || undefined,
