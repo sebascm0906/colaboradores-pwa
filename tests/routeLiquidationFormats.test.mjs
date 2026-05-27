@@ -96,3 +96,31 @@ test('downloadable html includes escaped plan and selected format content', () =
   assert.match(html, /Bolsa 5kg/)
   assert.doesNotMatch(html, /<especial>/)
 })
+
+test('one page summary includes visits and reloads', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    stops_total: 11,
+    stops_done: 10,
+    reload_lines: [
+      { product_name: 'Bolsa 5kg', quantity: 4, name: 'REC-001', date: '15:20' },
+      { product_name: 'Bolsa 3kg', qty_loaded: 3, folio: 'REC-002', time: '16:10' },
+    ],
+  })
+
+  assert.equal(vm.formatDefinitions[0].id, 'summary')
+  assert.equal(vm.formats.summary.visits.planned, 11)
+  assert.equal(vm.formats.summary.visits.done, 10)
+  assert.equal(vm.formats.summary.visits.notDone, 1)
+  assert.equal(vm.formats.summary.visits.compliancePct, 91)
+  assert.equal(vm.formats.summary.reloads.rows.length, 2)
+  assert.equal(vm.formats.summary.reloads.totals.quantity, 7)
+  assert.equal(vm.formats.summary.inventory.rows[0].reloaded, 4)
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /Resumen 1 hoja/)
+  assert.match(html, /Visitas planificadas/)
+  assert.match(html, /Recargas/)
+  assert.match(html, /REC-001/)
+})

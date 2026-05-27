@@ -22,7 +22,7 @@ function filenameSafe(value) {
 }
 
 export default function RouteFormatViewer({ detail }) {
-  const [selectedFormat, setSelectedFormat] = useState('sales')
+  const [selectedFormat, setSelectedFormat] = useState('summary')
   const [downloadError, setDownloadError] = useState('')
   const viewModel = useMemo(() => buildRouteFormatsViewModel(detail || {}), [detail])
   const selected = viewModel.formats[selectedFormat]
@@ -242,12 +242,115 @@ function ReportHeader({ viewModel, title }) {
 }
 
 function ReportBody({ formatId, format }) {
+  if (formatId === 'summary') return <SummaryReport format={format} />
   if (formatId === 'sales') return <SalesReport format={format} />
   if (formatId === 'inventory') return <InventoryReport format={format} />
   if (formatId === 'scrap') return <ScrapReport format={format} />
   if (formatId === 'corte') return <CorteReport format={format} />
   if (formatId === 'liquidation') return <LiquidationReport format={format} />
   return <EmptyReport text="Formato no disponible" />
+}
+
+function SummaryReport({ format }) {
+  if (!format) return <EmptyReport text="Resumen no disponible" />
+  return (
+    <>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gap: 8,
+        marginBottom: 12,
+      }}>
+        <SummaryMetric label="Visitas planificadas" value={fmtNum(format.visits.planned)} />
+        <SummaryMetric label="Visitas realizadas" value={fmtNum(format.visits.done)} />
+        <SummaryMetric label="No realizadas" value={fmtNum(format.visits.notDone)} />
+        <SummaryMetric label="Cumplimiento" value={`${fmtNum(format.visits.compliancePct)}%`} />
+        <SummaryMetric label="Total ventas" value={format.sales.unavailable ? 'N/D' : formatRouteMoney(format.sales.total)} />
+        <SummaryMetric label="Ventas" value={format.sales.unavailable ? 'N/D' : fmtNum(format.sales.count)} />
+        <SummaryMetric label="Recargas" value={fmtNum(format.reloads.totals.quantity)} />
+        <SummaryMetric label="Diferencia" value={formatRouteMoney(format.liquidation.totals.difference)} />
+      </div>
+
+      <ReportSectionTitle title="Inventario y corte" />
+      {format.inventory.empty ? (
+        <EmptyReport text="Sin inventario disponible." />
+      ) : (
+        <Table headers={['Producto', 'Cargado', 'Recargas', 'Vendido', 'Devuelto', 'Merma', 'Dif.']} rows={format.inventory.rows.map((row) => [
+          row.product,
+          fmtNum(row.loaded),
+          fmtNum(row.reloaded),
+          fmtNum(row.delivered),
+          fmtNum(row.returned),
+          fmtNum(row.scrap),
+          fmtNum(row.difference),
+        ])} />
+      )}
+
+      <ReportSectionTitle title="Recargas" />
+      {format.reloads.empty ? (
+        <EmptyReport text="Sin recargas registradas." />
+      ) : (
+        <Table headers={['Folio', 'Producto', 'Cant.', 'Hora']} rows={format.reloads.rows.map((row) => [
+          row.folio,
+          row.product,
+          fmtNum(row.quantity),
+          row.time || '-',
+        ])} />
+      )}
+
+      <ReportSectionTitle title="Liquidacion" />
+      <Table headers={['Esperado', 'Cobrado', 'Diferencia']} rows={[[
+        formatRouteMoney(format.liquidation.totals.expected),
+        formatRouteMoney(format.liquidation.totals.collected),
+        formatRouteMoney(format.liquidation.totals.difference),
+      ]]} />
+    </>
+  )
+}
+
+function SummaryMetric({ label, value }) {
+  return (
+    <div style={{
+      minHeight: 58,
+      padding: 8,
+      borderRadius: TOKENS.radius.sm,
+      background: TOKENS.colors.surfaceSoft,
+      border: `1px solid ${TOKENS.colors.border}`,
+    }}>
+      <div style={{
+        color: TOKENS.colors.textLow,
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+      }}>
+        {label}
+      </div>
+      <div style={{
+        color: TOKENS.colors.text,
+        fontSize: 13,
+        fontWeight: 800,
+        marginTop: 4,
+      }}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function ReportSectionTitle({ title }) {
+  return (
+    <div style={{
+      margin: '12px 0 6px',
+      color: TOKENS.colors.textLow,
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: '0.12em',
+      textTransform: 'uppercase',
+    }}>
+      {title}
+    </div>
+  )
 }
 
 function SalesReport({ format }) {

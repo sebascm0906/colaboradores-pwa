@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Ejemplo mock - Resumen 1 hoja liquidacion ruta</title>
+  <style>
+    @page { size: letter; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9px;
+      line-height: 1.25;
+      background: #fff;
+    }
+    .page { position: relative; min-height: 259mm; }
+    .watermark {
+      position: absolute;
+      inset: 38% 0 auto;
+      color: rgba(17, 24, 39, 0.055);
+      font-size: 88px;
+      font-weight: 800;
+      letter-spacing: 8px;
+      text-align: center;
+      transform: rotate(-18deg);
+    }
+    .content { position: relative; z-index: 1; }
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #111827;
+      margin-bottom: 9px;
+    }
+    .brand { font-size: 18px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+    .subtitle { margin-top: 2px; color: #4b5563; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+    .folio {
+      min-width: 145px;
+      padding: 7px 9px;
+      border: 1px solid #cbd5e1;
+      border-radius: 7px;
+      text-align: right;
+      background: #f8fafc;
+    }
+    .folio strong { display: block; font-size: 14px; }
+    h1 { margin: 0 0 8px; font-size: 18px; line-height: 1.12; }
+    h2 { margin: 9px 0 5px; font-size: 10px; letter-spacing: 1.1px; text-transform: uppercase; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 7px; }
+    .box {
+      min-height: 38px;
+      padding: 6px 7px;
+      border: 1px solid #d7dde8;
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+    .box label {
+      display: block;
+      color: #64748b;
+      font-size: 7px;
+      font-weight: 800;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+    }
+    .box strong { display: block; margin-top: 2px; font-size: 11px; }
+    .kpis { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; margin-bottom: 7px; }
+    .kpis .box { min-height: 46px; }
+    .kpis strong { font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    th, td { border: 1px solid #d1d5db; padding: 4px 5px; vertical-align: top; }
+    th {
+      color: #111827;
+      background: #eef2f7;
+      font-size: 7px;
+      font-weight: 800;
+      letter-spacing: .7px;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .num { text-align: right; white-space: nowrap; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ok { color: #047857; }
+    .warn { color: #b45309; }
+    .danger { color: #b91c1c; }
+    .note {
+      margin-top: 8px;
+      padding: 7px 9px;
+      color: #475569;
+      border: 1px dashed #cbd5e1;
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+    .signatures {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+    }
+    .signature {
+      padding-top: 22px;
+      border-top: 1px solid #111827;
+      text-align: center;
+      font-size: 8px;
+      font-weight: 700;
+    }
+    footer {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      justify-content: space-between;
+      color: #64748b;
+      font-size: 8px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="watermark">MOCK</div>
+    <div class="content">
+      <header>
+        <div>
+          <div class="brand">Aida Sugey</div>
+          <div class="subtitle">Resumen 1 hoja - Corte y liquidacion</div>
+        </div>
+        <div class="folio">
+          Folio
+          <strong>LIQ-MOCK-0001</strong>
+          27/05/2026 18:42
+        </div>
+      </header>
+
+      <h1>Ruta cerrada lista para liquidacion</h1>
+
+      <div class="grid">
+        <div class="box"><label>Empresa</label><strong>GLACIEM</strong></div>
+        <div class="box"><label>Ruta</label><strong>IGUALA CENTRO</strong></div>
+        <div class="box"><label>Chofer</label><strong>RICARDO MIRANDA</strong></div>
+        <div class="box"><label>Unidad</label><strong>CAMIONETA 07</strong></div>
+        <div class="box"><label>Salida</label><strong>07:35</strong></div>
+        <div class="box"><label>Cierre ruta</label><strong>17:58</strong></div>
+        <div class="box"><label>Estatus</label><strong class="ok">Cerrada</strong></div>
+        <div class="box"><label>Validacion</label><strong class="warn">Pendiente</strong></div>
+      </div>
+
+      <div class="kpis">
+        <div class="box"><label>Visitas plan.</label><strong>26</strong></div>
+        <div class="box"><label>Realizadas</label><strong class="ok">24</strong></div>
+        <div class="box"><label>No realizadas</label><strong class="danger">2</strong></div>
+        <div class="box"><label>Cumplimiento</label><strong>92%</strong></div>
+        <div class="box"><label>Total ventas</label><strong>$18,740</strong></div>
+        <div class="box"><label>Cobrado</label><strong>$18,490</strong></div>
+        <div class="box"><label>Recargas</label><strong>18 pzas</strong></div>
+        <div class="box"><label>Diferencia</label><strong class="danger">-$250</strong></div>
+      </div>
+
+      <h2>Inventario, recargas y corte</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th class="num">Cargado</th>
+            <th class="num">Recargas</th>
+            <th class="num">Vendido</th>
+            <th class="num">Devuelto</th>
+            <th class="num">Merma</th>
+            <th class="num">Dif.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Bolsa hielo 5 kg</td><td class="num">120</td><td class="num">10</td><td class="num">107</td><td class="num">18</td><td class="num">5</td><td class="num">0</td></tr>
+          <tr><td>Bolsa hielo 15 kg</td><td class="num">75</td><td class="num">0</td><td class="num">64</td><td class="num">11</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>Barra hielo</td><td class="num">42</td><td class="num">4</td><td class="num">37</td><td class="num">8</td><td class="num">1</td><td class="num">0</td></tr>
+          <tr><td>Garrafon agua 20 L</td><td class="num">65</td><td class="num">4</td><td class="num">58</td><td class="num">8</td><td class="num">3</td><td class="num">0</td></tr>
+          <tr><td>Paquete hielo gourmet</td><td class="num">36</td><td class="num">0</td><td class="num">29</td><td class="num">7</td><td class="num">0</td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+
+      <div class="two-col">
+        <div>
+          <h2>Recargas</h2>
+          <table>
+            <thead>
+              <tr><th>Folio</th><th>Producto</th><th class="num">Cant.</th><th>Hora</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>REC-001</td><td>Bolsa hielo 5 kg</td><td class="num">10</td><td>13:20</td></tr>
+              <tr><td>REC-002</td><td>Barra hielo</td><td class="num">4</td><td>15:05</td></tr>
+              <tr><td>REC-003</td><td>Garrafon agua 20 L</td><td class="num">4</td><td>16:10</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h2>Liquidacion</h2>
+          <table>
+            <thead>
+              <tr><th>Metodo</th><th class="num">Esperado</th><th class="num">Recibido</th><th class="num">Dif.</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Efectivo</td><td class="num">$13,640</td><td class="num">$13,390</td><td class="num danger">-$250</td></tr>
+              <tr><td>Credito</td><td class="num">$3,850</td><td class="num">$3,850</td><td class="num">$0</td></tr>
+              <tr><td>Transferencia</td><td class="num">$1,250</td><td class="num">$1,250</td><td class="num">$0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <h2>Ventas principales</h2>
+          <table>
+            <thead>
+              <tr><th>Folio</th><th>Cliente</th><th class="num">Total</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>S15985</td><td>VENTA PUBLICO IGUALA</td><td class="num">$5,961</td></tr>
+              <tr><td>S16018</td><td>CREMERIA SAN JOSE</td><td class="num">$3,430</td></tr>
+              <tr><td>S16022</td><td>TIENDA LA GUADALUPANA</td><td class="num">$4,969</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h2>Mermas</h2>
+          <table>
+            <thead>
+              <tr><th>Producto</th><th>Motivo</th><th class="num">Cant.</th><th class="num">Importe</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Bolsa hielo 5 kg</td><td>Bolsa rota</td><td class="num">5</td><td class="num">$140</td></tr>
+              <tr><td>Garrafon agua 20 L</td><td>Producto danado</td><td class="num">3</td><td class="num">$102</td></tr>
+              <tr><td>Barra hielo</td><td>Derretimiento</td><td class="num">1</td><td class="num">$8</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="note">
+        Datos ficticios. El formato real se genera al seleccionar una ruta cerrada en Liquidaciones; se puede ver en pantalla, imprimir o descargar.
+      </div>
+
+      <div class="signatures">
+        <div class="signature">Chofer</div>
+        <div class="signature">Caja / Liquidaciones</div>
+        <div class="signature">Supervisor</div>
+      </div>
+    </div>
+    <footer><span>Aida Sugey - Liquidaciones</span><span>Pagina 1 de 1</span></footer>
+  </section>
+</body>
+</html>

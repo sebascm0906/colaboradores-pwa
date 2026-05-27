@@ -1,4 +1,5 @@
 export const ROUTE_FORMATS = [
+  { id: 'summary', label: 'Resumen 1 hoja' },
   { id: 'sales', label: 'Ventas' },
   { id: 'inventory', label: 'Inventario cargado' },
   { id: 'scrap', label: 'Mermas' },
@@ -24,6 +25,14 @@ function text(value, fallback = '') {
   if (value == null || value === false) return fallback
   if (Array.isArray(value)) return text(value[1], fallback)
   return String(value)
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === false || value === '') continue
+    return number(value)
+  }
+  return 0
 }
 
 function money(value) {
@@ -70,6 +79,18 @@ function rawLines(detail = {}) {
   return candidates.find(Array.isArray) || []
 }
 
+function rawReloads(detail = {}) {
+  const candidates = [
+    detail.reload_lines,
+    detail.reloads,
+    detail.refill_lines,
+    detail.refills,
+    detail.restock_lines,
+    detail.restocks,
+  ]
+  return candidates.find(Array.isArray) || []
+}
+
 function normalizeLine(line = {}) {
   const product = text(line.product_name || line.product || line.product_id, 'Producto')
   const loaded = number(line.qty_loaded ?? line.loaded ?? line.product_uom_qty ?? line.quantity)
@@ -89,6 +110,19 @@ function normalizeLine(line = {}) {
   }
 }
 
+function normalizeReload(row = {}) {
+  const product = text(row.product_name || row.product || row.product_id, 'Producto')
+  const quantity = firstNumber(row.qty_loaded, row.loaded, row.quantity, row.qty, row.product_uom_qty)
+
+  return {
+    id: row.id || `${product}-${quantity}-${text(row.name || row.folio || row.reference)}`,
+    product,
+    quantity,
+    folio: text(row.folio || row.name || row.reference || row.move_name, 'Recarga'),
+    time: text(row.time || row.date || row.create_date || row.scheduled_date, ''),
+  }
+}
+
 function sumLines(lines) {
   return lines.reduce((totals, line) => ({
     loaded: totals.loaded + number(line.loaded),
@@ -97,6 +131,55 @@ function sumLines(lines) {
     scrap: totals.scrap + number(line.scrap),
     difference: totals.difference + number(line.difference),
   }), { loaded: 0, delivered: 0, returned: 0, scrap: 0, difference: 0 })
+}
+
+function sumReloadsByProduct(reloads) {
+  return reloads.reduce((totals, reload) => {
+    totals[reload.product] = number(totals[reload.product]) + number(reload.quantity)
+    return totals
+  }, {})
+}
+
+function normalizeVisits(detail = {}) {
+  const summary = detail.summary || detail.liquidation_summary || {}
+  const planned = firstNumber(
+    detail.visits_planned,
+    detail.planned_visits,
+    detail.stops_total,
+    detail.total_stops,
+    detail.visit_count,
+    summary.visits_planned,
+    summary.planned_visits,
+    summary.stops_total,
+    summary.total_stops,
+  )
+  const done = firstNumber(
+    detail.visits_done,
+    detail.done_visits,
+    detail.stops_done,
+    detail.completed_stops,
+    detail.visited_count,
+    summary.visits_done,
+    summary.done_visits,
+    summary.stops_done,
+    summary.completed_stops,
+  )
+  const notDone = Math.max(firstNumber(
+    detail.visits_not_done,
+    detail.not_done_visits,
+    detail.not_visited_count,
+    summary.visits_not_done,
+    summary.not_done_visits,
+    summary.not_visited_count,
+    planned - done,
+  ), 0)
+
+  return {
+    planned,
+    done,
+    notDone,
+    compliancePct: planned > 0 ? Math.round((done / planned) * 100) : 0,
+  }
 }
 
 function normalizePaymentEntries(summary = {}) {
@@ -190,13 +273,58 @@ function normalizeSales(detail = {}) {
   }
 }
 
-function buildFormats(detail = {}) {
-  const lines = rawLines(detail).map(normalizeLine)
-  const lineTotals = sumLines(lines)
-  const scrapRows = lines.filter((line) => line.scrap > 0)
+function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }) {
+  const reloadTotalsByProduct = sumReloadsByProduct(reloads)
+  const totalReloaded = reloads.reduce((sum, row) => sum + number(row.quantity), 0)
 
   return {
-    sales: normalizeSales(detail),
+    visits: normalizeVisits(detail),
+    sales: {
+      total: sales.totals.amount,
+      count: sales.rows.length,
+      unavailable: sales.unavailable,
+    },
+    inventory: {
+      rows: lines.map((line) => ({
+        id: line.id,
+        product: line.product,
+        loaded: line.loaded,
+        reloaded: number(reloadTotalsByProduct[line.product]),
+        delivered: line.delivered,
+        returned: line.returned,
+        scrap: line.scrap,
+        difference: line.difference,
+      })),
+      totals: {
+        loaded: lineTotals.loaded,
+        reloaded: totalReloaded,
+        delivered: lineTotals.delivered,
+        returned: lineTotals.returned,
+        scrap: lineTotals.scrap,
+        difference: lineTotals.difference,
+      },
+      empty: lines.length === 0,
+    },
+    reloads: {
+      rows: reloads,
+      totals: { quantity: totalReloaded, count: reloads.length },
+      empty: reloads.length === 0,
+    },
+    liquidation,
+  }
+}
+
+function buildFormats(detail = {}) {
+  const lines = rawLines(detail).map(normalizeLine)
+  const reloads = rawReloads(detail).map(normalizeReload)
+  const lineTotals = sumLines(lines)
+  const scrapRows = lines.filter((line) => line.scrap > 0)
+  const sales = normalizeSales(detail)
+  const liquidation = normalizeLiquidation(detail)
+
+  return {
+    summary: buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }),
+    sales,
     inventory: {
       rows: lines.map((line) => ({ id: line.id, product: line.product, loaded: line.loaded })),
       totals: { loaded: lineTotals.loaded },
@@ -212,7 +340,7 @@ function buildFormats(detail = {}) {
       totals: lineTotals,
       empty: lines.length === 0,
     },
-    liquidation: normalizeLiquidation(detail),
+    liquidation,
   }
 }
 
@@ -241,9 +369,71 @@ function table(headers, rows) {
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
 }
 
+function metricGrid(metrics) {
+  return `<div class="metrics">${metrics.map((metric) => `
+    <div class="metric">
+      <span>${escapeHtml(metric.label)}</span>
+      <strong>${escapeHtml(metric.value)}</strong>
+    </div>
+  `).join('')}</div>`
+}
+
+function formatSummaryRows(format) {
+  const inventoryTable = format.inventory.empty
+    ? '<p class="empty">Sin inventario disponible.</p>'
+    : table(
+      ['Producto', 'Cargado', 'Recargas', 'Vendido', 'Devuelto', 'Merma', 'Dif.'],
+      format.inventory.rows.map((row) => [
+        row.product,
+        row.loaded,
+        row.reloaded,
+        row.delivered,
+        row.returned,
+        row.scrap,
+        row.difference,
+      ]),
+    )
+  const reloadTable = format.reloads.empty
+    ? '<p class="empty">Sin recargas registradas.</p>'
+    : table(
+      ['Folio', 'Producto', 'Cant.', 'Hora'],
+      format.reloads.rows.map((row) => [row.folio, row.product, row.quantity, row.time || '-']),
+    )
+
+  return `
+    ${metricGrid([
+      { label: 'Visitas planificadas', value: format.visits.planned },
+      { label: 'Visitas realizadas', value: format.visits.done },
+      { label: 'No realizadas', value: format.visits.notDone },
+      { label: 'Cumplimiento', value: `${format.visits.compliancePct}%` },
+      { label: 'Total ventas', value: format.sales.unavailable ? 'N/D' : money(format.sales.total) },
+      { label: 'Ventas', value: format.sales.unavailable ? 'N/D' : format.sales.count },
+      { label: 'Recargas', value: format.reloads.totals.quantity },
+      { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
+    ])}
+    <h2>Inventario y corte</h2>
+    ${inventoryTable}
+    <h2>Recargas</h2>
+    ${reloadTable}
+    <h2>Liquidacion</h2>
+    ${table(
+      ['Esperado', 'Cobrado', 'Diferencia'],
+      [[
+        money(format.liquidation.totals.expected),
+        money(format.liquidation.totals.collected),
+        money(format.liquidation.totals.difference),
+      ]],
+    )}
+  `
+}
+
 function formatRows(vm, formatId) {
   const format = vm.formats[formatId]
   if (!format) return [['Sin datos']]
+
+  if (formatId === 'summary') {
+    return formatSummaryRows(format)
+  }
 
   if (formatId === 'sales') {
     if (format.unavailable) return [['Lista de ventas no disponible en este endpoint.']]
@@ -318,12 +508,18 @@ export function buildRouteFormatHtml(viewModel, formatId) {
   <meta charset="utf-8">
   <title>${escapeHtml(title)} - ${escapeHtml(vm.plan.name)}</title>
   <style>
-    body { font-family: Arial, sans-serif; color: #111827; margin: 32px; }
+    @page { size: letter; margin: 12mm; }
+    body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 11px; }
     header { border-bottom: 2px solid #111827; margin-bottom: 18px; padding-bottom: 12px; }
-    h1 { font-size: 22px; margin: 0 0 6px; }
-    .meta { color: #4b5563; font-size: 12px; line-height: 1.5; }
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-    th, td { border: 1px solid #d1d5db; padding: 8px 10px; font-size: 12px; text-align: left; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    h2 { font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .meta { color: #4b5563; font-size: 11px; line-height: 1.5; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0; }
+    .metric { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px; background: #f9fafb; }
+    .metric span { display: block; color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .metric strong { display: block; margin-top: 3px; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    th, td { border: 1px solid #d1d5db; padding: 5px 6px; font-size: 10px; text-align: left; }
     th { background: #f3f4f6; font-weight: 700; }
     .totals { margin-top: 14px; font-size: 13px; }
     .empty { padding: 14px; border: 1px dashed #d1d5db; color: #6b7280; }
