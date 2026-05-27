@@ -22,6 +22,7 @@ import {
   getLiquidationsHistory,
 } from '../api'
 import { BACKEND_CAPS } from '../adminService'
+import RouteFormatViewer from '../components/RouteFormatViewer'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
@@ -517,6 +518,8 @@ export default function AdminLiquidacionesForm() {
                   Validar liquidación
                 </button>
               )}
+
+              <RouteFormatViewer detail={detail} />
             </>
           )}
         </div>
@@ -539,6 +542,9 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -546,6 +552,8 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
       if (!companyId) return
       setLoading(true)
       setError('')
+      setSelectedId(null)
+      setDetail(null)
       try {
         const res = await getLiquidationsHistory({
           companyId, warehouseId,
@@ -566,6 +574,26 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
     load()
     return () => { alive = false }
   }, [companyId, warehouseId, dateFrom, dateTo])
+
+  useEffect(() => {
+    if (!selectedId) { setDetail(null); return }
+    let alive = true
+    async function loadDetail() {
+      setDetailLoading(true)
+      setError('')
+      try {
+        const res = await getLiquidationDetail(selectedId)
+        const data = res?.data ?? res
+        if (alive) setDetail(data || null)
+      } catch (e) {
+        if (alive) setError(e?.message || 'Error al cargar detalle')
+      } finally {
+        if (alive) setDetailLoading(false)
+      }
+    }
+    loadDetail()
+    return () => { alive = false }
+  }, [selectedId])
 
   return (
     <div>
@@ -623,76 +651,119 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
       )}
 
       <div style={{
-        padding: 18, borderRadius: TOKENS.radius.xl,
-        background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 0.85fr) minmax(0, 1.3fr)',
+        gap: 20,
+        alignItems: 'start',
       }}>
-        <p style={{
-          fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
-          color: TOKENS.colors.textLow, margin: '0 0 12px',
+        <div style={{
+          padding: 18, borderRadius: TOKENS.radius.xl,
+          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
         }}>
-          VALIDADAS · {list.length}
-        </p>
+          <p style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.18em',
+            color: TOKENS.colors.textLow, margin: '0 0 12px',
+          }}>
+            VALIDADAS · {list.length}
+          </p>
 
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}>
+              <div style={{
+                width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
+                borderTop: '2px solid #2B8FE0', borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+            </div>
+          ) : list.length === 0 ? (
             <div style={{
-              width: 24, height: 24, border: '2px solid rgba(255,255,255,0.12)',
-              borderTop: '2px solid #2B8FE0', borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-            }} />
-          </div>
-        ) : list.length === 0 ? (
-          <div style={{
-            padding: '28px 16px', borderRadius: TOKENS.radius.md, textAlign: 'center',
-            background: TOKENS.glass.panelSoft, border: `1px dashed ${TOKENS.colors.border}`,
-          }}>
+              padding: '28px 16px', borderRadius: TOKENS.radius.md, textAlign: 'center',
+              background: TOKENS.glass.panelSoft, border: `1px dashed ${TOKENS.colors.border}`,
+            }}>
+              <p style={{ fontSize: 12, color: TOKENS.colors.textMuted, margin: 0 }}>
+                Sin liquidaciones validadas en este rango
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 6,
+              maxHeight: 'calc(100dvh - 380px)', overflowY: 'auto',
+            }}>
+              {list.map(plan => {
+                const active = plan.id === selectedId
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => setSelectedId(plan.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '12px 14px', borderRadius: TOKENS.radius.md,
+                      background: active ? `${TOKENS.colors.blue2}1f` : TOKENS.colors.surface,
+                      border: `1px solid ${active ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                      textAlign: 'left', cursor: 'pointer',
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        fontSize: 13, fontWeight: 700, color: TOKENS.colors.text,
+                        margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {plan.name || `Plan #${plan.id}`}
+                      </p>
+                      <p style={{ fontSize: 10, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
+                        {[plan.route_name, plan.driver_name, plan.vehicle_name].filter(Boolean).join(' · ') || '—'}
+                        {plan.validated_date && ` · ${plan.validated_date}`}
+                      </p>
+                    </div>
+                    {plan.total != null && (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: TOKENS.colors.blue3, whiteSpace: 'nowrap' }}>
+                        {fmt(plan.total)}
+                      </span>
+                    )}
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 999, fontSize: 9, fontWeight: 700,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      background: `${TOKENS.colors.success}22`, color: TOKENS.colors.success,
+                      border: `1px solid ${TOKENS.colors.success}40`,
+                    }}>
+                      Validada
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          padding: 22, borderRadius: TOKENS.radius.xl,
+          background: TOKENS.glass.panel, border: `1px solid ${TOKENS.colors.border}`,
+          minHeight: 360,
+        }}>
+          {!selectedId ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+              <p style={{ fontSize: 13, color: TOKENS.colors.textMuted, margin: 0 }}>
+                Selecciona una liquidación validada
+              </p>
+            </div>
+          ) : detailLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <div style={{
+                width: 28, height: 28, border: '2px solid rgba(255,255,255,0.12)',
+                borderTop: '2px solid #2B8FE0', borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+              }} />
+            </div>
+          ) : !detail ? (
             <p style={{ fontSize: 12, color: TOKENS.colors.textMuted, margin: 0 }}>
-              Sin liquidaciones validadas en este rango
+              Sin detalle disponible
             </p>
-          </div>
-        ) : (
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: 6,
-            maxHeight: 'calc(100dvh - 380px)', overflowY: 'auto',
-          }}>
-            {list.map(plan => (
-              <div
-                key={plan.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '12px 14px', borderRadius: TOKENS.radius.md,
-                  background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: 13, fontWeight: 700, color: TOKENS.colors.text,
-                    margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {plan.name || `Plan #${plan.id}`}
-                  </p>
-                  <p style={{ fontSize: 10, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
-                    {[plan.route_name, plan.driver_name, plan.vehicle_name].filter(Boolean).join(' · ') || '—'}
-                    {plan.validated_date && ` · ${plan.validated_date}`}
-                  </p>
-                </div>
-                {plan.total != null && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: TOKENS.colors.blue3, whiteSpace: 'nowrap' }}>
-                    {fmt(plan.total)}
-                  </span>
-                )}
-                <span style={{
-                  padding: '3px 10px', borderRadius: 999, fontSize: 9, fontWeight: 700,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  background: `${TOKENS.colors.success}22`, color: TOKENS.colors.success,
-                  border: `1px solid ${TOKENS.colors.success}40`,
-                }}>
-                  Validada
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+          ) : (
+            <RouteFormatViewer detail={detail} />
+          )}
+        </div>
       </div>
     </div>
   )
