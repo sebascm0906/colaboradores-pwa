@@ -6675,46 +6675,6 @@ async function directAlmacenPT(method, path, body) {
     })
   }
 
-  if (cleanPath === '/pwa-entregas/transformation-catalog' && method === 'GET') {
-    const result = await odooHttp('GET', '/api/pt/transformation/catalog', {
-      warehouse_id: warehouseId,
-      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
-      role_scope: query.get('role_scope') || 'entregas',
-    })
-    return result?.data ?? result
-  }
-
-  if (cleanPath === '/pwa-entregas/transformation-history' && method === 'GET') {
-    const result = await odooHttp('GET', '/api/pt/transformation/history', {
-      warehouse_id: warehouseId,
-      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
-      role_scope: query.get('role_scope') || 'entregas',
-      date: query.get('date') || undefined,
-    })
-    return result?.data ?? result
-  }
-
-  if (cleanPath === '/pwa-entregas/transformation-create' && method === 'POST') {
-    return odooJson('/api/pt/transformation/create', {
-      warehouse_id: body?.warehouse_id || warehouseId,
-      employee_id: body?.employee_id || getEmployeeId() || 0,
-      role_scope: body?.role_scope || 'entregas',
-      recipe_code: body?.recipe_code || undefined,
-      input_product_id: body?.input_product_id || undefined,
-      input_qty_units: body?.input_qty_units != null ? Number(body.input_qty_units) : undefined,
-      output_qty_units: body?.output_qty_units != null ? Number(body.output_qty_units) : undefined,
-      notes: body?.notes || '',
-    })
-  }
-
-  if (cleanPath === '/pwa-entregas/transformation-cancel' && method === 'POST') {
-    return odooJson('/api/pt/transformation/cancel', {
-      transformation_id: body?.transformation_id || undefined,
-      employee_id: body?.employee_id || getEmployeeId() || 0,
-      reason: body?.reason || '',
-    })
-  }
-
   // ── Forecast requests (Sebastián rollout 2026-04-10, gf_saleops) ─────────
   // Backend: gf_saleops/controllers/pt.py
   //   Warehouse → analytic resolution.
@@ -6768,6 +6728,46 @@ async function directEntregas(method, path, body) {
   const warehouseId = Number(query.get('warehouse_id') || 0) || getWarehouseId()
 
   if (!cleanPath.startsWith('/pwa-entregas/')) return NO_DIRECT
+
+  if (cleanPath === '/pwa-entregas/transformation-catalog' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/catalog', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'entregas',
+    })
+    return result?.data ?? result
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-history' && method === 'GET') {
+    const result = await odooHttp('GET', '/api/pt/transformation/history', {
+      warehouse_id: warehouseId,
+      employee_id: Number(query.get('employee_id') || 0) || getEmployeeId() || undefined,
+      role_scope: query.get('role_scope') || 'entregas',
+      date: query.get('date') || undefined,
+    })
+    return result?.data ?? result
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-create' && method === 'POST') {
+    return odooJson('/api/pt/transformation/create', {
+      warehouse_id: body?.warehouse_id || warehouseId,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      role_scope: body?.role_scope || 'entregas',
+      recipe_code: body?.recipe_code || undefined,
+      input_product_id: body?.input_product_id || undefined,
+      input_qty_units: body?.input_qty_units != null ? Number(body.input_qty_units) : undefined,
+      output_qty_units: body?.output_qty_units != null ? Number(body.output_qty_units) : undefined,
+      notes: body?.notes || '',
+    })
+  }
+
+  if (cleanPath === '/pwa-entregas/transformation-cancel' && method === 'POST') {
+    return odooJson('/api/pt/transformation/cancel', {
+      transformation_id: body?.transformation_id || undefined,
+      employee_id: body?.employee_id || getEmployeeId() || 0,
+      reason: body?.reason || '',
+    })
+  }
 
   // BLD-20260426-P0-1: lista de empleados elegibles para recibir un
   // handover de turno. Filtra por warehouse del saliente y por el
