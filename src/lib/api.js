@@ -3855,22 +3855,44 @@ async function directProduction(method, path, body) {
       sudo: 1,
     })
     const rows = pickListResponse(res)
-    const slots = rows.map(r => ({
-      id: r.id,
-      name: r.x_name,
-      state: r.x_state,
-      kg_per_bar: Number(r.kg_per_bar || 0),
-      freeze_start: r.x_freeze_start || null,
-      ready_since: r.x_ready_since || null,
-      expected_ready_at: r.x_expected_ready_at || null,
-      extraction_time: r.x_actual_extraction_time || null,
-      extraction_sequence: Number(r.x_extraction_sequence || 0),
-      time_in_ready_hours: Number(r.x_time_in_ready_hours || 0),
-      freezing_progress_pct: Number(r.x_freezing_progress_pct || 0),
-      product_id: Array.isArray(r.x_product_id) ? r.x_product_id[0] : (r.x_product_id || null),
-      product_name: Array.isArray(r.x_product_id) ? r.x_product_id[1] : '',
-      shift_id: Array.isArray(r.x_shift_id) ? r.x_shift_id[0] : (r.x_shift_id || null),
-    }))
+    const nowMs = Date.now()
+    // Helper: parse Odoo datetime string (UTC "YYYY-MM-DD HH:MM:SS") to ms
+    const parseOdooUtcMs = s => s ? Date.parse(String(s).replace(' ', 'T') + 'Z') : NaN
+    // Compute effective state: promote freezing→ready when ETA has passed.
+    // The cron cron_promote_ready_slots should do this on the backend, but if it
+    // hasn't run yet the UI would block the operator. We compute client-side so
+    // the slot is clickable immediately; backend action_cosechar accepts it
+    // (gf_production_ops_ice_brine override does not gate on x_state).
+    const effectiveSlotState = (r) => {
+      if (r.x_state !== 'freezing') return r.x_state
+      // Primary: use Odoo-computed x_expected_ready_at
+      const etaMs = parseOdooUtcMs(r.x_expected_ready_at)
+      if (!isNaN(etaMs) && etaMs <= nowMs) return 'ready'
+      // Fallback: derive from x_freeze_start + tank.freeze_hours
+      const startMs = parseOdooUtcMs(r.x_freeze_start)
+      const freezeHours = Number(tank?.freeze_hours || 0)
+      if (!isNaN(startMs) && freezeHours > 0 && (startMs + freezeHours * 3600000) <= nowMs) return 'ready'
+      return 'freezing'
+    }
+    const slots = rows.map(r => {
+      const state = effectiveSlotState(r)
+      return {
+        id: r.id,
+        name: r.x_name,
+        state,
+        kg_per_bar: Number(r.kg_per_bar || 0),
+        freeze_start: r.x_freeze_start || null,
+        ready_since: r.x_ready_since || (state === 'ready' && r.x_state === 'freezing' ? r.x_expected_ready_at || r.x_freeze_start || null : null),
+        expected_ready_at: r.x_expected_ready_at || null,
+        extraction_time: r.x_actual_extraction_time || null,
+        extraction_sequence: Number(r.x_extraction_sequence || 0),
+        time_in_ready_hours: Number(r.x_time_in_ready_hours || 0),
+        freezing_progress_pct: Number(r.x_freezing_progress_pct || 0),
+        product_id: Array.isArray(r.x_product_id) ? r.x_product_id[0] : (r.x_product_id || null),
+        product_name: Array.isArray(r.x_product_id) ? r.x_product_id[1] : '',
+        shift_id: Array.isArray(r.x_shift_id) ? r.x_shift_id[0] : (r.x_shift_id || null),
+      }
+    })
     // Prefer Odoo-computed next slot; fall back to oldest ready_since
     let nextReadyId = tank?.next_slot_id || null
     if (!nextReadyId) {
