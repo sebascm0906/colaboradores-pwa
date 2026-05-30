@@ -1,3 +1,5 @@
+const MEXICO_TIME_ZONE = 'America/Mexico_City'
+
 function relationId(value) {
   if (Array.isArray(value)) return Number(value[0] || 0) || null
   const id = Number(value || 0)
@@ -9,11 +11,84 @@ function relationName(value, fallback = '') {
   return fallback
 }
 
+function pad2(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatOdooUtc(date) {
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())} ${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}:${pad2(date.getUTCSeconds())}`
+}
+
+function timeZoneParts(date, timeZone = MEXICO_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  return Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+}
+
+function timeZoneOffsetMs(date, timeZone = MEXICO_TIME_ZONE) {
+  const parts = timeZoneParts(date, timeZone)
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  )
+  return asUtc - date.getTime()
+}
+
+function zonedDateTimeToUtc(dateKey, { hour = 0, minute = 0, second = 0 } = {}, timeZone = MEXICO_TIME_ZONE) {
+  const [year, month, day] = String(dateKey).split('-').map((part) => Number(part))
+  const localAsUtc = Date.UTC(year, month - 1, day, hour, minute, second)
+  let utcMs = localAsUtc - timeZoneOffsetMs(new Date(localAsUtc), timeZone)
+  const correctedOffset = timeZoneOffsetMs(new Date(utcMs), timeZone)
+  utcMs = localAsUtc - correctedOffset
+  return new Date(utcMs)
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const [year, month, day] = String(dateKey).split('-').map((part) => Number(part))
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0))
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
+}
+
+function parseOdooUtc(value) {
+  if (!value) return null
+  const text = String(value).trim()
+  if (!text) return null
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) return new Date(text)
+  return new Date(`${text.replace(' ', 'T')}Z`)
+}
+
+export function mexicoDateRangeToOdooUtc(dateKey) {
+  const start = zonedDateTimeToUtc(dateKey)
+  const end = zonedDateTimeToUtc(addDaysToDateKey(dateKey, 1))
+  return {
+    start: formatOdooUtc(start),
+    end: formatOdooUtc(end),
+  }
+}
+
+export function mexicoTodayDateKey(date = new Date()) {
+  const parts = timeZoneParts(date)
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
 function formatTime(value) {
   if (!value) return ''
-  const text = String(value)
-  const time = text.includes(' ') ? text.split(' ')[1] : text.split('T')[1]
-  return time ? time.slice(0, 5) : ''
+  const date = parseOdooUtc(value)
+  if (!date || Number.isNaN(date.getTime())) return ''
+  const parts = timeZoneParts(date)
+  return `${parts.hour}:${parts.minute}`
 }
 
 function stateLabel(state) {

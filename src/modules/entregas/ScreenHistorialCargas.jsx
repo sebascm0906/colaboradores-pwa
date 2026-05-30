@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useSession } from '../../App'
-import { todayLocal } from '../../lib/api'
 import { softWarehouse } from '../../lib/sessionGuards'
 import { TOKENS, getTypo } from '../../tokens'
 import SessionErrorState from '../../components/SessionErrorState'
 import { getVanLoadHistory } from './entregasService'
-import { buildVanLoadHistorySummary, groupVanLoadHistoryByVan } from './vanLoadHistory'
+import { buildVanLoadHistorySummary, groupVanLoadHistoryByVan, mexicoTodayDateKey } from './vanLoadHistory'
 import { ScreenShell, EmptyState } from './components'
 import { AdminProvider } from '../admin/AdminContext'
 import AdminShell from '../admin/components/AdminShell'
@@ -87,7 +86,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
   const { session } = useSession()
   const [sw, setSw] = useState(typeof window !== 'undefined' ? window.innerWidth : 390)
   const typo = useMemo(() => getTypo(sw), [sw])
-  const [date, setDate] = useState(todayLocal())
+  const [date, setDate] = useState(mexicoTodayDateKey())
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -164,7 +163,7 @@ function HistoryView({ backTo, isAdmin = false, shell = true }) {
           />
         </div>
         <button
-          onClick={() => setDate(todayLocal())}
+          onClick={() => setDate(mexicoTodayDateKey())}
           style={{
             minHeight: 44,
             padding: '0 14px',

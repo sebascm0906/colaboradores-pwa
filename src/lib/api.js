@@ -38,6 +38,7 @@ import {
   normalizeOdooPickingId,
   normalizePtTransferActionId,
 } from '../modules/entregas/ptTransferGuards.js'
+import { mexicoDateRangeToOdooUtc } from '../modules/entregas/vanLoadHistory.js'
 import { readWithOptionalFieldFallback } from '../modules/admin/requisitionReadFallback.js'
 
 // ─── API Helper Central — Bypass-safe ────────────────────────────────────────
@@ -7493,12 +7494,7 @@ async function directEntregas(method, path, body) {
     const sourceLocationId = Number(whRows[0]?.lot_stock_id?.[0] || whRows[0]?.lot_stock_id || 0)
     if (!sourceLocationId) return { ok: true, date, warehouse_id: whId, items: [] }
 
-    const start = `${date} 00:00:00`
-    const next = new Date(`${date}T12:00:00`)
-    next.setDate(next.getDate() + 1)
-    const pad2 = (n) => String(n).padStart(2, '0')
-    const endDate = `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`
-    const end = `${endDate} 00:00:00`
+    const { start, end } = mexicoDateRangeToOdooUtc(date)
 
     const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
       fields: ['id', 'name', 'state', 'create_date', 'scheduled_date', 'date_done',

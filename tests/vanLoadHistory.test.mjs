@@ -4,8 +4,36 @@ import assert from 'node:assert/strict'
 import {
   buildVanLoadHistorySummary,
   groupVanLoadHistoryByVan,
+  mexicoDateRangeToOdooUtc,
+  mexicoTodayDateKey,
   normalizeVanLoadHistoryItems,
 } from '../src/modules/entregas/vanLoadHistory.js'
+
+test('mexicoDateRangeToOdooUtc builds UTC boundaries for a Mexico calendar day', () => {
+  assert.deepEqual(mexicoDateRangeToOdooUtc('2026-05-28'), {
+    start: '2026-05-28 06:00:00',
+    end: '2026-05-29 06:00:00',
+  })
+})
+
+test('mexicoTodayDateKey uses Mexico calendar day instead of browser UTC day', () => {
+  assert.equal(mexicoTodayDateKey(new Date('2026-05-29T03:30:00Z')), '2026-05-28')
+})
+
+test('normalizeVanLoadHistoryItems displays Odoo UTC datetimes in Mexico time', () => {
+  const [item] = normalizeVanLoadHistoryItems([
+    {
+      id: 500,
+      name: 'WH/OUT/0500',
+      state: 'done',
+      create_date: '2026-05-28 23:15:00',
+      driver_employee_id: [17, 'Ruta Centro'],
+      lines: [{ product_id: 10, product_name: 'Bolsa 5kg', qty: 20 }],
+    },
+  ])
+
+  assert.equal(item.time, '17:15')
+})
 
 test('normalizeVanLoadHistoryItems keeps loads and refills grouped by picking', () => {
   const items = normalizeVanLoadHistoryItems([
@@ -46,7 +74,7 @@ test('normalizeVanLoadHistoryItems keeps loads and refills grouped by picking', 
       loadKind: 'initial',
       loadKindLabel: 'Carga',
       createDate: '2026-05-30 08:15:00',
-      time: '08:15',
+      time: '02:15',
       driverEmployeeId: 17,
       driverEmployeeName: 'Ruta Centro',
       mobileLocationId: null,
@@ -69,7 +97,7 @@ test('normalizeVanLoadHistoryItems keeps loads and refills grouped by picking', 
       loadKind: 'refill',
       loadKindLabel: 'Recarga',
       createDate: '2026-05-30 12:40:00',
-      time: '12:40',
+      time: '06:40',
       driverEmployeeId: 17,
       driverEmployeeName: 'Ruta Centro',
       mobileLocationId: null,
