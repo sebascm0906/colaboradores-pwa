@@ -221,6 +221,30 @@ export default function ScreenHubDia() {
         </svg>
       </button>
 
+      <button
+        onClick={() => navigate('/entregas/historial-cargas')}
+        style={{
+          width: '100%',
+          marginBottom: 12,
+          padding: '14px 16px',
+          borderRadius: TOKENS.radius.lg,
+          background: TOKENS.colors.surfaceSoft,
+          border: `1px solid ${TOKENS.colors.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0 }}>Historial de cargas</p>
+          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>Por dia y camioneta</p>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+
       {/* Error */}
       {error && (
         <div style={{

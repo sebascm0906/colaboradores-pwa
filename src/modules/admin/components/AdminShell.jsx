@@ -30,6 +30,7 @@ export const NAV_ITEMS = [
   { id: 'pos',          label: 'Venta mostrador',  route: '/admin/pos',                roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'gastos',       label: 'Gastos',           route: '/admin/gastos',             roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'gastos-hist',  label: 'Historial gastos', route: '/admin/gastos-historial',   roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
+  { id: 'historial-cargas', label: 'Historial cargas', route: '/admin/historial-cargas', roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },
   // Aprobar gastos: SOLO gerente/dirección (auxiliar_admin NO aprueba — ver guía §2d)
   { id: 'gastos-aprobar', label: 'Aprobar gastos', route: '/admin/gastos/aprobar',     roles: ['gerente_sucursal', 'direccion_general'], status: 'live' },
   { id: 'requisiciones',label: 'Requisiciones',    route: '/admin/requisiciones',      roles: ['auxiliar_admin', 'gerente_sucursal', 'direccion_general'], status: 'live' },

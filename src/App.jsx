@@ -81,6 +81,7 @@ const AdminThemeScope = lazy(() => import('./modules/admin/components/AdminTheme
 const ScreenHubDia          = lazy(() => import('./modules/entregas/ScreenHubDia'))
 const ScreenRecibirPT       = lazy(() => import('./modules/entregas/ScreenRecibirPT'))
 const ScreenCargaUnidades   = lazy(() => import('./modules/entregas/ScreenCargaUnidades'))
+const ScreenHistorialCargas = lazy(() => import('./modules/entregas/ScreenHistorialCargas'))
 const ScreenOperacionDia    = lazy(() => import('./modules/entregas/ScreenOperacionDia'))
 const ScreenDevolucionesV2  = lazy(() => import('./modules/entregas/ScreenDevolucionesV2'))
 const ScreenMermaEntregas   = lazy(() => import('./modules/entregas/ScreenMerma'))
@@ -475,6 +476,7 @@ export default function App() {
               <Route path="liquidaciones" element={<ScreenLiquidaciones />} />
               <Route path="materia-prima" element={<ScreenMateriaPrima />} />
               <Route path="traspaso-materia-prima" element={<ScreenTraspasoMateriaPrima />} />
+              <Route path="historial-cargas" element={<ScreenHistorialCargas />} />
               <Route path="bolsas/validar" element={<ScreenValidacionBolsas />} />
               <Route path="cierre" element={<ScreenCierreCaja />} />
               <Route path="materiales/validar" element={<ScreenMaterialesValidate />} />
@@ -487,6 +489,7 @@ export default function App() {
             <Route path="/entregas/recibir-pt" element={<PrivateRoute><ScreenRecibirPT /></PrivateRoute>} />
             <Route path="/entregas/transformacion" element={<PrivateRoute><ScreenTransformacionEntregas /></PrivateRoute>} />
             <Route path="/entregas/carga" element={<PrivateRoute><ScreenCargaUnidades /></PrivateRoute>} />
+            <Route path="/entregas/historial-cargas" element={<PrivateRoute><ScreenHistorialCargas /></PrivateRoute>} />
             <Route path="/entregas/operacion" element={<PrivateRoute><ScreenOperacionDia /></PrivateRoute>} />
             <Route path="/entregas/devoluciones" element={<PrivateRoute><ScreenDevolucionesV2 /></PrivateRoute>} />
             <Route path="/entregas/merma" element={<PrivateRoute><ScreenMermaEntregas /></PrivateRoute>} />

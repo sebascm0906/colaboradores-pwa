@@ -32,6 +32,7 @@
 
 import { api, todayLocal } from '../../lib/api.js'
 import { getPtTransferActionTarget, normalizePtTransferActionId } from './ptTransferGuards.js'
+import { normalizeVanLoadHistoryItems } from './vanLoadHistory.js'
 
 // ── STEP STATUS CONSTANTS ───────────────────────────────────────────────────
 
@@ -334,6 +335,37 @@ export async function executeVanLoad(mobileLocationId, lines, driverEmployeeId) 
     lines,
     ...(driverEmployeeId ? { driver_employee_id: driverEmployeeId } : {}),
   })
+}
+
+/**
+ * Historial diario de cargas y recargas CEDIS → camioneta.
+ *
+ * @param {Object} params
+ * @param {number} params.warehouseId
+ * @param {string} params.date - YYYY-MM-DD
+ * @returns {Promise<Array>} Normalized load history items.
+ */
+export async function getVanLoadHistory({ warehouseId, date } = {}) {
+  if (!warehouseId || !date) return []
+  try {
+    const params = new URLSearchParams({
+      warehouse_id: String(warehouseId),
+      date: String(date),
+    })
+    const result = await api('GET', `/pwa-entregas/van-load-history?${params.toString()}`)
+    const items = Array.isArray(result?.items)
+      ? result.items
+      : Array.isArray(result?.data?.items)
+        ? result.data.items
+        : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result)
+            ? result
+            : []
+    return normalizeVanLoadHistoryItems(items)
+  } catch {
+    return []
+  }
 }
 
 /**

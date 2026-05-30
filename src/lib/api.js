@@ -7448,6 +7448,126 @@ async function directEntregas(method, path, body) {
     return { ok: false, error: userMessage || 'Error al ejecutar carga', message: userMessage || 'Error al ejecutar carga', code: envelope?.code || 'UNKNOWN', data: envelope?.data || {} }
   }
 
+  // ── VAN LOAD HISTORY ────────────────────────────────────────────────────────
+  // Historial diario de cargas/recargas CEDIS → camioneta. Se reconstruye desde
+  // stock.picking + stock.move para que funcione aunque la carga haya nacido de
+  // forecast o como recarga manual.
+  if (cleanPath === '/pwa-entregas/van-load-history' && method === 'GET') {
+    const whId = Number(query.get('warehouse_id') || warehouseId || 0)
+    const date = String(query.get('date') || todayLocal()).slice(0, 10)
+    if (!whId) return { ok: false, error: 'warehouse_id requerido', items: [] }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: 'date inválida', items: [] }
+
+    const routeRows = pickListResponse(await readModelSorted('gf.route', {
+      fields: ['id', 'name', 'warehouse_dispatch_id', 'location_en_ruta_id', 'salesperson_employee_id', 'driver_employee_id'],
+      domain: [['warehouse_dispatch_id', '=', whId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 200,
+      sudo: 1,
+    }))
+    const mobileLocationIds = [...new Set(
+      routeRows
+        .map((route) => Number(route.location_en_ruta_id?.[0] || route.location_en_ruta_id || 0))
+        .filter((id) => id > 0)
+    )]
+    if (!mobileLocationIds.length) return { ok: true, date, warehouse_id: whId, items: [] }
+
+    const routeByLocation = new Map()
+    for (const route of routeRows) {
+      const locId = Number(route.location_en_ruta_id?.[0] || route.location_en_ruta_id || 0)
+      if (!locId || routeByLocation.has(locId)) continue
+      routeByLocation.set(locId, route)
+    }
+
+    const whRows = pickListResponse(await readModelSorted('stock.warehouse', {
+      fields: ['id', 'lot_stock_id'],
+      domain: [['id', '=', whId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    const sourceLocationId = Number(whRows[0]?.lot_stock_id?.[0] || whRows[0]?.lot_stock_id || 0)
+    if (!sourceLocationId) return { ok: true, date, warehouse_id: whId, items: [] }
+
+    const start = `${date} 00:00:00`
+    const next = new Date(`${date}T12:00:00`)
+    next.setDate(next.getDate() + 1)
+    const pad2 = (n) => String(n).padStart(2, '0')
+    const endDate = `${next.getFullYear()}-${pad2(next.getMonth() + 1)}-${pad2(next.getDate())}`
+    const end = `${endDate} 00:00:00`
+
+    const pickingRows = pickListResponse(await readModelSorted('stock.picking', {
+      fields: ['id', 'name', 'state', 'create_date', 'scheduled_date', 'date_done',
+        'location_id', 'location_dest_id', 'create_uid', 'gf_route_plan_id',
+        'gf_route_id', 'gf_route_load_kind', 'origin'],
+      domain: [
+        ['location_id', '=', sourceLocationId],
+        ['location_dest_id', 'in', mobileLocationIds],
+        ['create_date', '>=', start],
+        ['create_date', '<', end],
+        ['state', '!=', 'cancel'],
+      ],
+      sort_column: 'create_date',
+      sort_desc: false,
+      limit: 500,
+      sudo: 1,
+    }))
+    const pickingIds = pickingRows.map((row) => Number(row.id || 0)).filter((id) => id > 0)
+    if (!pickingIds.length) return { ok: true, date, warehouse_id: whId, items: [] }
+
+    const moveRows = pickListResponse(await readModelSorted('stock.move', {
+      fields: ['id', 'picking_id', 'product_id', 'product_uom_qty', 'state'],
+      domain: [['picking_id', 'in', pickingIds], ['state', '!=', 'cancel']],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 2000,
+      sudo: 1,
+    }))
+    const linesByPicking = new Map()
+    for (const move of moveRows) {
+      const pickingId = Number(move.picking_id?.[0] || move.picking_id || 0)
+      const productId = Number(move.product_id?.[0] || move.product_id || 0)
+      const qty = Number(move.product_uom_qty || 0) || 0
+      if (!pickingId || !productId || qty <= 0) continue
+      if (!linesByPicking.has(pickingId)) linesByPicking.set(pickingId, [])
+      linesByPicking.get(pickingId).push({
+        product_id: productId,
+        product_name: Array.isArray(move.product_id) ? move.product_id[1] : '',
+        qty,
+      })
+    }
+
+    const items = pickingRows.map((picking) => {
+      const destId = Number(picking.location_dest_id?.[0] || picking.location_dest_id || 0)
+      const route = routeByLocation.get(destId) || null
+      const driverRef = route?.salesperson_employee_id || route?.driver_employee_id || null
+      return {
+        id: picking.id,
+        name: picking.name || '',
+        state: picking.state || '',
+        create_date: picking.create_date || picking.scheduled_date || picking.date_done || '',
+        scheduled_date: picking.scheduled_date || '',
+        date_done: picking.date_done || '',
+        gf_route_load_kind: picking.gf_route_load_kind || 'initial',
+        origin: picking.origin || '',
+        location_id: picking.location_id || null,
+        location_dest_id: picking.location_dest_id || null,
+        mobile_location_id: picking.location_dest_id || null,
+        mobile_location_name: Array.isArray(picking.location_dest_id) ? picking.location_dest_id[1] : '',
+        registered_by_id: picking.create_uid || null,
+        route_id: picking.gf_route_id || route?.id || null,
+        route_plan_id: picking.gf_route_plan_id || null,
+        driver_employee_id: driverRef || null,
+        driver_employee_name: Array.isArray(driverRef) ? driverRef[1] : '',
+        lines: linesByPicking.get(Number(picking.id || 0)) || [],
+      }
+    }).filter((item) => item.lines.length > 0)
+
+    return { ok: true, date, warehouse_id: whId, items }
+  }
+
   if (cleanPath === '/pwa-entregas/returns' && method === 'GET') {
     // BLD-20260426-P0-RETURNS-BFF: campos del modelo gf.route.stop.line confirmados
     // por Sebastián + introspección live (2026-04-26):

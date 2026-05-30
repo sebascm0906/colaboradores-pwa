@@ -76,6 +76,7 @@ function MobileAdminHub() {
     { id: 'pos',              label: 'POS Mostrador',      desc: 'Punto de venta mostrador',   route: '/admin/pos',              color: TOKENS.colors.success, badge: salesCount || null },
     { id: 'gastos',           label: 'Gastos',             desc: 'Registrar gastos del día',   route: '/admin/gastos',           color: TOKENS.colors.warning, badge: expensesCount || null },
     { id: 'historial_gastos', label: 'Historial de Gastos',desc: 'Consultar gastos',            route: '/admin/gastos-historial', color: TOKENS.colors.blue3 },
+    { id: 'historial_cargas', label: 'Historial de Cargas',desc: 'Cargas y recargas por camioneta', route: '/admin/historial-cargas', color: TOKENS.colors.blue2 },
     { id: 'requisiciones',    label: 'Requisiciones',      desc: 'Solicitudes de compra',       route: '/admin/requisiciones',    color: TOKENS.colors.blue2 },
     { id: 'cierre',           label: 'Cierre de Caja',     desc: 'Resumen y cierre del día',    route: '/admin/cierre',           color: TOKENS.colors.blue3 },
     { id: 'traspaso_mp',      label: 'TRASPASO MATERIA PRIMA', desc: 'Enviar material a rolito o PT', route: '/admin/traspaso-materia-prima', color: TOKENS.colors.blue2, roles: ['auxiliar_admin', 'gerente_sucursal'] },
