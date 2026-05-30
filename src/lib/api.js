@@ -30,6 +30,8 @@ import {
 } from '../modules/shared/packingLocalStore.js'
 import {
   collectRouteEmployeeIds,
+  filterRouteSuggestionsByDriverScope,
+  filterRoutesByEmployeeScope,
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
 import {
@@ -7881,8 +7883,36 @@ async function directSupervisorVentas(method, path, body) {
     }
   }
 
+  let supervisorScopePromise = null
+  async function supervisorAnalyticScope() {
+    if (!supervisorScopePromise) {
+      supervisorScopePromise = (async () => {
+        const analyticAccountId = sessionAnalyticAccountId() || await readEmployeeAnalyticAccountId(getEmployeeId())
+        if (!analyticAccountId) return { analyticAccountId: 0, employeeIds: [], employeeIdSet: new Set() }
+        const scope = await readEmployeeScopeForAnalyticAccount(analyticAccountId)
+        return {
+          analyticAccountId,
+          employeeIds: scope.employeeIds,
+          employeeIdSet: new Set(scope.employeeIds),
+        }
+      })()
+    }
+    return supervisorScopePromise
+  }
+
+  function employeeInScope(row, scope) {
+    if (!scope?.employeeIdSet?.size) return false
+    return SUPV_ROUTE_EMPLOYEE_FIELDS.some((field) => {
+      const value = row?.[field]
+      const id = Array.isArray(value) ? Number(value[0] || 0) : Number(value || 0)
+      return id && scope.employeeIdSet.has(id)
+    })
+  }
+
   if (cleanPath === '/pwa-supv/team' && method === 'GET') {
     const warehouseId = getWarehouseId()
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
 
     // Obtener employee_ids de las rutas asignadas al CEDIS del supervisor.
     // hr.employee.warehouse_id frecuentemente no está configurado, así que
@@ -7901,7 +7931,8 @@ async function directSupervisorVentas(method, path, body) {
         sort_column: 'id', sort_desc: false, limit: 200, sudo: 1,
       }))
       const empIds = collectRouteEmployeeIds(routeRows, empFields)
-      if (empIds.length > 0) employeeIdFilter = empIds
+      const scopedEmpIds = empIds.filter((id) => scope.employeeIdSet.has(id))
+      if (scopedEmpIds.length > 0) employeeIdFilter = scopedEmpIds
     }
 
     const domain = []
@@ -7911,6 +7942,7 @@ async function directSupervisorVentas(method, path, body) {
       domain.push(['x_job_key', 'in', ['jefe_ruta', 'auxiliar_ruta']])
       if (companyId) domain.push(['company_id', '=', companyId])
     }
+    domain.push(['x_analytic_account_id', '=', scope.analyticAccountId])
     const result = await readModelSorted('hr.employee', {
       fields: ['id', 'name', 'barcode', 'job_id', 'x_job_key', 'warehouse_id', 'company_id', 'image_128', 'work_phone', 'mobile_phone'],
       domain,
@@ -7933,6 +7965,8 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team-routes' && method === 'GET') {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
     const pad = (n) => String(n).padStart(2, '0')
     // Accept optional ?date=YYYY-MM-DD param, default to today
     const dateParam = query.get('date')
@@ -7961,7 +7995,7 @@ async function directSupervisorVentas(method, path, body) {
       limit: 200,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => {
+    return pickListResponse(result).filter((row) => employeeInScope(row, scope)).map((row) => {
       const stopsTotal = Number(row.stops_total || 0)
       const stopsDone = Number(row.stops_done || 0)
       return {
@@ -7992,12 +8026,14 @@ async function directSupervisorVentas(method, path, body) {
 
   if (cleanPath === '/pwa-supv/route-templates' && method === 'GET') {
     const warehouseId = getWarehouseId()
+    const scope = await supervisorAnalyticScope()
     if (!warehouseId) {
       throw new ApiError(
         'Tu usuario no tiene CEDIS asignado. Pide a administracion que configure warehouse_id.',
         { status: 400, code: 'missing_warehouse_id' }
       )
     }
+    if (!scope.analyticAccountId) return []
 
     const requestedDate = query.get('date_target') || ''
     const dateTarget = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : tomorrowDateString()
@@ -8018,14 +8054,14 @@ async function directSupervisorVentas(method, path, body) {
     if (companyId && routeHasCompany) domain.push(['company_id', '=', companyId])
     if (routeHasActive) domain.push(['active', '=', true])
 
-    const routeRows = pickListResponse(await readModelSorted('gf.route', {
+    const routeRows = filterRoutesByEmployeeScope(pickListResponse(await readModelSorted('gf.route', {
       fields: routeFields,
       domain,
       sort_column: 'name',
       sort_desc: false,
       limit: 200,
       sudo: 1,
-    }))
+    })), scope.employeeIds, employeeFields)
 
     const assignedRoutes = routeRows
       .map((route) => ({ route, employeeRef: firstM2o(route, employeeFields) }))
@@ -8182,6 +8218,7 @@ async function directSupervisorVentas(method, path, body) {
     // Plan creation must stay server-side: the backend owns idempotency,
     // route defaults, stops, and load picking creation. The PWA only wraps it.
     const warehouseId = getWarehouseId()
+    const scope = await supervisorAnalyticScope()
     const supervisorEmpId = Number(getEmployeeId() || 0) || 0
     const routeId = Number(body?.route_id || 0)
     const dateTarget = body?.date_target || ''
@@ -8189,13 +8226,17 @@ async function directSupervisorVentas(method, path, body) {
     if (!warehouseId) {
       throw new ApiError('Tu usuario no tiene CEDIS asignado.', { status: 400, code: 'missing_warehouse_id' })
     }
+    if (!scope.analyticAccountId) {
+      return { ok: false, error: 'Tu usuario no tiene analitica CEDIS configurada.', code: 'missing_x_analytic_account_id' }
+    }
     if (!routeId) return { ok: false, error: 'route_id requerido', code: 'route_id_required' }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateTarget)) {
       return { ok: false, error: 'date_target invalida', code: 'invalid_date_target' }
     }
 
+    const routeEmployeeFields = await getSupportedFields('gf.route', SUPV_ROUTE_EMPLOYEE_FIELDS)
     const routeRows = pickListResponse(await readModelSorted('gf.route', {
-      fields: ['id', 'name', 'warehouse_dispatch_id'],
+      fields: ['id', 'name', 'warehouse_dispatch_id', ...routeEmployeeFields],
       domain: [['id', '=', routeId], ['warehouse_dispatch_id', '=', warehouseId]],
       sort_column: 'id',
       sort_desc: false,
@@ -8204,6 +8245,9 @@ async function directSupervisorVentas(method, path, body) {
     }))
     if (!routeRows.length) {
       return { ok: false, error: 'Ruta fuera del CEDIS de la sesion.', code: 'route_not_in_warehouse' }
+    }
+    if (!employeeInScope(routeRows[0], scope)) {
+      return { ok: false, error: 'Ruta fuera de tu analitica CEDIS.', code: 'route_not_in_analytic_scope' }
     }
 
     // F1: clasificación de demanda (AA/A/B/C). Always emit array — incluso
@@ -8264,6 +8308,19 @@ async function directSupervisorVentas(method, path, body) {
     // genérico perdía los line_ids silenciosamente).
     const employeeId = Number(body?.employee_id || 0)
     const supervisorEmpId = Number(getEmployeeId() || 0) || 0
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) {
+      throw new ApiError(
+        'Tu usuario no tiene analitica CEDIS configurada.',
+        { status: 400, code: 'missing_x_analytic_account_id' }
+      )
+    }
+    if (employeeId && !scope.employeeIdSet.has(employeeId)) {
+      throw new ApiError(
+        'No puedes crear pronostico para un chofer fuera de tu analitica CEDIS.',
+        { status: 403, code: 'employee_not_in_analytic_scope' }
+      )
+    }
 
     const supvMeta = {}
     if (supervisorEmpId) supvMeta.employee_id = supervisorEmpId
@@ -8310,8 +8367,11 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/forecasts' && method === 'GET') {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
     const domain = []
     if (companyId) domain.push(['company_id', '=', companyId])
+    domain.push(['analytic_account_id', '=', scope.analyticAccountId])
     const result = await readModelSorted('gf.saleops.forecast', {
       fields: [
         'id', 'name', 'date_target', 'state', 'company_id',
@@ -8418,9 +8478,12 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/team-targets' && method === 'GET') {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
     const [startMonth, endMonth] = monthRange()
     const domain = [['target_month', '>=', startMonth], ['target_month', '<', endMonth]]
     if (companyId) domain.push(['company_id', '=', companyId])
+    domain.push(['employee_id', 'in', scope.employeeIds])
     const result = await readModelSorted('hr.employee.monthly.target', {
       fields: ['id', 'employee_id', 'target_month', 'sales_target', 'collection_target', 'actual_sales', 'actual_collection'],
       domain,
@@ -8460,8 +8523,19 @@ async function directSupervisorVentas(method, path, body) {
 
   // ── Route Stops (detalle de paradas de una ruta) ──
   if (cleanPath === '/pwa-supv/route-stops' && method === 'GET') {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
     const routePlanId = Number(query.get('route_plan_id') || 0)
     if (!routePlanId) return []
+    const planRows = pickListResponse(await readModelSorted('gf.route.plan', {
+      fields: ['id', 'driver_employee_id', 'salesperson_employee_id'],
+      domain: [['id', '=', routePlanId]],
+      sort_column: 'id',
+      sort_desc: false,
+      limit: 1,
+      sudo: 1,
+    }))
+    if (!planRows.length || !employeeInScope(planRows[0], scope)) return []
     const result = await readModelSorted('gf.route.stop', {
       fields: [
         'id', 'route_plan_id', 'customer_id', 'state', 'result_status',
@@ -8495,6 +8569,8 @@ async function directSupervisorVentas(method, path, body) {
 
   // ── Week Routes (rutas lunes a domingo para score semanal) ──
   if (cleanPath === '/pwa-supv/week-routes' && method === 'GET') {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) return []
     const today = new Date()
     const dayOfWeek = today.getDay()
     const monday = new Date(today)
@@ -8521,7 +8597,7 @@ async function directSupervisorVentas(method, path, body) {
       limit: 500,
       sudo: 1,
     })
-    return pickListResponse(result).map((row) => ({
+    return pickListResponse(result).filter((row) => employeeInScope(row, scope)).map((row) => ({
       id: row.id,
       name: row.name,
       date: row.date,
@@ -8633,20 +8709,43 @@ async function directSupervisorVentas(method, path, body) {
   }
 
   if (cleanPath === '/pwa-supv/route-suggestions' && method === 'GET') {
-    return odooHttp('GET', '/pwa-supv/route-suggestions', {
+    const scope = await supervisorAnalyticScope()
+    if (!scope.analyticAccountId) {
+      return { ok: true, data: { suggestions: [] } }
+    }
+    const result = await odooHttp('GET', '/pwa-supv/route-suggestions', {
       weekly_plan_id:   Number(query.get('weekly_plan_id'))   || undefined,
       branch_config_id: Number(query.get('branch_config_id')) || undefined,
       date:             query.get('date') || undefined,
     })
+    const data = result?.data || {}
+    if (Array.isArray(data.suggestions)) {
+      return {
+        ...result,
+        data: {
+          ...data,
+          suggestions: filterRouteSuggestionsByDriverScope(data.suggestions, scope.employeeIds),
+        },
+      }
+    }
+    return result
   }
 
   if (cleanPath === '/pwa-supv/route-suggestions/confirm' && method === 'POST') {
+    const scope = await supervisorAnalyticScope()
+    const plannedDriverId = Number(body?.planned_driver_id || 0)
+    if (!scope.analyticAccountId) {
+      return { ok: false, error: 'Tu usuario no tiene analitica CEDIS configurada.', code: 'missing_x_analytic_account_id' }
+    }
+    if (!plannedDriverId || !scope.employeeIdSet.has(plannedDriverId)) {
+      return { ok: false, error: 'Chofer fuera de tu analitica CEDIS.', code: 'driver_not_in_analytic_scope' }
+    }
     // Backend tiene whitelist estricto: weekly_plan_line_id + planned_*
     // (driver, vehicle requeridos; salesperson/mobile_location/
     // warehouse_dispatch/departure_time opcionales). Extras -> invalid_payload.
     return odooJson('/pwa-supv/route-suggestions/confirm', {
       weekly_plan_line_id:           Number(body?.weekly_plan_line_id || 0),
-      planned_driver_id:             Number(body?.planned_driver_id || 0),
+      planned_driver_id:             plannedDriverId,
       planned_vehicle_id:            Number(body?.planned_vehicle_id || 0),
       planned_salesperson_id:        body?.planned_salesperson_id
                                       ? Number(body.planned_salesperson_id)

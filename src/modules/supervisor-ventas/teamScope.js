@@ -24,3 +24,36 @@ export function collectRouteEmployeeIds(routes, fields = SUPV_ROUTE_EMPLOYEE_FIE
   }
   return [...ids]
 }
+
+export function filterRoutesByEmployeeScope(routes, allowedEmployeeIds, fields = SUPV_ROUTE_EMPLOYEE_FIELDS) {
+  const allowed = new Set((Array.isArray(allowedEmployeeIds) ? allowedEmployeeIds : []).map(Number).filter(Boolean))
+  if (!allowed.size) return []
+  return (Array.isArray(routes) ? routes : []).filter((route) => (
+    fields.some((field) => allowed.has(routeEmployeeId(route?.[field])))
+  ))
+}
+
+export function filterRouteSuggestionsByDriverScope(suggestions, allowedEmployeeIds) {
+  const allowed = new Set((Array.isArray(allowedEmployeeIds) ? allowedEmployeeIds : []).map(Number).filter(Boolean))
+  if (!allowed.size) return []
+  return (Array.isArray(suggestions) ? suggestions : [])
+    .map((suggestion) => {
+      const options = Array.isArray(suggestion?.valid_route_options)
+        ? suggestion.valid_route_options
+        : []
+      const scopedOptions = options.filter((option) => {
+        const driverId = routeEmployeeId(
+          option?.driver_employee_id
+          || option?.driver_id
+          || option?.planned_driver_id
+        )
+        return driverId && allowed.has(driverId)
+      })
+      return { ...suggestion, valid_route_options: scopedOptions }
+    })
+    .filter((suggestion) => (
+      suggestion.route_resolution_status === 'resolved'
+      || suggestion.resolved_route_id
+      || (Array.isArray(suggestion.valid_route_options) && suggestion.valid_route_options.length > 0)
+    ))
+}
