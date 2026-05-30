@@ -30,7 +30,7 @@
 //   - Controllers de Sebastián (/gf/logistics/api/employee/*) para funciones nuevas
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api.js'
+import { api, todayLocal } from '../../lib/api.js'
 import { getPtTransferActionTarget, normalizePtTransferActionId } from './ptTransferGuards.js'
 
 // ── STEP STATUS CONSTANTS ───────────────────────────────────────────────────
@@ -103,7 +103,7 @@ export async function getDaySummary(warehouseId) {
   const handoverData = handover.status === 'fulfilled' ? handover.value : null
 
   return {
-    date: new Date().toISOString().slice(0, 10),
+    date: todayLocal(),
     warehouse_id: warehouseId,
     pending_pallets: transferData.length,
     routes_total: routeData.length,

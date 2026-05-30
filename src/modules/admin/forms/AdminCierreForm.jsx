@@ -27,6 +27,7 @@ import {
   CASH_DENOMINATIONS,
   BACKEND_CAPS,
 } from '../adminService'
+import { localDateString } from '../../../lib/api'
 
 // ── Umbrales de diferencia (alineados con backend 2026-04-18) ───────────────
 // Se leen de BACKEND_CAPS al render; los defaults son los mismos que el
@@ -683,7 +684,7 @@ export default function AdminCierreForm() {
 function CashClosingHistory({ companyId, warehouseId }) {
   const today = new Date()
   const weekAgo = new Date(); weekAgo.setDate(today.getDate() - 30)
-  const iso = (d) => d.toISOString().slice(0, 10)
+  const iso = (d) => localDateString(d)
 
   const [dateFrom, setDateFrom] = useState(iso(weekAgo))
   const [dateTo, setDateTo] = useState(iso(today))

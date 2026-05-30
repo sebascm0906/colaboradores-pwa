@@ -4,9 +4,10 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { buildKoldcupTransferPayload, getKoldcupDaySummary, transferKoldcupToEntregas } from './koldcupService'
 import { normalizeKoldcupSummary } from './koldcupState'
+import { todayLocal } from '../../lib/api'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }
 
 export default function ScreenKoldcupTraspaso() {

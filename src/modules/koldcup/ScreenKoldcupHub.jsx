@@ -4,9 +4,10 @@ import { useSession } from '../../App'
 import { TOKENS, getTypo } from '../../tokens'
 import { computeKoldcupSteps, normalizeKoldcupSummary } from './koldcupState'
 import { getKoldcupDaySummary } from './koldcupService'
+import { todayLocal } from '../../lib/api'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }
 
 function fmtMoney(value) {

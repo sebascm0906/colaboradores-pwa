@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { useAdmin } from '../AdminContext'
 import { getExpensesHistory } from '../api'
+import { localDateString } from '../../../lib/api'
 
 const STATE_MAP = {
   draft:     { label: 'Borrador',  color: 'muted' },
@@ -24,8 +25,7 @@ const PAGE_SIZE = 25
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 function toISODate(d = new Date()) {
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
+  return localDateString(d)
 }
 
 function formatDate(value) {

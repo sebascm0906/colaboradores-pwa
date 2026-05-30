@@ -4,13 +4,14 @@
 import { useEffect, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import { getMpMoves } from '../api'
+import { localDateString } from '../../../lib/api'
 
 const nfmt = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 3 })
 
 export default function MpKardexModal({ product, companyId, warehouseId, onClose }) {
   const today = new Date()
   const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate())
-  const toIso = (d) => d.toISOString().slice(0, 10)
+  const toIso = (d) => localDateString(d)
 
   const [dateFrom, setDateFrom] = useState(toIso(monthAgo))
   const [dateTo, setDateTo] = useState(toIso(today))

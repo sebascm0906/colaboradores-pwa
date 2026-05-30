@@ -19,6 +19,7 @@ import {
   getLiquidation,
   closeRoute,
 } from './api'
+import { todayLocal } from '../../lib/api'
 export { calculateFlowState } from './routeFlowState'
 export { buildInventoryView } from './routeInventoryView'
 
@@ -433,5 +434,5 @@ export function fmtPct(n) {
 
 /** Get today's date as YYYY-MM-DD */
 export function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }

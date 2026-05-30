@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { COMPANY_LABELS, TOKENS, getCompaniesForSucursal, getTypo } from '../../tokens'
 import { getExpensesHistory } from './api'
+import { localDateString } from '../../lib/api'
 import { AdminProvider } from './AdminContext'
 import AdminShell from './components/AdminShell'
 import AdminHistorialGastosView from './views/AdminHistorialGastosView'
@@ -51,8 +52,7 @@ function formatCurrency(value) {
 }
 
 function getLocalISODate(date = new Date()) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
+  return localDateString(date)
 }
 
 function formatHistoryDate(value) {

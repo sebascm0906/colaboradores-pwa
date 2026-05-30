@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useSession } from '../../App'
 import { TOKENS, getTypo, getCompaniesForSucursal } from '../../tokens'
 import { createExpense, getTodayExpenses } from '../admin/api'
+import { todayLocal } from '../../lib/api'
 
 export default function GastosScreenBase({
   title = 'Gastos',
@@ -25,7 +26,7 @@ export default function GastosScreenBase({
   const [companyId, setCompanyId] = useState(session?.company_id || companies[0]?.id || null)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayLocal())
   const [paymentMode, setPaymentMode] = useState('company')
   const [description, setDescription] = useState('')
 

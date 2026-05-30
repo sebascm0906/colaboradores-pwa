@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet as _apiGet } from "../lib/api";
+import { apiGet as _apiGet, todayLocal } from "../lib/api";
 
 /* ============================================================================
    DESIGN TOKENS
@@ -105,7 +105,7 @@ function mapOdooBadge(b) {
     id: b.id,
     badge_id: [b.badge_id, b.badge_name],
     badge_name: b.badge_name || "Logro",
-    create_date: b.create_date || new Date().toISOString().split("T")[0],
+    create_date: b.create_date || todayLocal(),
     comment: b.comment || "Logro obtenido en Grupo Frío",
     x_points: b.x_points || 0,
     icon: getBadgeIcon(b.badge_name),

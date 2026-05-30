@@ -17,7 +17,7 @@ import {
   BACKEND_CAPS,
 } from '../adminService'
 import { attachExpense } from '../api'
-import { api } from '../../../lib/api'
+import { api, todayLocal } from '../../../lib/api'
 import AnalyticAccountPicker from '../components/AnalyticAccountPicker'
 
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024 // 8 MB
@@ -52,7 +52,7 @@ export default function AdminGastosForm() {
   // Campos del formulario
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayLocal())
   const [paymentMode, setPaymentMode] = useState('company')
   const [reference, setReference] = useState('')
   const [description, setDescription] = useState('')

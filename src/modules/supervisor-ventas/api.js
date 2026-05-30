@@ -14,7 +14,7 @@
 // - employee_id se pasa explícitamente donde aplica (forecast, kpi)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { api } from '../../lib/api.js'
+import { api, todayLocal } from '../../lib/api.js'
 
 // ── Dashboard / Equipo ───────────────────────────────────────────────────────
 
@@ -198,7 +198,7 @@ export async function getDaySales(opts = {}) {
   const result = await api('GET', `/pwa-pt/day-sales${qs.toString() ? `?${qs}` : ''}`)
   const payload = result?.data || result || {}
   return {
-    date: payload.date || opts.date || new Date().toISOString().slice(0, 10),
+    date: payload.date || opts.date || todayLocal(),
     warehouse_id: payload.warehouse_id || opts.warehouseId || 0,
     items: Array.isArray(payload.items) ? payload.items
          : Array.isArray(payload) ? payload

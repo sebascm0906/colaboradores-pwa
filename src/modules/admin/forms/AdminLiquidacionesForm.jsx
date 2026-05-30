@@ -22,6 +22,7 @@ import {
   getLiquidationsHistory,
 } from '../api'
 import { BACKEND_CAPS } from '../adminService'
+import { localDateString } from '../../../lib/api'
 import RouteFormatViewer from '../components/RouteFormatViewer'
 
 const fmt = (n) => '$' + Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -535,7 +536,7 @@ export default function AdminLiquidacionesForm() {
 function LiquidacionesHistory({ companyId, warehouseId }) {
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const toIso = (d) => d.toISOString().slice(0, 10)
+  const toIso = (d) => localDateString(d)
 
   const [dateFrom, setDateFrom] = useState(toIso(firstOfMonth))
   const [dateTo, setDateTo] = useState(toIso(today))

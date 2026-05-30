@@ -18,9 +18,10 @@ import {
   suggestTransformationOutputQty,
   validateTransformationDraft,
 } from './utils/transformationHelpers'
+import { todayLocal } from '../../lib/api'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }
 
 export default function TransformationScreen({ roleScope }) {

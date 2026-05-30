@@ -21,7 +21,7 @@
 // Base: stock.quant for real inventory. gf.pallet DESCARTADO (0 registros).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api'
+import { api, todayLocal } from '../../lib/api'
 import {
   derivePtBlockState,
   normalizePendingPtHandover,
@@ -336,7 +336,7 @@ export async function getDaySummary(warehouseId = DEFAULT_WAREHOUSE_ID) {
   })
 
   return {
-    date: backendSummary?.date || new Date().toISOString().slice(0, 10),
+    date: backendSummary?.date || todayLocal(),
     warehouse_id: warehouseId,
     warehouse_name: backendSummary?.warehouse_name || '',
     inventory: {
@@ -450,7 +450,7 @@ export function saveReceptionLocal(reception) {
 export function getTodayReceptionsLocal() {
   const key = 'gf_pt_receptions'
   const all = JSON.parse(localStorage.getItem(key) || '[]')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   return all.filter(r => r.timestamp?.startsWith(today))
 }
 
@@ -521,7 +521,7 @@ export function logTransferLocal(entry) {
 export function getTodayTransfersLocal() {
   const key = 'gf_pt_transfers'
   const all = JSON.parse(localStorage.getItem(key) || '[]')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   return all.filter(t => t.timestamp?.startsWith(today))
 }
 
@@ -602,7 +602,7 @@ export async function getTransfersHistory({
  * if the endpoint fails. Returns the same shape as getTodayTransfersLocal().
  */
 export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   try {
     const rows = await getTransfersHistory({
       warehouseId,
@@ -636,7 +636,7 @@ export async function getDaySales({ warehouseId = DEFAULT_WAREHOUSE_ID, date } =
   const result = await api('GET', `/pwa-pt/day-sales?${qs}`)
   const payload = result?.data || result || {}
   return {
-    date: payload.date || date || new Date().toISOString().slice(0, 10),
+    date: payload.date || date || todayLocal(),
     warehouse_id: payload.warehouse_id || warehouseId,
     items: Array.isArray(payload.items) ? payload.items
          : Array.isArray(payload) ? payload

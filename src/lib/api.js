@@ -236,10 +236,15 @@ function toMany2oneName(value) {
   return ''
 }
 
-function localDateString(date = new Date()) {
+export function localDateString(date = new Date()) {
   const value = date instanceof Date ? date : new Date(date)
   const pad = (n) => String(n).padStart(2, '0')
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+}
+
+/** Shorthand for localDateString() — returns today in YYYY-MM-DD using local timezone. */
+export function todayLocal() {
+  return localDateString(new Date())
 }
 
 function normalizeText(value) {
@@ -5892,7 +5897,7 @@ async function directSupervision(method, path, body) {
       method: 'create',
       dict: {
         name: body?.name || body?.subject || 'Solicitud PWA',
-        request_date: body?.request_date || new Date().toISOString().slice(0, 10),
+        request_date: body?.request_date || todayLocal(),
         maintenance_type: body?.maintenance_type || body?.type || 'corrective',
         priority,
         equipment_id: Number(body?.equipment_id || 0) || undefined,
@@ -7461,7 +7466,7 @@ async function directEntregas(method, path, body) {
     //   - reception_state = 'pending'
     //   - plan en estados activos (published/in_progress/closed/reconciled)
     //   - plan.date = hoy
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayLocal()
     const routePlanId = Number(query.get('route_plan_id') || 0)
     const domain = [
       ['line_type', '=', 'return'],
@@ -8162,7 +8167,7 @@ async function directSupervisorVentas(method, path, body) {
       : []
 
     const upsertData = {
-      date_target: body?.date_target || new Date().toISOString().slice(0, 10),
+      date_target: body?.date_target || todayLocal(),
       lines,
       replace: true,
     }
