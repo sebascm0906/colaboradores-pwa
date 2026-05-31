@@ -450,8 +450,14 @@ export function saveReceptionLocal(reception) {
 export function getTodayReceptionsLocal() {
   const key = 'gf_pt_receptions'
   const all = JSON.parse(localStorage.getItem(key) || '[]')
-  const today = todayLocal()
-  return all.filter(r => r.timestamp?.startsWith(today))
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
+  return all.filter(r => {
+    if (!r.timestamp) return false
+    const ts = new Date(r.timestamp).getTime()
+    return ts >= startOfToday && ts < startOfTomorrow
+  })
 }
 
 /**
@@ -517,12 +523,20 @@ export function logTransferLocal(entry) {
 
 /**
  * Get local transfer log for today (fallback only).
+ * Compares using local-timezone Date boundaries so transfers made after
+ * midnight UTC (e.g. after ~7 PM Mexico CDT) are not incorrectly excluded.
  */
 export function getTodayTransfersLocal() {
   const key = 'gf_pt_transfers'
   const all = JSON.parse(localStorage.getItem(key) || '[]')
-  const today = todayLocal()
-  return all.filter(t => t.timestamp?.startsWith(today))
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfTomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
+  return all.filter(t => {
+    if (!t.timestamp) return false
+    const ts = new Date(t.timestamp).getTime()
+    return ts >= startOfToday && ts < startOfTomorrow
+  })
 }
 
 export function getPendingTransferReservationMap({ warehouseId, destinationWarehouseId } = {}) {
