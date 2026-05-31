@@ -440,24 +440,26 @@ export default function ScreenTraspasoPT() {
                       : t.kg_total != null ? t.kg_total
                       : 0
                     )
+                    const isPending = t.pending_validation === true || t.state === 'Listo para recibir'
                     return (
                       <div key={t.id || `${t.name}-${rawDate}`} style={{
                         padding: '10px 14px', borderRadius: TOKENS.radius.md,
-                        background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                        background: isPending ? 'rgba(245,158,11,0.06)' : TOKENS.colors.surfaceSoft,
+                        border: isPending ? '1px solid rgba(245,158,11,0.22)' : `1px solid ${TOKENS.colors.border}`,
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       }}>
                         <div>
                           <p style={{ ...typo.caption, color: TOKENS.colors.textSoft, margin: 0, fontWeight: 600 }}>
                             → {destName}
                           </p>
-                          <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
+                          <p style={{ ...typo.caption, color: isPending ? TOKENS.colors.warning : TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
                             {time}{linesCount ? ` · ${linesCount} productos` : ''}
                             {t.state ? ` · ${t.state}` : ''}
                           </p>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           {totalQty > 0 && (
-                            <p style={{ ...typo.caption, color: TOKENS.colors.success, margin: 0, fontWeight: 700 }}>{fmtNum(totalQty)} uds</p>
+                            <p style={{ ...typo.caption, color: isPending ? TOKENS.colors.warning : TOKENS.colors.success, margin: 0, fontWeight: 700 }}>{fmtNum(totalQty)} uds</p>
                           )}
                           {totalKg > 0 && (
                             <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0 }}>{fmtKg(totalKg)}</p>

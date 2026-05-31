@@ -598,11 +598,18 @@ export async function getTransfersHistory({
 }
 
 /**
- * Get today's transfers PT→CEDIS from backend, with localStorage fallback
- * if the endpoint fails. Returns the same shape as getTodayTransfersLocal().
+ * Get today's transfers PT→CEDIS.
+ * Always merges backend (done/confirmed) rows with locally-logged pending
+ * transfers so that transfers waiting for Entregas acceptance appear immediately
+ * in "Traspasos de hoy" with state "Listo para recibir".
+ *
+ * Deduplication: backend rows win over local rows with the same backend_id.
+ * Local entries with negative backend_id (picking_id = -transfer_id convention)
+ * are never deduplicated against positive-id backend rows.
  */
 export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID) {
   const today = todayLocal()
+  let backendRows = []
   try {
     const rows = await getTransfersHistory({
       warehouseId,
@@ -610,11 +617,38 @@ export async function getTodayTransfers(warehouseId = DEFAULT_WAREHOUSE_ID) {
       dateTo: today,
       limit: 100,
     })
-    return Array.isArray(rows) ? rows : []
+    backendRows = Array.isArray(rows) ? rows : []
   } catch (err) {
-    console.warn('[GFSC][ptService] getTodayTransfers backend fallback:', err?.message || err)
+    console.warn('[GFSC][ptService] getTodayTransfers backend error:', err?.message || err)
+    // Full fallback: backend unreachable, show only local
     return getTodayTransfersLocal()
   }
+
+  // Merge locally-pending transfers not yet resolved by Entregas
+  const backendIds = new Set(
+    backendRows.map(r => Number(r.id || 0)).filter(id => id > 0)
+  )
+  const localPending = getTodayTransfersLocal()
+    .filter(t => {
+      if (t.pending_validation === false) return false
+      const bid = Number(t.backend_id || t.id || 0)
+      // Positive backend_id means backend already has it — skip to avoid dup
+      return bid <= 0 || !backendIds.has(bid)
+    })
+    .map(t => {
+      // Derive PTT name from negative backend_id (picking_id = -transfer_id)
+      const bid = Number(t.backend_id || t.id || 0)
+      const pttName = bid < 0 ? `PTT/${String(-bid).padStart(5, '0')}` : null
+      return {
+        ...t,
+        name: pttName || t.name || t.cedis_name || 'Entregas',
+        date: t.timestamp,
+        state: 'Listo para recibir',
+      }
+    })
+
+  // Pending first so the almacenista sees what's waiting, then confirmed history
+  return [...localPending, ...backendRows]
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
