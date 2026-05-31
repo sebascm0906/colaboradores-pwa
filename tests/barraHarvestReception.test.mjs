@@ -185,22 +185,34 @@ test('resolvePackedProductFromHarvest falls back when action_cosechar does not r
   })
 })
 
-test('resolveHarvestShiftId prefers slot shift_id when available', () => {
+test('resolveHarvestShiftId prefers active shift over slot shift (cosecha vs llenado)', () => {
+  // El slot.shift_id arrastra el turno de LLENADO (puede tener 25h y estar
+  // cerrado). La cosecha se registra contra el turno ACTIVO del operador.
+  assert.equal(
+    resolveHarvestShiftId({
+      slot: { shift_id: 55 }, // turno de llenado (cerrado)
+      activeShift: { id: 88 }, // turno actual de cosecha
+    }),
+    88,
+  )
+})
+
+test('resolveHarvestShiftId falls back to slot shift_id when no active shift', () => {
   assert.equal(
     resolveHarvestShiftId({
       slot: { shift_id: 55 },
-      activeShift: { id: 88 },
+      activeShift: { id: 0 },
     }),
     55,
   )
 })
 
-test('resolveHarvestShiftId falls back to active shift when slot shift_id is missing', () => {
+test('resolveHarvestShiftId returns 0 when neither active nor slot shift available', () => {
   assert.equal(
     resolveHarvestShiftId({
       slot: { shift_id: null },
-      activeShift: { id: 88 },
+      activeShift: { id: null },
     }),
-    88,
+    0,
   )
 })

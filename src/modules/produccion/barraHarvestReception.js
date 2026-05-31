@@ -25,9 +25,19 @@ export function resolveHarvestProduct({ slot = {}, tank = {} } = {}) {
 }
 
 export function resolveHarvestShiftId({ slot = {}, activeShift = {} } = {}) {
-  const slotShiftId = Number(slot?.shift_id || 0)
-  if (slotShiftId) return slotShiftId
-  return Number(activeShift?.id || 0)
+  // La cosecha se registra contra el TURNO ACTIVO del operador (turno de cosecha),
+  // NO contra el turno en que se llenó el slot. El slot.shift_id (=x_shift_id)
+  // arrastra el turno de llenado, que típicamente ya está cerrado 25h después
+  // cuando se cosecha. Si la packing.entry queda en ese turno cerrado, el
+  // almacenista PT (que consulta por turno activo) no la verá en recepciones
+  // pendientes.
+  //
+  // Priorizar activeShift.id; fallback al shift del slot solo si no hay turno
+  // activo (caso edge: operador sin turno abierto — el backend rechazará igual,
+  // pero al menos quedará trazabilidad al slot).
+  const activeId = Number(activeShift?.id || 0)
+  if (activeId) return activeId
+  return Number(slot?.shift_id || 0)
 }
 
 export function resolveBarHarvestQuantities({ tank = {}, scrapBars = 0 } = {}) {
