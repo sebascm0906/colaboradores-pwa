@@ -274,8 +274,21 @@ export default function ScreenTurnoRolito() {
                     }} />
                   </div>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, marginTop: 6, textAlign: 'center' }}>
-                    {progress.elapsedMin} min de {progress.expectedMin} min esperados
+                    {progress.clockSkew
+                      ? 'Inicio de congelación registrado (esperando hora del equipo)'
+                      : `${progress.elapsedMin} min de ${progress.expectedMin} min esperados`}
                   </p>
+                  {progress.clockSkew && (
+                    <div style={{
+                      marginTop: 8, padding: '8px 10px', borderRadius: TOKENS.radius.md,
+                      background: TOKENS.colors.warning + '22',
+                      border: `1px solid ${TOKENS.colors.warning}55`,
+                    }}>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.warning, margin: 0, textAlign: 'center' }}>
+                        ⚠️ La hora de este dispositivo está desfasada. Ajusta la fecha y hora del equipo (activa la sincronización automática) para ver el tiempo correcto.
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>

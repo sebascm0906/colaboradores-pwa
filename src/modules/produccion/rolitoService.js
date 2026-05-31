@@ -281,6 +281,53 @@ export function getLastDumpedCycle(cycles) {
  * Computes cycle progress and countdown for an active cycle.
  * Returns { phase, progressPct, remainingMin, remainingSec, elapsed, isOverdue }
  */
+// Tolerancia de desfase de reloj: si freeze_start/defrost_start aparece en el
+// "futuro" respecto al reloj del dispositivo por más de este margen, asumimos
+// que el reloj del equipo está mal sincronizado (no que el dato esté mal).
+const CLOCK_SKEW_TOLERANCE_MS = 2 * 60000
+
+function buildPhaseProgress({ phase, phaseLabel, start, now, expectedMin }) {
+  const elapsedMs = now - start
+
+  // Reloj del dispositivo atrasado respecto al servidor: el inicio del ciclo
+  // queda "en el futuro" y produciría tiempos absurdos (ej. "498:30 / -471 min").
+  // Devolvemos un estado seguro y marcamos clockSkew para que la UI avise.
+  if (elapsedMs < -CLOCK_SKEW_TOLERANCE_MS) {
+    return {
+      phase,
+      phaseLabel,
+      progressPct: 0,
+      remainingMin: Math.round(expectedMin),
+      remainingSec: 0,
+      elapsedMin: 0,
+      isOverdue: false,
+      expectedMin,
+      clockSkew: true,
+      skewMin: Math.round(Math.abs(elapsedMs) / 60000),
+    }
+  }
+
+  // Clamp para desfases pequeños (segundos): nunca mostrar elapsed negativo.
+  const safeElapsedMs = Math.max(0, elapsedMs)
+  const elapsedMin = safeElapsedMs / 60000
+  const progressPct = Math.min(100, Math.round((elapsedMin / expectedMin) * 100))
+  const remainingMs = Math.max(0, (expectedMin * 60000) - safeElapsedMs)
+  const remainingMin = Math.floor(remainingMs / 60000)
+  const remainingSec = Math.floor((remainingMs % 60000) / 1000)
+
+  return {
+    phase,
+    phaseLabel,
+    progressPct,
+    remainingMin,
+    remainingSec,
+    elapsedMin: Math.round(elapsedMin),
+    isOverdue: elapsedMin > expectedMin,
+    expectedMin,
+    clockSkew: false,
+  }
+}
+
 export function getCycleProgress(cycle) {
   if (!cycle) return null
 
@@ -289,47 +336,25 @@ export function getCycleProgress(cycle) {
   if (cycle.state === 'freezing' && cycle.freeze_start) {
     const start = parseOdooDatetime(cycle.freeze_start)
     if (!start) return null
-    const elapsedMs = now - start
-    const elapsedMin = elapsedMs / 60000
-    const expectedMin = cycle.expected_freeze_min || EXPECTED_FREEZE_MIN
-    const progressPct = Math.min(100, Math.round((elapsedMin / expectedMin) * 100))
-    const remainingMs = Math.max(0, (expectedMin * 60000) - elapsedMs)
-    const remainingMin = Math.floor(remainingMs / 60000)
-    const remainingSec = Math.floor((remainingMs % 60000) / 1000)
-
-    return {
+    return buildPhaseProgress({
       phase: 'freezing',
       phaseLabel: 'Congelando',
-      progressPct,
-      remainingMin,
-      remainingSec,
-      elapsedMin: Math.round(elapsedMin),
-      isOverdue: elapsedMin > expectedMin,
-      expectedMin,
-    }
+      start,
+      now,
+      expectedMin: cycle.expected_freeze_min || EXPECTED_FREEZE_MIN,
+    })
   }
 
   if (cycle.state === 'defrosting' && cycle.defrost_start) {
     const start = parseOdooDatetime(cycle.defrost_start)
     if (!start) return null
-    const elapsedMs = now - start
-    const elapsedMin = elapsedMs / 60000
-    const expectedMin = cycle.expected_defrost_min || EXPECTED_DEFROST_MIN
-    const progressPct = Math.min(100, Math.round((elapsedMin / expectedMin) * 100))
-    const remainingMs = Math.max(0, (expectedMin * 60000) - elapsedMs)
-    const remainingMin = Math.floor(remainingMs / 60000)
-    const remainingSec = Math.floor((remainingMs % 60000) / 1000)
-
-    return {
+    return buildPhaseProgress({
       phase: 'defrosting',
       phaseLabel: 'Deshielo',
-      progressPct,
-      remainingMin,
-      remainingSec,
-      elapsedMin: Math.round(elapsedMin),
-      isOverdue: elapsedMin > expectedMin,
-      expectedMin,
-    }
+      start,
+      now,
+      expectedMin: cycle.expected_defrost_min || EXPECTED_DEFROST_MIN,
+    })
   }
 
   return null
