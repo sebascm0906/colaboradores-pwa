@@ -127,11 +127,12 @@ export default function ScreenControlTurno() {
   const navigate = useNavigate()
   const [sw] = useState(window.innerWidth)
   const typo = useMemo(() => getTypo(sw), [sw])
+  const supervisionWarehouseId = resolveSupervisionWarehouseId(session)
   const [shift, setShift] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState(null)
-  const [formData, setFormData] = useState({ shift_code: '', warehouse_id: 76 })
+  const [formData, setFormData] = useState({ shift_code: '', warehouse_id: supervisionWarehouseId })
   const [confirmClose, setConfirmClose] = useState(false)
   const [closeReadiness, setCloseReadiness] = useState(null)
   const [loadingReadiness, setLoadingReadiness] = useState(false)
@@ -150,7 +151,6 @@ export default function ScreenControlTurno() {
   const [showIncidentForm, setShowIncidentForm] = useState(false)
   const [incidentForm, setIncidentForm] = useState({ name: '', description: '', incident_type: 'production', severity: 'low' })
   const [incidentSubmitting, setIncidentSubmitting] = useState(false)
-  const supervisionWarehouseId = resolveSupervisionWarehouseId(session, formData.warehouse_id)
   const startEnergyReading = useMemo(
     () => energyReadings.find((reading) => reading?.reading_type === 'start') || null,
     [energyReadings]
@@ -256,12 +256,22 @@ export default function ScreenControlTurno() {
     setSubmitting(true)
     try {
       const result = await createShift({ shift_code: Number(formData.shift_code), warehouse_id: Number(formData.warehouse_id) })
+      // El servidor puede responder ok=false si ya hay un turno activo para esta planta
+      if (result?.ok === false || (result && !result.shift && result.message)) {
+        const isBlockedByActive = result?.data?.blocked_by_active || result?.data?.already_existed
+        setMsg({
+          type: 'error',
+          text: result.message || 'No se pudo abrir el turno.',
+        })
+        if (isBlockedByActive) await loadData()
+        return
+      }
       const successText = result?.message || (result?.already_existed ? 'El turno ya existia; se cargo correctamente' : 'Turno abierto correctamente')
       setMsg({
         type: 'success',
         text: successText,
       })
-      setFormData({ shift_code: '', warehouse_id: 76 })
+      setFormData({ shift_code: '', warehouse_id: supervisionWarehouseId })
       setConfirmClose(false)
       setCloseReadiness(null)
       savePersistedTurnControlShift(result?.shift || null)
@@ -1084,7 +1094,7 @@ export default function ScreenControlTurno() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <span style={{ ...typo.caption, color: TOKENS.colors.textMuted }}>Planta</span>
-                <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>Planta Iguala</span>
+                <span style={{ ...typo.body, color: TOKENS.colors.textSoft, fontWeight: 600 }}>{session?.warehouse_name || `Almacén #${supervisionWarehouseId}`}</span>
               </div>
 
               <button type="submit" disabled={submitting || !formData.shift_code}

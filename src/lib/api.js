@@ -5424,7 +5424,10 @@ async function directSupervision(method, path, body) {
     // Este endpoint prioriza state='in_progress' + start_time y soporta
     // turnos nocturnos (sin filtro fecha=hoy). NO duplicar logica aqui.
     const requestedWarehouseId = Number(query.get('warehouse_id') || 0) || 0
-    const resp = await odooHttp('GET', '/api/production/shift/current', {})
+    // Pasar warehouse_id al endpoint para que Odoo filtre por planta desde
+    // el inicio y no devuelva turnos de otras plantas.
+    const currentParams = requestedWarehouseId ? { warehouse_id: requestedWarehouseId } : {}
+    const resp = await odooHttp('GET', '/api/production/shift/current', currentParams)
     const data = resp?.data || {}
     let shiftId = Number(data.shift_id || 0) || 0
     let shiftWarehouseId = Number(data.warehouse_id || 0) || 0
