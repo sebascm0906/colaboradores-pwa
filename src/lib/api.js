@@ -1490,7 +1490,7 @@ async function directAdmin(method, path, body) {
     const domain = [['date', '>=', todayStart], ['date', '<=', todayEnd]]
     if (reqCompanyId) domain.push(['company_id', '=', reqCompanyId])
     const result = await readModelSorted('hr.expense', {
-      fields: ['id', 'name', 'date', 'create_date', 'state', 'total_amount', 'company_id', 'employee_id', 'description'],
+      fields: ['id', 'name', 'date', 'state', 'total_amount', 'company_id', 'employee_id', 'description'],
       domain,
       sort_column: 'date',
       sort_desc: true,
@@ -1503,7 +1503,6 @@ async function directAdmin(method, path, body) {
       description: row.description || '',
       amount: Number(row.total_amount || 0),
       date: row.date || null,
-      create_date: row.create_date || null,
       state: row.state || 'draft',
       company_id: row.company_id?.[0] || reqCompanyId || 0,
       employee_id: row.employee_id?.[0] || 0,
@@ -1552,7 +1551,7 @@ async function directAdmin(method, path, body) {
     if (state) domain.push(['state', '=', state])
 
     const result = await readModelSorted('hr.expense', {
-      fields: ['id', 'name', 'date', 'create_date', 'state', 'total_amount', 'company_id', 'employee_id', 'description', 'account_id'],
+      fields: ['id', 'name', 'date', 'state', 'total_amount', 'company_id', 'employee_id', 'description', 'account_id'],
       domain,
       sort_column: 'date',
       sort_desc: true,
@@ -1566,7 +1565,6 @@ async function directAdmin(method, path, body) {
       description: row.description || '',
       total_amount: Number(row.total_amount || 0),
       date: row.date || null,
-      create_date: row.create_date || null,
       state: row.state || 'draft',
       company_id: row.company_id?.[0] || 0,
       company_name: row.company_id?.[1] || '',

@@ -557,7 +557,7 @@ export default function AdminGastosForm() {
                     <p style={{
                       fontSize: 11, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2,
                     }}>
-                      {exp.create_date ? new Date(exp.create_date.replace(' ', 'T') + 'Z').toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : ''}
+                      {exp.create_date ? new Date(exp.create_date.replace(' ', 'T') + 'Z').toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : exp.date ? new Date(exp.date + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : ''}
                     </p>
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: TOKENS.colors.warning }}>

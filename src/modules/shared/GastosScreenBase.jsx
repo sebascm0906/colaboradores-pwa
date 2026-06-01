@@ -226,7 +226,7 @@ export default function GastosScreenBase({
                 <div style={{ flex: 1 }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.text, margin: 0, fontWeight: 600 }}>{exp.name || exp.description || 'Gasto'}</p>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, marginTop: 2 }}>
-                    {exp.create_date ? new Date(exp.create_date.replace(' ', 'T') + 'Z').toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : ''}
+                    {exp.create_date ? new Date(exp.create_date.replace(' ', 'T') + 'Z').toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' }) : exp.date ? new Date(exp.date + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : ''}
                   </p>
                 </div>
                 <span style={{ ...typo.title, color: TOKENS.colors.warning }}>{fmt(exp.total_amount || exp.amount)}</span>
