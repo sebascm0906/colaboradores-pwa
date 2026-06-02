@@ -245,6 +245,7 @@ export default function ScreenPronostico() {
   const [selectedSubpolygonIds, setSelectedSubpolygonIds] = useState([])
   const [previewCustomers, setPreviewCustomers] = useState([])
   const [previewLoading, setPreviewLoading] = useState(false)
+  const previewRequestRef = useRef(0)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [customerSearching, setCustomerSearching] = useState(false)
@@ -465,7 +466,7 @@ export default function ScreenPronostico() {
     async function loadSubpolygons() {
       setSelectedSubpolygonId('')
       setSelectedSubpolygonIds([])
-      setPreviewCustomers([])
+      clearPreviewCustomers()
       setSubpolygons([])
       if (!selectedPolygonId) {
         return
@@ -496,7 +497,9 @@ export default function ScreenPronostico() {
   }
 
   function clearPreviewCustomers() {
+    previewRequestRef.current += 1
     setPreviewCustomers([])
+    setPreviewLoading(false)
   }
 
   function handleChannelToggle(channelId) {
@@ -549,7 +552,7 @@ export default function ScreenPronostico() {
     setManualView('routes')
     setRoutePlanId(null)
     setSelectedSubpolygonIds([])
-    setPreviewCustomers([])
+    clearPreviewCustomers()
     setCustomerQuery('')
     setCustomerResults([])
     setExpandedForecastId(null)
@@ -561,7 +564,7 @@ export default function ScreenPronostico() {
   function handleOpenRouteDetail(route) {
     setSelectedRouteId(route.route_id)
     setRoutePlanId(route.plan_id || null)
-    setPreviewCustomers([])
+    clearPreviewCustomers()
     setCustomerQuery('')
     setCustomerResults([])
     setManualView('detail')
@@ -569,7 +572,7 @@ export default function ScreenPronostico() {
 
   function handleBackToRoutes() {
     setManualView('routes')
-    setPreviewCustomers([])
+    clearPreviewCustomers()
     setCustomerQuery('')
     setCustomerResults([])
   }
@@ -635,6 +638,8 @@ export default function ScreenPronostico() {
     if (!selectedRoute) { flashMsg('Selecciona una ruta'); return }
     if (!selectedPolygonId) { flashMsg('Selecciona un poligono'); return }
 
+    const requestId = previewRequestRef.current + 1
+    previewRequestRef.current = requestId
     setPreviewLoading(true)
     setMsg(null)
     try {
@@ -649,6 +654,7 @@ export default function ScreenPronostico() {
         demandClasses: selectedDemandClasses,
       })
       const resp = await previewRoutePlanCustomers(payload)
+      if (previewRequestRef.current !== requestId) return
       if (
         resp?.ok === false
         || String(resp?.status || '').toLowerCase() === 'error'
@@ -670,12 +676,14 @@ export default function ScreenPronostico() {
               : []
       setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
       await loadData()
+      if (previewRequestRef.current !== requestId) return
       flashMsg('Propuesta generada')
     } catch (e) {
+      if (previewRequestRef.current !== requestId) return
       logScreenError('ScreenPronostico', 'previewRoutePlanCustomers', e)
       flashMsg(getSupervisorRouteErrorMessage(e), 5000)
     } finally {
-      setPreviewLoading(false)
+      if (previewRequestRef.current === requestId) setPreviewLoading(false)
     }
   }
 
