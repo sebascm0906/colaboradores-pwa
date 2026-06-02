@@ -844,6 +844,47 @@ export default function ScreenPronostico() {
     }
   }
 
+  async function handlePublishRoutePlan() {
+    if (!routePlanId) {
+      flashMsg('Genera primero la propuesta de clientes')
+      return
+    }
+    if (!canPublishRoutePlan({
+      state: selectedRoute?.plan_state || (routePlanId && ['sin_plan', 'plan_draft'].includes(selectedRoute?.state) ? 'draft' : selectedRoute?.state),
+      plan_state: selectedRoute?.plan_state,
+      customersCount: previewCustomers.length,
+      load_sealed: selectedRoute?.load_sealed,
+      load_picking_id: selectedRoute?.load_picking_id,
+    })) {
+      flashMsg('Este plan no se puede publicar en su estado actual')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const resp = await publishRoutePlan(routePlanId)
+      if (
+        resp?.ok === false
+        || String(resp?.status || '').toLowerCase() === 'error'
+        || String(resp?.data?.status || '').toLowerCase() === 'error'
+      ) {
+        throw resp
+      }
+      flashMsg('Plan diario publicado')
+      await loadData()
+      setManualView('routes')
+      setRoutePlanId(null)
+      clearPreviewCustomers()
+      setCustomerQuery('')
+      setCustomerResults([])
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'publishRoutePlan', e)
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   // ── F4-E.2: Plan Maestro Semanal — helpers + effects ─────────────────
 
   function pmTranslateErrorCode(code, fallback = '') {
@@ -1105,6 +1146,7 @@ export default function ScreenPronostico() {
   function routeStateColor(state) {
     if (state === 'load_executed') return TOKENS.colors.success
     if (state === 'load_ready' || state === 'forecast_confirmed') return TOKENS.colors.blue2
+    if (state === 'published') return TOKENS.colors.success
     if (state === 'plan_draft') return TOKENS.colors.warning
     if (state === 'blocked') return TOKENS.colors.error
     return TOKENS.colors.textMuted
@@ -1113,6 +1155,7 @@ export default function ScreenPronostico() {
   function routeStateLabel(state) {
     if (state === 'sin_plan') return 'Sin plan'
     if (state === 'plan_draft') return 'Plan creado'
+    if (state === 'published') return 'Publicado'
     if (state === 'forecast_confirmed') return 'Forecast confirmado'
     if (state === 'load_ready') return 'Carga lista'
     if (state === 'load_executed') return 'Carga ejecutada'
@@ -1142,6 +1185,13 @@ export default function ScreenPronostico() {
   }
 
   const canEditCustomers = canEditRoutePlanCustomers(selectedRoute || {})
+  const canPublishSelectedPlan = canPublishRoutePlan({
+    state: selectedRoute?.plan_state || (routePlanId && ['sin_plan', 'plan_draft'].includes(selectedRoute?.state) ? 'draft' : selectedRoute?.state),
+    plan_state: selectedRoute?.plan_state,
+    customersCount: previewCustomers.length,
+    load_sealed: selectedRoute?.load_sealed,
+    load_picking_id: selectedRoute?.load_picking_id,
+  })
 
   return (
     <div style={{
@@ -1830,6 +1880,23 @@ export default function ScreenPronostico() {
                 )}
                 {routeCustomersLoading && (
                   <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '10px 0 0', fontSize: 11 }}>Cargando clientes...</p>
+                )}
+
+                {canEditCustomers && (
+                  <button
+                    type="button"
+                    onClick={handlePublishRoutePlan}
+                    disabled={submitting || !canPublishSelectedPlan}
+                    style={{
+                      width: '100%', marginTop: 12, padding: '12px 0', borderRadius: TOKENS.radius.md,
+                      background: (submitting || !canPublishSelectedPlan) ? TOKENS.colors.surface : TOKENS.colors.success,
+                      color: (submitting || !canPublishSelectedPlan) ? TOKENS.colors.textLow : '#fff',
+                      border: `1px solid ${(submitting || !canPublishSelectedPlan) ? TOKENS.colors.border : TOKENS.colors.success}`,
+                      fontSize: 13, fontWeight: 700, opacity: (submitting || !canPublishSelectedPlan) ? 0.75 : 1,
+                    }}
+                  >
+                    {previewCustomers.length === 0 ? 'Sin clientes para publicar' : submitting ? 'Publicando...' : 'Publicar plan diario'}
+                  </button>
                 )}
 
                 {canEditCustomers && (
