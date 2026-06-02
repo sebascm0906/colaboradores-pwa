@@ -275,12 +275,13 @@ export default function AdminLiquidacionesForm() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 'calc(100dvh - 260px)', overflowY: 'auto' }}>
               {list.map(plan => {
-                const active = plan.id === selectedId
+                const planId = plan.plan_id ?? plan.id
+                const active = planId === selectedId
                 return (
                   <button
-                    key={plan.id}
+                    key={planId}
                     type="button"
-                    onClick={() => setSelectedId(plan.id)}
+                    onClick={() => setSelectedId(planId)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 12px', borderRadius: TOKENS.radius.md,
@@ -297,7 +298,7 @@ export default function AdminLiquidacionesForm() {
                           margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           flex: 1, minWidth: 0,
                         }}>
-                          {plan.name || `Plan #${plan.id}`}
+                          {plan.name || `Plan #${planId}`}
                         </p>
                         {plan.state === 'in_progress' && (
                           <span style={{
@@ -721,12 +722,13 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
               maxHeight: 'calc(100dvh - 380px)', overflowY: 'auto',
             }}>
               {list.map(plan => {
-                const active = plan.id === selectedId
+                const planId = plan.plan_id ?? plan.id
+                const active = planId === selectedId
                 return (
                   <button
-                    key={plan.id}
+                    key={planId}
                     type="button"
-                    onClick={() => setSelectedId(plan.id)}
+                    onClick={() => setSelectedId(planId)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '12px 14px', borderRadius: TOKENS.radius.md,
@@ -741,7 +743,7 @@ function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null
                         fontSize: 13, fontWeight: 700, color: TOKENS.colors.text,
                         margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
-                        {plan.name || `Plan #${plan.id}`}
+                        {plan.name || `Plan #${planId}`}
                       </p>
                       <p style={{ fontSize: 10, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
                         {[plan.route_name, plan.driver_name, plan.vehicle_name].filter(Boolean).join(' · ') || '—'}
