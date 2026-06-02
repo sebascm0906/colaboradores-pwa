@@ -465,8 +465,9 @@ export default function ScreenPronostico() {
     async function loadSubpolygons() {
       setSelectedSubpolygonId('')
       setSelectedSubpolygonIds([])
+      setPreviewCustomers([])
+      setSubpolygons([])
       if (!selectedPolygonId) {
-        setSubpolygons([])
         return
       }
       try {
@@ -494,28 +495,48 @@ export default function ScreenPronostico() {
     setLines(prev => prev.filter((_, i) => i !== idx))
   }
 
+  function clearPreviewCustomers() {
+    setPreviewCustomers([])
+  }
+
   function handleChannelToggle(channelId) {
+    clearPreviewCustomers()
     setSelectedChannelIds(prev => prev.includes(channelId)
       ? prev.filter((id) => id !== channelId)
       : [...prev, channelId])
   }
 
   function handleVisitDayToggle(dayId) {
+    clearPreviewCustomers()
     setSelectedVisitDays(prev => prev.includes(dayId)
       ? prev.filter((id) => id !== dayId)
       : [...prev, dayId])
   }
 
   function handleDemandClassToggle(value) {
+    clearPreviewCustomers()
     setSelectedDemandClasses(prev => sanitizeDemandClasses(
       prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
     ))
   }
 
   function handleSubpolygonToggle(subpolygonId) {
+    setSelectedSubpolygonId('')
+    clearPreviewCustomers()
     setSelectedSubpolygonIds(prev => prev.includes(subpolygonId)
       ? prev.filter((id) => id !== subpolygonId)
       : [...prev, subpolygonId])
+  }
+
+  function handleAllPolygonSubpolygons() {
+    setSelectedSubpolygonId('')
+    clearPreviewCustomers()
+    setSelectedSubpolygonIds([])
+  }
+
+  function handleTimeWindowChange(value) {
+    clearPreviewCustomers()
+    setSelectedTimeWindowId(value)
   }
 
   function handleDateTargetChange(value) {
@@ -558,7 +579,7 @@ export default function ScreenPronostico() {
       routeId,
       dateTarget,
       polygonId: selectedPolygonId,
-      subpolygonId: selectedSubpolygonId,
+      subpolygonId: selectedSubpolygonIds[0] || '',
       channelIds: selectedChannelIds,
       visitDays: selectedVisitDays,
       timeWindowId: selectedTimeWindowId,
@@ -1399,7 +1420,7 @@ export default function ScreenPronostico() {
                     <button
                       type="button"
                       aria-pressed={selectedSubpolygonIds.length === 0}
-                      onClick={() => setSelectedSubpolygonIds([])}
+                      onClick={handleAllPolygonSubpolygons}
                       style={{
                         padding: '6px 9px', borderRadius: TOKENS.radius.pill,
                         background: selectedSubpolygonIds.length === 0 ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
@@ -1535,7 +1556,7 @@ export default function ScreenPronostico() {
 
                 <select
                   value={selectedTimeWindowId}
-                  onChange={(e) => setSelectedTimeWindowId(e.target.value)}
+                  onChange={(e) => handleTimeWindowChange(e.target.value)}
                   style={{
                     width: '100%', padding: '10px 8px', borderRadius: TOKENS.radius.sm,
                     background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
