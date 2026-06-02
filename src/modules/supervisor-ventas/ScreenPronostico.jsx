@@ -616,6 +616,10 @@ export default function ScreenPronostico() {
 
   async function handleEnsurePlan(route) {
     if (!route?.route_id) return
+    if (selectedSubpolygonIds.length > 1) {
+      flashMsg('Para multiples subpoligonos usa Generar propuesta', 4000)
+      return
+    }
     setRouteLoading(route.route_id)
     setMsg(null)
     try {
@@ -1391,18 +1395,26 @@ export default function ScreenPronostico() {
                   )}
                 </div>
                 {selectedRoute && !selectedRoute.plan_id && (
+                  <>
                   <button
                     type="button"
                     onClick={() => handleEnsurePlan(selectedRoute)}
-                    disabled={routeLoading === selectedRoute.route_id}
+                    disabled={routeLoading === selectedRoute.route_id || selectedSubpolygonIds.length > 1}
                     style={{
                       width: '100%', marginBottom: 12, padding: '10px 0', borderRadius: TOKENS.radius.md,
-                      background: routeLoading === selectedRoute.route_id ? TOKENS.colors.surface : TOKENS.colors.blue2,
-                      color: '#fff', fontSize: 12, fontWeight: 700, opacity: routeLoading === selectedRoute.route_id ? 0.65 : 1,
+                      background: (routeLoading === selectedRoute.route_id || selectedSubpolygonIds.length > 1) ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                      color: selectedSubpolygonIds.length > 1 ? TOKENS.colors.textLow : '#fff',
+                      fontSize: 12, fontWeight: 700, opacity: (routeLoading === selectedRoute.route_id || selectedSubpolygonIds.length > 1) ? 0.65 : 1,
                     }}
                   >
-                    {routeLoading === selectedRoute.route_id ? 'Creando...' : 'Crear plan diario'}
+                    {routeLoading === selectedRoute.route_id ? 'Creando...' : selectedSubpolygonIds.length > 1 ? 'Usa propuesta' : 'Crear plan diario'}
                   </button>
+                  {selectedSubpolygonIds.length > 1 && (
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '-6px 0 12px', fontSize: 10 }}>
+                      Multiples subpoligonos: genera propuesta.
+                    </p>
+                  )}
+                  </>
                 )}
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Filtros de clientes</p>
                 <div style={{ marginBottom: 10 }}>
