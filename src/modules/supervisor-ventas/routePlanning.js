@@ -192,11 +192,14 @@ export function normalizeActiveRoutePlan(row = {}) {
 
 export function normalizeRoutePlanCustomer(row = {}) {
   const customerRef = row.customer_id || row.partner_id || row.id
+  const customerId = toM2oId(customerRef) || toNumber(row.customer_id || row.partner_id || row.id)
+  const rowId = toNumber(row.id)
+  const stopId = toNumber(row.stop_id) || (customerId && rowId && rowId !== customerId ? rowId : 0)
   return {
-    id: toM2oId(customerRef) || toNumber(row.id),
-    customer_id: toM2oId(customerRef) || toNumber(row.customer_id || row.partner_id || row.id),
-    stop_id: toNumber(row.stop_id),
-    name: toM2oName(customerRef, row.name || row.customer_name || ''),
+    id: customerId || rowId,
+    customer_id: customerId,
+    stop_id: stopId,
+    name: toM2oName(customerRef, row.name || row.customer_name || row.customer || ''),
     address: row.address || row.street || row.contact_address || '',
     source: row.source || row.origin || 'suggested',
     subpolygon_id: toM2oId(row.subpolygon_id),
@@ -210,12 +213,12 @@ export function normalizeRoutePlanCustomer(row = {}) {
 }
 
 export function canEditRoutePlanCustomers(plan = {}) {
-  const state = String(plan.state || plan.plan_state || '').toLowerCase()
+  const state = String(plan.plan_state || plan.state || '').toLowerCase()
   return state === 'draft' && plan.load_sealed !== true && !toM2oId(plan.load_picking_id)
 }
 
 export function canPublishRoutePlan({ state, plan_state, customersCount = 0, load_sealed, load_picking_id } = {}) {
-  return canEditRoutePlanCustomers({ state: state || plan_state, load_sealed, load_picking_id })
+  return canEditRoutePlanCustomers({ state, plan_state, load_sealed, load_picking_id })
     && Number(customersCount || 0) > 0
 }
 

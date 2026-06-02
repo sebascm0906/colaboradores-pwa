@@ -172,6 +172,28 @@ test('normalizeRoutePlanCustomer preserves stop and planning metadata', () => {
   })
 })
 
+test('normalizeRoutePlanCustomer preserves route-stop identity for existing stops', () => {
+  assert.deepEqual(normalizeRoutePlanCustomer({
+    id: 9001,
+    customer_id: 55,
+    customer: 'Abarrotes Sol',
+    address: 'Av 1',
+    source: 'existing',
+  }), {
+    id: 55,
+    customer_id: 55,
+    stop_id: 9001,
+    name: 'Abarrotes Sol',
+    address: 'Av 1',
+    source: 'existing',
+    subpolygon_id: 0,
+    subpolygon_name: '',
+    channels: [],
+    visit_days: [],
+    time_window: '',
+  })
+})
+
 test('canEditRoutePlanCustomers only allows draft editable plans', () => {
   assert.equal(canEditRoutePlanCustomers({ state: 'draft' }), true)
   assert.equal(canEditRoutePlanCustomers({ state: 'published' }), false)
@@ -179,10 +201,19 @@ test('canEditRoutePlanCustomers only allows draft editable plans', () => {
   assert.equal(canEditRoutePlanCustomers({ state: 'draft', load_sealed: true }), false)
 })
 
+test('canEditRoutePlanCustomers prefers backend plan_state over UI lifecycle state', () => {
+  assert.equal(canEditRoutePlanCustomers({ state: 'plan_draft', plan_state: 'draft' }), true)
+  assert.equal(canEditRoutePlanCustomers({ state: 'plan_draft', plan_state: 'draft', load_picking_id: 55 }), false)
+})
+
 test('canPublishRoutePlan only allows draft plans with customers', () => {
   assert.equal(canPublishRoutePlan({ state: 'draft', customersCount: 1 }), true)
   assert.equal(canPublishRoutePlan({ state: 'draft', customersCount: 0 }), false)
   assert.equal(canPublishRoutePlan({ state: 'published', customersCount: 1 }), false)
+})
+
+test('canPublishRoutePlan prefers backend plan_state over UI lifecycle state', () => {
+  assert.equal(canPublishRoutePlan({ state: 'plan_draft', plan_state: 'draft', customersCount: 1 }), true)
 })
 
 // ── F1: demand_classes ──────────────────────────────────────────────────────
