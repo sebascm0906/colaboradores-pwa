@@ -8286,7 +8286,8 @@ async function directSupervisorVentas(method, path, body) {
     if (!plan || !employeeInScope(plan, scope)) {
       return { ok: false, status: 'error', code: 'NOT_FOUND', message: 'Plan no existe o esta fuera de tu alcance.' }
     }
-    if (String(plan.state || '').toLowerCase() !== 'draft' || plan.load_sealed || plan.load_picking_id) {
+    const loadPickingId = Number(plan.load_picking_id?.[0] || plan.load_picking_id || 0) || 0
+    if (String(plan.state || '').toLowerCase() !== 'draft' || plan.load_sealed || loadPickingId > 0) {
       return { ok: false, status: 'error', code: 'plan_not_editable', message: 'Este plan no se puede publicar en su estado actual.', data: { state: plan.state || '' } }
     }
     if (Number(plan.stops_total || 0) <= 0) {
