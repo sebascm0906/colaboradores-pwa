@@ -283,15 +283,28 @@ export default function AdminLiquidacionesForm() {
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 12, fontWeight: 700, color: TOKENS.colors.text,
-                        margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {plan.name || `Plan #${plan.id}`}
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 1 }}>
+                        <p style={{
+                          fontSize: 12, fontWeight: 700, color: TOKENS.colors.text,
+                          margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          flex: 1, minWidth: 0,
+                        }}>
+                          {plan.name || `Plan #${plan.id}`}
+                        </p>
+                        {plan.state === 'in_progress' && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                            borderRadius: 4, background: 'rgba(245,158,11,0.15)',
+                            color: TOKENS.colors.warning, whiteSpace: 'nowrap', flexShrink: 0,
+                          }}>EN RUTA</span>
+                        )}
+                      </div>
                       <p style={{ fontSize: 10, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
-                        {plan.route_name || plan.vehicle_name || '—'}
-                        {plan.driver_name && ` · ${plan.driver_name}`}
+                        {plan.date || ''}
+                        {(plan.route_name || plan.employee_name) && ` · ${plan.route_name || plan.employee_name}`}
+                        {plan.liquidacion_done_at && (
+                          <span style={{ color: TOKENS.colors.success, marginLeft: 4 }}>✓ LIQ</span>
+                        )}
                       </p>
                     </div>
                     {plan.total != null && (
