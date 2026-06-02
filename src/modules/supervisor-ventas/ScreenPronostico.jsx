@@ -27,6 +27,7 @@ import {
   publishRoutePlan,
   searchPlanningCustomers,
   addCustomerToRoutePlan,
+  getRouteStops,
 } from './api'
 import {
   buildRoutePlanPreviewPayload,
@@ -246,6 +247,8 @@ export default function ScreenPronostico() {
   const [previewCustomers, setPreviewCustomers] = useState([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewRequestRef = useRef(0)
+  const routeCustomersRequestRef = useRef(0)
+  const [routeCustomersLoading, setRouteCustomersLoading] = useState(false)
   const [customerQuery, setCustomerQuery] = useState('')
   const [customerResults, setCustomerResults] = useState([])
   const [customerSearching, setCustomerSearching] = useState(false)
@@ -535,8 +538,10 @@ export default function ScreenPronostico() {
 
   function clearPreviewCustomers() {
     previewRequestRef.current += 1
+    routeCustomersRequestRef.current += 1
     setPreviewCustomers([])
     setPreviewLoading(false)
+    setRouteCustomersLoading(false)
   }
 
   function handleChannelToggle(channelId) {
@@ -598,13 +603,42 @@ export default function ScreenPronostico() {
     setMsg(null)
   }
 
+  async function loadRoutePlanCustomers(planId) {
+    const requestId = routeCustomersRequestRef.current + 1
+    routeCustomersRequestRef.current = requestId
+    if (!planId) {
+      setPreviewCustomers([])
+      setRouteCustomersLoading(false)
+      return
+    }
+
+    setRouteCustomersLoading(true)
+    try {
+      const result = await getRouteStops(planId)
+      if (routeCustomersRequestRef.current !== requestId) return
+      setPreviewCustomers(unwrapList(result).map((row) => normalizeRoutePlanCustomer({
+        ...row,
+        source: row.source || 'existing',
+      })))
+    } catch (e) {
+      if (routeCustomersRequestRef.current !== requestId) return
+      logScreenError('ScreenPronostico', 'getRouteStops', e)
+      setPreviewCustomers([])
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      if (routeCustomersRequestRef.current === requestId) setRouteCustomersLoading(false)
+    }
+  }
+
   function handleOpenRouteDetail(route) {
+    const planId = route.plan_id || null
     setSelectedRouteId(route.route_id)
-    setRoutePlanId(route.plan_id || null)
+    setRoutePlanId(planId)
     clearPreviewCustomers()
     setCustomerQuery('')
     setCustomerResults([])
     setManualView('detail')
+    if (planId) loadRoutePlanCustomers(planId)
   }
 
   function handleBackToRoutes() {
@@ -665,9 +699,11 @@ export default function ScreenPronostico() {
         flashMsg(getSupervisorRouteErrorMessage(res), 5000)
         return
       }
-      setRoutePlanId(res?.route_plan_id || res?.plan_id || res?.id || null)
+      const planId = res?.route_plan_id || res?.plan_id || res?.id || null
+      setRoutePlanId(planId)
       await loadData()
       setSelectedRouteId(route.route_id)
+      if (planId) await loadRoutePlanCustomers(planId)
       flashMsg('Plan diario listo')
     } catch (e) {
       flashMsg(getSupervisorRouteErrorMessage(e), 5000)
@@ -730,6 +766,10 @@ export default function ScreenPronostico() {
   }
 
   async function handleAddCustomer(customer) {
+    if (!canEditRoutePlanCustomers(selectedRoute || {})) {
+      flashMsg('Este plan no permite modificar clientes', 4000)
+      return
+    }
     if (!routePlanId) {
       flashMsg('Genera primero la propuesta de clientes')
       return
@@ -748,7 +788,17 @@ export default function ScreenPronostico() {
       const data = result?.data || result || {}
       const addedCustomer = data.customer
         ? normalizeRoutePlanCustomer(data.customer)
-        : { ...customer, source: 'manual' }
+        : normalizeRoutePlanCustomer({
+          id: data.stop_id || customer.id,
+          stop_id: data.stop_id || 0,
+          customer_id: customer.id,
+          name: customer.name,
+          address: customer.address,
+          source: 'manual',
+          channel_ids: customer.channels,
+          visit_days: customer.visit_days,
+          time_window: customer.time_window,
+        })
       setPreviewCustomers((current) => {
         const addedId = String(addedCustomer.customer_id || addedCustomer.id || customer.id || '')
         if (!addedId || current.some((item) => String(item.customer_id || item.id || '') === addedId)) return current
@@ -766,6 +816,10 @@ export default function ScreenPronostico() {
 
   async function handleRemoveCustomer(customer) {
     if (!routePlanId) return
+    if (!canEditRoutePlanCustomers(selectedRoute || {})) {
+      flashMsg('Este plan no permite modificar clientes', 4000)
+      return
+    }
 
     const targetId = customer.stop_id || customer.id
     setCustomerActionLoading(`remove-${targetId}`)
@@ -1774,7 +1828,11 @@ export default function ScreenPronostico() {
                     </div>
                   </div>
                 )}
+                {routeCustomersLoading && (
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '10px 0 0', fontSize: 11 }}>Cargando clientes...</p>
+                )}
 
+                {canEditCustomers && (
                 <div style={{ marginTop: 12 }}>
                   <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Agregar cliente manual</p>
                   <input
@@ -1856,6 +1914,7 @@ export default function ScreenPronostico() {
                     </div>
                   )}
                 </div>
+                )}
               </div>
               </>
               )}

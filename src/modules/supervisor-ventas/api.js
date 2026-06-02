@@ -127,7 +127,7 @@ export function removeCustomerFromRoutePlan(routePlanId, customerOrStopId) {
     : { customer_id: customerOrStopId }
   return api('POST', '/pwa-supv/route-plan-remove-customer', {
     route_plan_id: Number(routePlanId || 0),
-    customer_id: Number(target.customer_id || 0),
+    customer_id: Number(target.customer_id || target.id || 0),
     stop_id: Number(target.stop_id || 0),
   })
 }
