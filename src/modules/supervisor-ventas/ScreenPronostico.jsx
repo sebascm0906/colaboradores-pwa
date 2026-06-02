@@ -21,8 +21,15 @@ import {
   getBranchConfigs,
   getRouteSuggestions,
   confirmRouteSuggestion,
+  previewRoutePlanCustomers,
+  saveRoutePlanDraft,
+  removeCustomerFromRoutePlan,
+  publishRoutePlan,
+  searchPlanningCustomers,
+  addCustomerToRoutePlan,
 } from './api'
 import {
+  buildRoutePlanPreviewPayload,
   buildRoutePlanCriteriaPayload,
   buildRouteForecastPayload,
   DEMAND_CLASSES,
@@ -31,8 +38,12 @@ import {
   getPlanningDateBounds,
   getSupervisorRouteErrorMessage,
   isFuturePlanningDate,
+  normalizeRoutePlanCustomer,
+  normalizeCustomerSearchResult,
   normalizeRoutePlanningRow,
   sanitizeDemandClasses,
+  canEditRoutePlanCustomers,
+  canPublishRoutePlan,
 } from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
 
@@ -229,6 +240,15 @@ export default function ScreenPronostico() {
   const [selectedRouteId, setSelectedRouteId] = useState(null)
   const [selectedPolygonId, setSelectedPolygonId] = useState('')
   const [selectedSubpolygonId, setSelectedSubpolygonId] = useState('')
+  const [manualView, setManualView] = useState('routes') // 'routes' | 'detail'
+  const [routePlanId, setRoutePlanId] = useState(null)
+  const [selectedSubpolygonIds, setSelectedSubpolygonIds] = useState([])
+  const [previewCustomers, setPreviewCustomers] = useState([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [customerResults, setCustomerResults] = useState([])
+  const [customerSearching, setCustomerSearching] = useState(false)
+  const [customerActionLoading, setCustomerActionLoading] = useState(null)
   const [selectedChannelIds, setSelectedChannelIds] = useState([])
   const [selectedVisitDays, setSelectedVisitDays] = useState([])
   const [selectedTimeWindowId, setSelectedTimeWindowId] = useState('')
@@ -498,10 +518,32 @@ export default function ScreenPronostico() {
     }
     setDateTarget(value)
     setSelectedRouteId(null)
+    setManualView('routes')
+    setRoutePlanId(null)
+    setSelectedSubpolygonIds([])
+    setPreviewCustomers([])
+    setCustomerQuery('')
+    setCustomerResults([])
     setExpandedForecastId(null)
     setForecastLinesCache({})
     setEditingForecastId(null)
     setMsg(null)
+  }
+
+  function handleOpenRouteDetail(route) {
+    setSelectedRouteId(route.route_id)
+    setRoutePlanId(route.plan_id || null)
+    setPreviewCustomers([])
+    setCustomerQuery('')
+    setCustomerResults([])
+    setManualView('detail')
+  }
+
+  function handleBackToRoutes() {
+    setManualView('routes')
+    setPreviewCustomers([])
+    setCustomerQuery('')
+    setCustomerResults([])
   }
 
   function buildCurrentPlanCriteria(routeId) {
