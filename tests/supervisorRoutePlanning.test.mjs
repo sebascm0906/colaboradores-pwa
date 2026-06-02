@@ -9,9 +9,13 @@ import {
   normalizeRoutePlanningRow,
   buildRouteForecastPayload,
   buildRoutePlanCriteriaPayload,
+  buildRoutePlanPreviewPayload,
   getDefaultTimeWindow,
   normalizeActiveRoutePlan,
+  normalizeRoutePlanCustomer,
   normalizeCustomerSearchResult,
+  canEditRoutePlanCustomers,
+  canPublishRoutePlan,
   getSupervisorRouteErrorMessage,
   buildPolygonMarkerStyle,
   DEMAND_CLASSES,
@@ -109,6 +113,76 @@ test('buildRoutePlanCriteriaPayload defaults to any time and all visit days', ()
     time_window_id: null,
     demand_classes: [],
   })
+})
+
+test('buildRoutePlanPreviewPayload supports multiple subpolygons and preserves filters', () => {
+  assert.deepEqual(buildRoutePlanPreviewPayload({
+    routeId: '10',
+    dateTarget: '2026-06-03',
+    polygonId: '20',
+    subpolygonIds: ['101', '102', '', 'bad'],
+    channelIds: ['1', '2'],
+    visitDays: ['monday'],
+    timeWindowId: '7',
+    demandClasses: ['A', 'AA'],
+  }), {
+    route_id: 10,
+    date_target: '2026-06-03',
+    polygon_id: 20,
+    subpolygon_ids: [101, 102],
+    channel_ids: [1, 2],
+    visit_days: ['monday'],
+    time_window_id: 7,
+    demand_classes: ['AA', 'A'],
+  })
+})
+
+test('buildRoutePlanPreviewPayload treats no subpolygon as full polygon', () => {
+  assert.deepEqual(buildRoutePlanPreviewPayload({
+    routeId: 10,
+    dateTarget: '2026-06-03',
+    polygonId: 20,
+    subpolygonIds: [],
+  }).subpolygon_ids, [])
+})
+
+test('normalizeRoutePlanCustomer preserves stop and planning metadata', () => {
+  assert.deepEqual(normalizeRoutePlanCustomer({
+    id: 55,
+    customer_id: [55, 'Abarrotes Sol'],
+    stop_id: 9001,
+    street: 'Av 1',
+    source: 'manual',
+    subpolygon_id: [101, 'Sub A'],
+    channel_ids: [[1, 'Mayoreo']],
+    visit_days: ['monday'],
+    time_window_id: [3, 'Tarde'],
+  }), {
+    id: 55,
+    customer_id: 55,
+    stop_id: 9001,
+    name: 'Abarrotes Sol',
+    address: 'Av 1',
+    source: 'manual',
+    subpolygon_id: 101,
+    subpolygon_name: 'Sub A',
+    channels: ['Mayoreo'],
+    visit_days: ['monday'],
+    time_window: 'Tarde',
+  })
+})
+
+test('canEditRoutePlanCustomers only allows draft editable plans', () => {
+  assert.equal(canEditRoutePlanCustomers({ state: 'draft' }), true)
+  assert.equal(canEditRoutePlanCustomers({ state: 'published' }), false)
+  assert.equal(canEditRoutePlanCustomers({ state: 'in_progress' }), false)
+  assert.equal(canEditRoutePlanCustomers({ state: 'draft', load_sealed: true }), false)
+})
+
+test('canPublishRoutePlan only allows draft plans with customers', () => {
+  assert.equal(canPublishRoutePlan({ state: 'draft', customersCount: 1 }), true)
+  assert.equal(canPublishRoutePlan({ state: 'draft', customersCount: 0 }), false)
+  assert.equal(canPublishRoutePlan({ state: 'published', customersCount: 1 }), false)
 })
 
 // ── F1: demand_classes ──────────────────────────────────────────────────────

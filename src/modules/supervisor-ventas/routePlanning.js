@@ -10,6 +10,10 @@ function toM2oName(value, fallback = '') {
   return String(fallback || '')
 }
 
+function toNumber(value) {
+  return Number(value || 0) || 0
+}
+
 function toNumberList(values) {
   return (Array.isArray(values) ? values : [])
     .map((value) => Number(value || 0))
@@ -151,6 +155,28 @@ export function buildRoutePlanCriteriaPayload({
   }
 }
 
+export function buildRoutePlanPreviewPayload({
+  routeId,
+  dateTarget,
+  polygonId,
+  subpolygonIds,
+  channelIds,
+  visitDays,
+  timeWindowId,
+  demandClasses,
+}) {
+  return {
+    route_id: toNumber(routeId),
+    date_target: dateTarget,
+    polygon_id: toNumber(polygonId),
+    subpolygon_ids: toNumberList(subpolygonIds),
+    channel_ids: toNumberList(channelIds),
+    visit_days: Array.isArray(visitDays) ? visitDays.filter(Boolean) : [],
+    time_window_id: timeWindowId ? toNumber(timeWindowId) : null,
+    demand_classes: sanitizeDemandClasses(demandClasses),
+  }
+}
+
 export function normalizeActiveRoutePlan(row = {}) {
   return {
     id: Number(row.id || 0),
@@ -162,6 +188,35 @@ export function normalizeActiveRoutePlan(row = {}) {
     state: row.state || '',
     stops_total: Number(row.stops_total || 0),
   }
+}
+
+export function normalizeRoutePlanCustomer(row = {}) {
+  const customerRef = row.customer_id || row.partner_id || row.id
+  return {
+    id: toM2oId(customerRef) || toNumber(row.id),
+    customer_id: toM2oId(customerRef) || toNumber(row.customer_id || row.partner_id || row.id),
+    stop_id: toNumber(row.stop_id),
+    name: toM2oName(customerRef, row.name || row.customer_name || ''),
+    address: row.address || row.street || row.contact_address || '',
+    source: row.source || row.origin || 'suggested',
+    subpolygon_id: toM2oId(row.subpolygon_id),
+    subpolygon_name: toM2oName(row.subpolygon_id, row.subpolygon_name || ''),
+    channels: (Array.isArray(row.channel_ids) ? row.channel_ids : [])
+      .map((item) => Array.isArray(item) ? item[1] : String(item || ''))
+      .filter(Boolean),
+    visit_days: Array.isArray(row.visit_days) ? row.visit_days : [],
+    time_window: toM2oName(row.time_window_id, row.time_window || ''),
+  }
+}
+
+export function canEditRoutePlanCustomers(plan = {}) {
+  const state = String(plan.state || plan.plan_state || '').toLowerCase()
+  return state === 'draft' && plan.load_sealed !== true && !toM2oId(plan.load_picking_id)
+}
+
+export function canPublishRoutePlan({ state, plan_state, customersCount = 0, load_sealed, load_picking_id } = {}) {
+  return canEditRoutePlanCustomers({ state: state || plan_state, load_sealed, load_picking_id })
+    && Number(customersCount || 0) > 0
 }
 
 export function normalizeCustomerSearchResult(row = {}) {
