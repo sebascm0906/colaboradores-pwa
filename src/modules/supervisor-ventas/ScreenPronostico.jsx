@@ -464,6 +464,7 @@ export default function ScreenPronostico() {
     let cancelled = false
     async function loadSubpolygons() {
       setSelectedSubpolygonId('')
+      setSelectedSubpolygonIds([])
       if (!selectedPolygonId) {
         setSubpolygons([])
         return
@@ -509,6 +510,12 @@ export default function ScreenPronostico() {
     setSelectedDemandClasses(prev => sanitizeDemandClasses(
       prev.includes(value) ? prev.filter((c) => c !== value) : [...prev, value]
     ))
+  }
+
+  function handleSubpolygonToggle(subpolygonId) {
+    setSelectedSubpolygonIds(prev => prev.includes(subpolygonId)
+      ? prev.filter((id) => id !== subpolygonId)
+      : [...prev, subpolygonId])
   }
 
   function handleDateTargetChange(value) {
@@ -600,6 +607,54 @@ export default function ScreenPronostico() {
       flashMsg(getSupervisorRouteErrorMessage(e), 5000)
     } finally {
       setRouteLoading(null)
+    }
+  }
+
+  async function handlePreviewCustomers() {
+    if (!selectedRoute) { flashMsg('Selecciona una ruta'); return }
+    if (!selectedPolygonId) { flashMsg('Selecciona un poligono'); return }
+
+    setPreviewLoading(true)
+    setMsg(null)
+    try {
+      const payload = buildRoutePlanPreviewPayload({
+        routeId: selectedRoute.route_id,
+        dateTarget,
+        polygonId: selectedPolygonId,
+        subpolygonIds: selectedSubpolygonIds,
+        channelIds: selectedChannelIds,
+        visitDays: selectedVisitDays,
+        timeWindowId: selectedTimeWindowId,
+        demandClasses: selectedDemandClasses,
+      })
+      const resp = await previewRoutePlanCustomers(payload)
+      if (
+        resp?.ok === false
+        || String(resp?.status || '').toLowerCase() === 'error'
+        || String(resp?.data?.status || '').toLowerCase() === 'error'
+      ) {
+        flashMsg(getSupervisorRouteErrorMessage(resp), 5000)
+        return
+      }
+      const data = resp?.data || resp || {}
+      setRoutePlanId(current => data.route_plan_id || data.plan_id || current || null)
+      const rows = Array.isArray(data)
+        ? data
+        : Array.isArray(data.customers)
+          ? data.customers
+          : Array.isArray(data.items)
+            ? data.items
+            : Array.isArray(data.records)
+              ? data.records
+              : []
+      setPreviewCustomers(rows.map(normalizeRoutePlanCustomer))
+      await loadData()
+      flashMsg('Propuesta generada')
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'previewRoutePlanCustomers', e)
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setPreviewLoading(false)
     }
   }
 
@@ -884,6 +939,20 @@ export default function ScreenPronostico() {
     if (!route.plan_id) return 'Crear propuesta'
     if (planState === 'published') return 'Ver publicado'
     return 'Revisar clientes'
+  }
+
+  function previewSourceLabel(source) {
+    const value = String(source || '').toLowerCase()
+    if (value === 'manual') return 'Manual'
+    if (value === 'existing') return 'Existente'
+    return 'Sugerido'
+  }
+
+  function previewSourceColor(source) {
+    const value = String(source || '').toLowerCase()
+    if (value === 'manual') return TOKENS.colors.success
+    if (value === 'existing') return TOKENS.colors.warning
+    return TOKENS.colors.blue2
   }
 
   return (
@@ -1307,12 +1376,12 @@ export default function ScreenPronostico() {
                   </button>
                 )}
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Filtros de clientes</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <div style={{ marginBottom: 10 }}>
                   <select
                     value={selectedPolygonId}
                     onChange={(e) => setSelectedPolygonId(e.target.value)}
                     style={{
-                      minWidth: 0, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
+                      width: '100%', minWidth: 0, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
                       background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
                       color: TOKENS.colors.text, fontSize: 12, outline: 'none',
                     }}
@@ -1322,21 +1391,51 @@ export default function ScreenPronostico() {
                       <option key={optionId(polygon)} value={optionId(polygon)}>{optionLabel(polygon, 'Poligono')}</option>
                     ))}
                   </select>
-                  <select
-                    value={selectedSubpolygonId}
-                    onChange={(e) => setSelectedSubpolygonId(e.target.value)}
-                    disabled={!selectedPolygonId}
-                    style={{
-                      minWidth: 0, padding: '10px 8px', borderRadius: TOKENS.radius.sm,
-                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
-                      color: TOKENS.colors.text, fontSize: 12, outline: 'none', opacity: selectedPolygonId ? 1 : 0.65,
-                    }}
-                  >
-                    <option value="">Ninguno</option>
-                    {subpolygons.map((subpolygon) => (
-                      <option key={optionId(subpolygon)} value={optionId(subpolygon)}>{optionLabel(subpolygon, 'Subpoligono')}</option>
-                    ))}
-                  </select>
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 6px', fontSize: 10 }}>Subpoligonos</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <button
+                      type="button"
+                      aria-pressed={selectedSubpolygonIds.length === 0}
+                      onClick={() => setSelectedSubpolygonIds([])}
+                      style={{
+                        padding: '6px 9px', borderRadius: TOKENS.radius.pill,
+                        background: selectedSubpolygonIds.length === 0 ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                        border: `1px solid ${selectedSubpolygonIds.length === 0 ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                        color: selectedSubpolygonIds.length === 0 ? TOKENS.colors.blue2 : TOKENS.colors.textMuted,
+                        fontSize: 11, fontWeight: 700,
+                      }}
+                    >
+                      Todo el poligono
+                    </button>
+                    {subpolygons.map((subpolygon) => {
+                      const id = optionId(subpolygon)
+                      const selected = selectedSubpolygonIds.includes(id)
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => handleSubpolygonToggle(id)}
+                          disabled={!selectedPolygonId}
+                          style={{
+                            padding: '6px 9px', borderRadius: TOKENS.radius.pill,
+                            background: selected ? `${TOKENS.colors.blue2}22` : TOKENS.colors.surface,
+                            border: `1px solid ${selected ? TOKENS.colors.blue2 : TOKENS.colors.border}`,
+                            color: selected ? TOKENS.colors.blue2 : TOKENS.colors.textMuted,
+                            fontSize: 11, fontWeight: 700, opacity: selectedPolygonId ? 1 : 0.65,
+                          }}
+                        >
+                          {optionLabel(subpolygon, 'Subpoligono')}
+                        </button>
+                      )
+                    })}
+                    {selectedPolygonId && subpolygons.length === 0 && (
+                      <span style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 11 }}>Sin subpoligonos cargados</span>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
@@ -1447,6 +1546,70 @@ export default function ScreenPronostico() {
                     <option key={optionId(window) || 'any'} value={optionId(window)}>{optionLabel(window, defaultTimeWindow.label)}</option>
                   ))}
                 </select>
+
+                <button
+                  type="button"
+                  onClick={handlePreviewCustomers}
+                  disabled={previewLoading}
+                  style={{
+                    width: '100%', marginTop: 12, padding: '12px 0', borderRadius: TOKENS.radius.md,
+                    background: previewLoading ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                    color: previewLoading ? TOKENS.colors.textLow : '#fff',
+                    border: `1px solid ${previewLoading ? TOKENS.colors.border : TOKENS.colors.blue2}`,
+                    fontSize: 13, fontWeight: 700, opacity: previewLoading ? 0.75 : 1,
+                  }}
+                >
+                  {previewLoading ? 'Generando propuesta...' : previewCustomers.length > 0 ? 'Actualizar propuesta' : 'Generar propuesta'}
+                </button>
+
+                {previewCustomers.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Clientes propuestos</p>
+                      <span style={{ ...typo.caption, color: TOKENS.colors.textLow, fontSize: 10 }}>{previewCustomers.length} clientes</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {previewCustomers.map((customer, idx) => {
+                        const sourceColor = previewSourceColor(customer.source)
+                        return (
+                          <div
+                            key={`${customer.stop_id || customer.customer_id || customer.id || 'customer'}-${idx}`}
+                            style={{
+                              padding: 10, borderRadius: TOKENS.radius.md,
+                              background: TOKENS.colors.surfaceSoft,
+                              border: `1px solid ${TOKENS.colors.border}`,
+                            }}
+                          >
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {customer.name || `Cliente #${customer.customer_id || customer.id || idx + 1}`}
+                                </p>
+                                {customer.address && (
+                                  <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '3px 0 0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {customer.address}
+                                  </p>
+                                )}
+                                {customer.subpolygon_name && (
+                                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0', fontSize: 10 }}>
+                                    {customer.subpolygon_name}
+                                  </p>
+                                )}
+                              </div>
+                              <span style={{
+                                flexShrink: 0, padding: '3px 8px', borderRadius: TOKENS.radius.pill,
+                                color: sourceColor, background: `${sourceColor}14`, border: `1px solid ${sourceColor}30`,
+                                fontSize: 10, fontWeight: 700,
+                              }}>
+                                {previewSourceLabel(customer.source)}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               </>
               )}
