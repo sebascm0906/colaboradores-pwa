@@ -46,6 +46,7 @@ export default function AdminLiquidacionesForm() {
   const [selectedId, setSelectedId] = useState(null)
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [historySelectedId, setHistorySelectedId] = useState(null)
 
   const [validating, setValidating] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -98,18 +99,21 @@ export default function AdminLiquidacionesForm() {
   // ── Validación ────────────────────────────────────────────────────────────
   async function doValidate() {
     if (!selectedId) return
+    const validatedPlanId = selectedId
     setValidating(true)
     setError('')
     setSuccess('')
     try {
-      await validateLiquidation(selectedId)
-      setSuccess(`Liquidación del plan #${selectedId} validada`)
+      await validateLiquidation(validatedPlanId)
+      setSuccess(`Liquidación del plan #${validatedPlanId} validada`)
       setConfirmOpen(false)
-      // Recargar lista (el plan validado debería desaparecer)
+      // Recargar pendientes y abrir el mismo reporte en Validadas.
       const res = await getPendingLiquidations({ companyId, warehouseId })
       const data = res?.data ?? res
       const rows = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : [])
       setList(rows)
+      setHistorySelectedId(validatedPlanId)
+      setView('history')
       setSelectedId(null)
       setDetail(null)
       setTimeout(() => setSuccess(''), 3500)
@@ -197,7 +201,11 @@ export default function AdminLiquidacionesForm() {
       )}
 
       {view === 'history' ? (
-        <LiquidacionesHistory companyId={companyId} warehouseId={warehouseId} />
+        <LiquidacionesHistory
+          companyId={companyId}
+          warehouseId={warehouseId}
+          initialSelectedId={historySelectedId}
+        />
       ) : (<>
 
       {!BACKEND_CAPS.liquidaciones && (
@@ -546,7 +554,7 @@ export default function AdminLiquidacionesForm() {
 }
 
 // ─── LiquidacionesHistory — tab "Validadas" ─────────────────────────────────
-function LiquidacionesHistory({ companyId, warehouseId }) {
+function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null }) {
   const today = new Date()
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
   const toIso = (d) => localDateString(d)
@@ -578,7 +586,16 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
         const rows = Array.isArray(data)
           ? data
           : (Array.isArray(data?.plans) ? data.plans : (Array.isArray(data?.history) ? data.history : []))
-        if (alive) setList(rows)
+        if (alive) {
+          setList(rows)
+          setSelectedId((current) => {
+            if (current && rows.some((plan) => plan.id === current)) return current
+            if (initialSelectedId && rows.some((plan) => plan.id === initialSelectedId)) {
+              return initialSelectedId
+            }
+            return null
+          })
+        }
       } catch (e) {
         if (alive) setError(e?.message || 'Error al cargar historial')
       } finally {
@@ -587,7 +604,7 @@ function LiquidacionesHistory({ companyId, warehouseId }) {
     }
     load()
     return () => { alive = false }
-  }, [companyId, warehouseId, dateFrom, dateTo])
+  }, [companyId, warehouseId, dateFrom, dateTo, initialSelectedId])
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); return }
