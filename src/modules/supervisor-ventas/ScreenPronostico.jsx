@@ -302,6 +302,12 @@ export default function ScreenPronostico() {
   )
   const defaultTimeWindow = useMemo(() => getDefaultTimeWindow(), [])
 
+  useEffect(() => {
+    if (manualView === 'detail' && selectedRoute?.plan_id) {
+      setRoutePlanId((current) => current || selectedRoute.plan_id)
+    }
+  }, [manualView, selectedRoute?.plan_id])
+
   const routesWithPlan = routes.filter((r) => r.plan_id).length
   const routesWithoutPlan = routes.length - routesWithPlan
   const warehouseLabel = session?.warehouse_name || session?.warehouse || (session?.warehouse_id ? `CEDIS #${session.warehouse_id}` : 'CEDIS no asignado')
@@ -460,6 +466,37 @@ export default function ScreenPronostico() {
   }, [dateTarget, defaultTimeWindow])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    const needle = customerQuery.trim()
+    if (manualView !== 'detail' || needle.length < 2) {
+      setCustomerResults([])
+      setCustomerSearching(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setCustomerSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const result = await searchPlanningCustomers(needle)
+        if (cancelled) return
+        setCustomerResults(unwrapList(result).map(normalizeCustomerSearchResult).filter((customer) => customer.id))
+      } catch (e) {
+        logScreenError('ScreenPronostico', 'searchPlanningCustomers', e)
+        if (cancelled) return
+        setCustomerResults([])
+        flashMsg(e.message === 'no_session' ? 'Sesion vencida, vuelve a ingresar.' : getSupervisorRouteErrorMessage(e), 5000)
+      } finally {
+        if (!cancelled) setCustomerSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [customerQuery, manualView])
 
   useEffect(() => {
     let cancelled = false
@@ -628,6 +665,7 @@ export default function ScreenPronostico() {
         flashMsg(getSupervisorRouteErrorMessage(res), 5000)
         return
       }
+      setRoutePlanId(res?.route_plan_id || res?.plan_id || res?.id || null)
       await loadData()
       setSelectedRouteId(route.route_id)
       flashMsg('Plan diario listo')
@@ -688,6 +726,67 @@ export default function ScreenPronostico() {
       flashMsg(getSupervisorRouteErrorMessage(e), 5000)
     } finally {
       if (previewRequestRef.current === requestId) setPreviewLoading(false)
+    }
+  }
+
+  async function handleAddCustomer(customer) {
+    if (!routePlanId) {
+      flashMsg('Genera primero la propuesta de clientes')
+      return
+    }
+
+    setCustomerActionLoading(`add-${customer.id}`)
+    try {
+      const result = await addCustomerToRoutePlan(routePlanId, customer.id, '')
+      if (
+        result?.ok === false
+        || String(result?.status || '').toLowerCase() === 'error'
+        || String(result?.data?.status || '').toLowerCase() === 'error'
+      ) {
+        throw result
+      }
+      const data = result?.data || result || {}
+      const addedCustomer = data.customer
+        ? normalizeRoutePlanCustomer(data.customer)
+        : { ...customer, source: 'manual' }
+      setPreviewCustomers((current) => {
+        const addedId = String(addedCustomer.customer_id || addedCustomer.id || customer.id || '')
+        if (!addedId || current.some((item) => String(item.customer_id || item.id || '') === addedId)) return current
+        return [...current, addedCustomer]
+      })
+      setCustomerQuery('')
+      setCustomerResults([])
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'addCustomerToRoutePlan', e)
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setCustomerActionLoading(null)
+    }
+  }
+
+  async function handleRemoveCustomer(customer) {
+    if (!routePlanId) return
+
+    const targetId = customer.stop_id || customer.id
+    setCustomerActionLoading(`remove-${targetId}`)
+    try {
+      const result = await removeCustomerFromRoutePlan(routePlanId, customer)
+      if (
+        result?.ok === false
+        || String(result?.status || '').toLowerCase() === 'error'
+        || String(result?.data?.status || '').toLowerCase() === 'error'
+      ) {
+        throw result
+      }
+      setPreviewCustomers((current) => current.filter((item) => {
+        if (customer.stop_id) return String(item.stop_id || '') !== String(customer.stop_id)
+        return String(item.customer_id || item.id || '') !== String(customer.customer_id || customer.id || '')
+      }))
+    } catch (e) {
+      logScreenError('ScreenPronostico', 'removeCustomerFromRoutePlan', e)
+      flashMsg(getSupervisorRouteErrorMessage(e), 5000)
+    } finally {
+      setCustomerActionLoading(null)
     }
   }
 
@@ -987,6 +1086,8 @@ export default function ScreenPronostico() {
     if (value === 'existing') return TOKENS.colors.warning
     return TOKENS.colors.blue2
   }
+
+  const canEditCustomers = canEditRoutePlanCustomers(selectedRoute || {})
 
   return (
     <div style={{
@@ -1612,6 +1713,7 @@ export default function ScreenPronostico() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {previewCustomers.map((customer, idx) => {
                         const sourceColor = previewSourceColor(customer.source)
+                        const removeKey = `remove-${customer.stop_id || customer.id}`
                         return (
                           <div
                             key={`${customer.stop_id || customer.customer_id || customer.id || 'customer'}-${idx}`}
@@ -1644,6 +1746,27 @@ export default function ScreenPronostico() {
                               }}>
                                 {previewSourceLabel(customer.source)}
                               </span>
+                              {canEditCustomers && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCustomer(customer)}
+                                  disabled={customerActionLoading === removeKey}
+                                  aria-label="Quitar cliente"
+                                  style={{
+                                    flexShrink: 0, width: 28, height: 28, borderRadius: TOKENS.radius.sm,
+                                    background: TOKENS.colors.surface,
+                                    border: `1px solid ${TOKENS.colors.border}`,
+                                    color: customerActionLoading === removeKey ? TOKENS.colors.textLow : TOKENS.colors.error,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    opacity: customerActionLoading === removeKey ? 0.6 : 1,
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M18 6 6 18"/>
+                                    <path d="m6 6 12 12"/>
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           </div>
                         )
@@ -1651,6 +1774,88 @@ export default function ScreenPronostico() {
                     </div>
                   </div>
                 )}
+
+                <div style={{ marginTop: 12 }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Agregar cliente manual</p>
+                  <input
+                    type="search"
+                    value={customerQuery}
+                    onChange={(e) => setCustomerQuery(e.target.value)}
+                    placeholder="Buscar cliente para agregar"
+                    style={{
+                      width: '100%', padding: '11px 10px', borderRadius: TOKENS.radius.sm,
+                      background: TOKENS.colors.surface, border: `1px solid ${TOKENS.colors.border}`,
+                      color: TOKENS.colors.text, fontSize: 12, outline: 'none',
+                    }}
+                  />
+                  {customerSearching && (
+                    <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '8px 0 0', fontSize: 11 }}>Buscando...</p>
+                  )}
+                  {customerResults.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                      {customerResults.map((customer) => {
+                        const addKey = `add-${customer.id}`
+                        const adding = customerActionLoading === addKey
+                        return (
+                          <div
+                            key={customer.id}
+                            style={{
+                              padding: 10, borderRadius: TOKENS.radius.md,
+                              background: TOKENS.colors.surfaceSoft,
+                              border: `1px solid ${TOKENS.colors.border}`,
+                              display: 'flex', gap: 8, alignItems: 'flex-start',
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ ...typo.title, color: TOKENS.colors.text, margin: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {customer.name || `Cliente #${customer.id}`}
+                              </p>
+                              {customer.address && (
+                                <p style={{ ...typo.caption, color: TOKENS.colors.textLow, margin: '3px 0 0', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {customer.address}
+                                </p>
+                              )}
+                              {customer.channels.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                                  {customer.channels.map((channel) => (
+                                    <span
+                                      key={channel}
+                                      style={{
+                                        padding: '2px 7px', borderRadius: TOKENS.radius.pill,
+                                        background: 'rgba(43,143,224,0.10)',
+                                        border: '1px solid rgba(43,143,224,0.22)',
+                                        color: TOKENS.colors.blue2,
+                                        fontSize: 10, fontWeight: 700,
+                                      }}
+                                    >
+                                      {channel}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleAddCustomer(customer)}
+                              disabled={!routePlanId || !!customerActionLoading}
+                              style={{
+                                flexShrink: 0, minWidth: 68, minHeight: 32, padding: '7px 10px',
+                                borderRadius: TOKENS.radius.sm,
+                                background: (!routePlanId || customerActionLoading) ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                                border: `1px solid ${(!routePlanId || customerActionLoading) ? TOKENS.colors.border : TOKENS.colors.blue2}`,
+                                color: (!routePlanId || customerActionLoading) ? TOKENS.colors.textLow : '#fff',
+                                fontSize: 11, fontWeight: 700,
+                                opacity: (!routePlanId || customerActionLoading) ? 0.65 : 1,
+                              }}
+                            >
+                              {adding ? 'Agregando...' : 'Agregar'}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               </>
               )}
