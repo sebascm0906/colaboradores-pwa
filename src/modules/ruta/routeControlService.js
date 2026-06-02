@@ -20,6 +20,7 @@ import {
   closeRoute,
 } from './api'
 import { todayLocal } from '../../lib/api'
+import { validateCierre as validateCierreRules } from './routeCloseValidation'
 export { calculateFlowState } from './routeFlowState'
 export { buildInventoryView } from './routeInventoryView'
 
@@ -385,29 +386,7 @@ export async function closeRouteWithValidation(planId, departureKm, arrivalKm) {
  * Catches obvious errors before hitting the server.
  */
 export function validateCierre(plan, kmData, cierreState, inventoryView) {
-  const errors = []
-  const warnings = []
-
-  if (!kmData.kmSalida) errors.push('Falta KM de salida')
-  if (!kmData.kmLlegada) errors.push('Falta KM de llegada')
-  if (kmData.kmSalida && kmData.kmLlegada && kmData.kmLlegada < kmData.kmSalida) {
-    errors.push('KM llegada debe ser mayor que KM salida')
-  }
-
-  if (!cierreState.corteDone) errors.push('Corte de unidades no completado')
-  if (!cierreState.liquidacionDone) errors.push('Liquidacion no completada')
-
-  // Check inventory = 0
-  const corteValidation = validateCorte(inventoryView)
-  if (!corteValidation.valid) {
-    errors.push('Inventario final no cuadra a 0')
-  }
-
-  const kmRecorridos = (kmData.kmLlegada && kmData.kmSalida)
-    ? kmData.kmLlegada - kmData.kmSalida
-    : 0
-
-  return { valid: errors.length === 0, errors, warnings, kmRecorridos }
+  return validateCierreRules(plan, kmData, cierreState, inventoryView, validateCorte)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
