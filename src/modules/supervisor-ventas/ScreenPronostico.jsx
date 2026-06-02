@@ -1228,6 +1228,28 @@ export default function ScreenPronostico() {
               )}
 
               {manualView === 'detail' && (
+              <>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10,
+              }}>
+                <div style={{
+                  padding: 9, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>CEDIS</p>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {warehouseLabel}
+                  </p>
+                </div>
+                <div style={{
+                  padding: 9, borderRadius: TOKENS.radius.md,
+                  background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
+                }}>
+                  <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: 0, fontSize: 10 }}>Fecha objetivo</p>
+                  <p style={{ ...typo.title, color: TOKENS.colors.text, margin: '2px 0 0', fontSize: 12 }}>{dateTarget}</p>
+                </div>
+              </div>
+
               <div style={{
                 marginBottom: 14, padding: 12, borderRadius: TOKENS.radius.md,
                 background: TOKENS.colors.surfaceSoft, border: `1px solid ${TOKENS.colors.border}`,
@@ -1270,6 +1292,20 @@ export default function ScreenPronostico() {
                     </span>
                   )}
                 </div>
+                {selectedRoute && !selectedRoute.plan_id && (
+                  <button
+                    type="button"
+                    onClick={() => handleEnsurePlan(selectedRoute)}
+                    disabled={routeLoading === selectedRoute.route_id}
+                    style={{
+                      width: '100%', marginBottom: 12, padding: '10px 0', borderRadius: TOKENS.radius.md,
+                      background: routeLoading === selectedRoute.route_id ? TOKENS.colors.surface : TOKENS.colors.blue2,
+                      color: '#fff', fontSize: 12, fontWeight: 700, opacity: routeLoading === selectedRoute.route_id ? 0.65 : 1,
+                    }}
+                  >
+                    {routeLoading === selectedRoute.route_id ? 'Creando...' : 'Crear plan diario'}
+                  </button>
+                )}
                 <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '0 0 8px', fontSize: 10 }}>Filtros de clientes</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
                   <select
@@ -1412,6 +1448,7 @@ export default function ScreenPronostico() {
                   ))}
                 </select>
               </div>
+              </>
               )}
 
               {manualView === 'routes' && (
@@ -1508,6 +1545,8 @@ export default function ScreenPronostico() {
               </>
               )}
 
+              {manualView === 'detail' && (
+              <>
               <div style={{
                 marginBottom: 12, padding: 10, borderRadius: TOKENS.radius.md,
                 background: selectedRoute ? 'rgba(43,143,224,0.08)' : TOKENS.colors.surfaceSoft,
@@ -1609,6 +1648,8 @@ export default function ScreenPronostico() {
                   ...typo.caption, textAlign: 'center', marginTop: 10,
                   color: msg.includes('guardado') || msg.includes('listo') || msg.includes('confirmado') ? TOKENS.colors.success : TOKENS.colors.error,
                 }}>{msg}</p>
+              )}
+              </>
               )}
             </div>
             </>
