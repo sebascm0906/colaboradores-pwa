@@ -110,6 +110,32 @@ export function addCustomerToRoutePlan(routePlanId, customerId, notes = '') {
   })
 }
 
+/** Previsualizar clientes candidatos para un plan de ruta */
+export function previewRoutePlanCustomers(criteria = {}) {
+  return api('POST', '/pwa-supv/route-plan-preview-customers', criteria)
+}
+
+/** Guardar borrador de plan de ruta */
+export function saveRoutePlanDraft(payload = {}) {
+  return api('POST', '/pwa-supv/route-plan-save-draft', payload)
+}
+
+/** Remover cliente o parada de un plan de ruta */
+export function removeCustomerFromRoutePlan(routePlanId, customerOrStopId) {
+  return api('POST', '/pwa-supv/route-plan-remove-customer', {
+    route_plan_id: Number(routePlanId || 0),
+    customer_id: Number(customerOrStopId?.customer_id || customerOrStopId || 0),
+    stop_id: Number(customerOrStopId?.stop_id || 0),
+  })
+}
+
+/** Publicar plan de ruta */
+export function publishRoutePlan(routePlanId) {
+  return api('POST', '/pwa-supv/route-plan-publish', {
+    route_plan_id: Number(routePlanId || 0),
+  })
+}
+
 /**
  * Forecasts recientes.
  * @param {Object} [opts]
