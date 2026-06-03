@@ -52,14 +52,15 @@ function escapeHtml(value) {
 }
 
 function normalizePlan(detail = {}) {
-  const state = text(detail.state || detail.plan_state).toLowerCase()
+  const plan = detail.plan && typeof detail.plan === 'object' ? detail.plan : {}
+  const state = text(detail.state || plan.state || detail.plan_state).toLowerCase()
   return {
-    id: detail.id || detail.plan_id || '',
-    name: text(detail.name || detail.plan_name || (detail.id ? `Plan #${detail.id}` : 'Plan de ruta')),
-    routeName: text(detail.route_name || detail.route || detail.route_id, 'Ruta'),
-    driverName: text(detail.driver_name || detail.driver || detail.salesperson_name || detail.salesperson, 'Chofer'),
-    vehicleName: text(detail.vehicle_name || detail.vehicle || detail.vehicle_id, ''),
-    date: text(detail.date || detail.route_date || detail.closed_date || detail.validated_date, ''),
+    id: detail.id || plan.id || detail.plan_id || plan.plan_id || '',
+    name: text(detail.name || plan.name || detail.plan_name || (detail.id ? `Plan #${detail.id}` : 'Plan de ruta')),
+    routeName: text(detail.route_name || plan.route_name || detail.route || detail.route_id, 'Ruta'),
+    driverName: text(detail.driver_name || plan.driver_name || detail.driver || detail.salesperson_name || detail.salesperson, 'Chofer'),
+    vehicleName: text(detail.vehicle_name || plan.vehicle_name || detail.vehicle || detail.vehicle_id, ''),
+    date: text(detail.date || plan.date || detail.route_date || detail.closed_date || detail.validated_date, ''),
     state,
   }
 }
@@ -154,6 +155,10 @@ function normalizeVisitRow(row = {}) {
   const customerId = row.customer_id?.[0] || row.customer_id || row.partner_id?.[0] || row.partner_id || ''
   const visited = isVisitedStop(row)
   const visitTime = shortTime(row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time)
+  const hasSale = row.has_sale != null
+    ? Boolean(row.has_sale)
+    : firstNumber(row.sale_order_count, row.sales_count, row.sales_amount) > 0
+  const saleStatus = hasSale ? 'Venta' : 'No venta'
 
   return {
     id: row.id || customerId || text(row.customer_name || row.customer || row.partner_name),
@@ -165,6 +170,7 @@ function normalizeVisitRow(row = {}) {
     plannedTime: shortTime(row.planned_time || row.scheduled_time || row.expected_time || row.time_window || row.window || ''),
     visitTime: visited ? visitTime : '',
     status: visited ? 'Visitado' : 'Sin visita',
+    saleStatus,
   }
 }
 
@@ -289,14 +295,38 @@ function normalizePaymentEntries(summary = {}) {
 
 function normalizeLiquidation(detail = {}) {
   const summary = detail.summary || detail.liquidation_summary || {}
+  const expectedBuckets = summary.expected_payments || {}
+  const paymentBuckets = summary.payments || {}
   const rows = normalizePaymentEntries(summary)
+  const expectedCash = firstNumber(expectedBuckets.cash?.total, expectedBuckets.cash, summary.total_expected)
+  const expectedCredit = firstNumber(expectedBuckets.credit?.total, expectedBuckets.credit)
+  const expectedTransfer = firstNumber(expectedBuckets.transfer?.total, expectedBuckets.transfer)
+  const receivedCash = firstNumber(
+    detail.cash_received_amount,
+    detail.plan?.cash_received_amount,
+    paymentBuckets.cash?.total,
+    summary.by_method?.cash,
+  )
+  const receivedTransfer = firstNumber(
+    paymentBuckets.transfer?.total,
+    summary.by_method?.transfer,
+  )
+  const expected = number(summary.total_expected ?? summary.expected_total ?? (expectedCash + expectedCredit + expectedTransfer))
   const collected = number(summary.total_collected ?? summary.collected_total ?? rows.reduce((sum, row) => sum + row.amount, 0))
-  const expected = number(summary.total_expected ?? summary.expected_total ?? collected)
-  const difference = number(summary.difference ?? (collected - expected))
+  const difference = number(receivedCash - expectedCash)
 
   return {
     rows,
-    totals: { expected, collected, difference },
+    totals: {
+      expected,
+      collected,
+      difference,
+      credit: expectedCredit,
+      cashExpected: expectedCash,
+      cashReceived: receivedCash,
+      transfer: expectedTransfer,
+      transferReceived: receivedTransfer,
+    },
     empty: rows.length === 0 && expected === 0 && collected === 0,
   }
 }
@@ -317,6 +347,12 @@ function normalizeSale(row = {}) {
   const customer = text(row.customer_name || row.partner_name || row.customer || row.partner_id, 'Cliente')
   const method = text(row.payment_method || row.method || row.payment_type || row.payment_label, '')
   const amount = number(row.amount_total ?? row.total ?? row.amount ?? row.price_total)
+  const kilos = number(
+    row.kg_total
+    ?? (Array.isArray(row.lines)
+      ? row.lines.reduce((sum, line) => sum + number(line.kg_total ?? ((line.weight || 0) * (line.quantity || 0))), 0)
+      : 0),
+  )
 
   return {
     id: row.id || folio,
@@ -324,14 +360,24 @@ function normalizeSale(row = {}) {
     customer,
     method,
     amount,
+    kilos,
   }
 }
 
 function normalizeSales(detail = {}) {
   const rows = rawSales(detail).map(normalizeSale)
+  const byMethod = rows.reduce((acc, row) => {
+    const key = text(row.method).toLowerCase() || 'cash'
+    acc[key] = number(acc[key]) + number(row.amount)
+    return acc
+  }, {})
   return {
     rows,
-    totals: { amount: rows.reduce((sum, row) => sum + row.amount, 0) },
+    totals: {
+      amount: rows.reduce((sum, row) => sum + row.amount, 0),
+      kilos: rows.reduce((sum, row) => sum + row.kilos, 0),
+      byMethod,
+    },
     unavailable: rows.length === 0,
   }
 }
@@ -345,6 +391,10 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
     sales: {
       total: sales.totals.amount,
       count: sales.rows.length,
+      kilos: sales.totals.kilos,
+      credit: liquidation.totals.credit,
+      cash: liquidation.totals.cashExpected,
+      cashReceived: liquidation.totals.cashReceived,
       unavailable: sales.unavailable,
     },
     visitList: normalizeVisitList(detail),
@@ -353,7 +403,6 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
         id: line.id,
         product: line.product,
         loaded: line.loaded,
-        reloaded: number(reloadTotalsByProduct[line.product]),
         delivered: line.delivered,
         returned: line.returned,
         scrap: line.scrap,
@@ -361,7 +410,6 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
       })),
       totals: {
         loaded: lineTotals.loaded,
-        reloaded: totalReloaded,
         delivered: lineTotals.delivered,
         returned: lineTotals.returned,
         scrap: lineTotals.scrap,
@@ -446,11 +494,10 @@ function formatSummaryRows(format) {
   const inventoryTable = format.inventory.empty
     ? '<p class="empty">Sin inventario disponible.</p>'
     : table(
-      ['Producto', 'Cargado', 'Recargas', 'Vendido', 'Devuelto', 'Merma', 'Dif.'],
+      ['Producto', 'Cargado', 'Vendido', 'Devuelto', 'Merma', 'Dif.'],
       format.inventory.rows.map((row) => [
         row.product,
         row.loaded,
-        row.reloaded,
         row.delivered,
         row.returned,
         row.scrap,
@@ -466,13 +513,14 @@ function formatSummaryRows(format) {
   const visitTable = format.visitList.empty
     ? '<p class="empty">Sin lista de visitas disponible.</p>'
     : table(
-      ['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado'],
+      ['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado', 'Venta'],
       format.visitList.rows.map((row) => [
         row.sequence || '-',
         row.customer,
         row.plannedTime || '-',
         row.visitTime || '-',
         row.status,
+        row.saleStatus,
       ]),
     )
 
@@ -484,7 +532,9 @@ function formatSummaryRows(format) {
       { label: 'Cumplimiento', value: `${format.visits.compliancePct}%` },
       { label: 'Total ventas', value: format.sales.unavailable ? 'N/D' : money(format.sales.total) },
       { label: 'Ventas', value: format.sales.unavailable ? 'N/D' : format.sales.count },
-      { label: 'Recargas', value: format.reloads.totals.quantity },
+      { label: 'Kilos vendidos', value: format.sales.unavailable ? 'N/D' : `${format.sales.kilos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` },
+      { label: 'Credito', value: money(format.liquidation.totals.credit) },
+      { label: 'Cash / efectivo', value: money(format.liquidation.totals.cashExpected) },
       { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
     ])}
     <h2>Lista de visitas</h2>
@@ -495,10 +545,11 @@ function formatSummaryRows(format) {
     ${reloadTable}
     <h2>Liquidacion</h2>
     ${table(
-      ['Esperado', 'Cobrado', 'Diferencia'],
+      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia'],
       [[
-        money(format.liquidation.totals.expected),
-        money(format.liquidation.totals.collected),
+        money(format.liquidation.totals.credit),
+        money(format.liquidation.totals.cashExpected),
+        money(format.liquidation.totals.cashReceived),
         money(format.liquidation.totals.difference),
       ]],
     )}
@@ -567,7 +618,7 @@ function formatTotals(vm, formatId) {
     return `<p><strong>Totales:</strong> Cargado ${escapeHtml(format.totals.loaded)} · Entregado ${escapeHtml(format.totals.delivered)} · Devuelto ${escapeHtml(format.totals.returned)} · Merma ${escapeHtml(format.totals.scrap)} · Diferencia ${escapeHtml(format.totals.difference)}</p>`
   }
   if (formatId === 'liquidation') {
-    return `<p><strong>Esperado:</strong> ${escapeHtml(money(format.totals.expected))} · <strong>Cobrado:</strong> ${escapeHtml(money(format.totals.collected))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
+    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
   }
   return ''
 }
@@ -592,7 +643,7 @@ export function buildRouteFormatHtml(viewModel, formatId) {
     h1 { font-size: 20px; margin: 0 0 6px; }
     h2 { font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; }
     .meta { color: #4b5563; font-size: 11px; line-height: 1.5; }
-    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0; }
+    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 12px 0; }
     .metric { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px; background: #f9fafb; }
     .metric span { display: block; color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
     .metric strong { display: block; margin-top: 3px; font-size: 13px; }

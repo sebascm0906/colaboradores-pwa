@@ -14,11 +14,14 @@ const CLOSED_DETAIL = {
   vehicle_name: 'Unidad 12',
   date: '2026-05-27',
   state: 'closed',
+  cash_received_amount: 100,
   summary: {
     by_method: { cash: 100, credit: 50 },
+    payments: { cash: { total: 100 }, credit: { total: 0 } },
+    expected_payments: { cash: { total: 100 }, credit: { total: 50 }, transfer: { total: 0 } },
     total_expected: 150,
-    total_collected: 145,
-    difference: -5,
+    total_collected: 150,
+    difference: -50,
   },
   reconciliation_lines: [
     {
@@ -53,7 +56,11 @@ test('closed route enables formats and normalizes inventory, scrap, corte, liqui
   assert.equal(vm.formats.corte.totals.delivered, 12)
   assert.equal(vm.formats.liquidation.rows.length, 2)
   assert.equal(vm.formats.liquidation.totals.expected, 150)
-  assert.equal(vm.formats.liquidation.totals.collected, 145)
+  assert.equal(vm.formats.liquidation.totals.collected, 150)
+  assert.equal(vm.formats.liquidation.totals.credit, 50)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 100)
+  assert.equal(vm.formats.liquidation.totals.cashReceived, 100)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
   assert.equal(vm.formats.sales.unavailable, true)
 })
 
@@ -72,14 +79,21 @@ test('sales format normalizes common backend sales shapes', () => {
   const vm = buildRouteFormatsViewModel({
     ...CLOSED_DETAIL,
     sale_orders: [
-      { name: 'S001', customer_name: 'Cliente A', payment_method: 'cash', amount_total: 123.5 },
-      { folio: 'S002', partner_name: 'Cliente B', payment_method: 'credit', total: 200 },
+      {
+        name: 'S001',
+        customer_name: 'Cliente A',
+        payment_method: 'cash',
+        amount_total: 123.5,
+        lines: [{ quantity: 2, weight: 5.5 }],
+      },
+      { folio: 'S002', partner_name: 'Cliente B', payment_method: 'credit', total: 200, kg_total: 3 },
     ],
   })
 
   assert.equal(vm.formats.sales.unavailable, false)
   assert.deepEqual(vm.formats.sales.rows.map((row) => row.folio), ['S001', 'S002'])
   assert.equal(vm.formats.sales.totals.amount, 323.5)
+  assert.equal(vm.formats.sales.totals.kilos, 14)
 })
 
 test('downloadable html includes escaped plan and selected format content', () => {
@@ -115,7 +129,6 @@ test('one page summary includes visits and reloads', () => {
   assert.equal(vm.formats.summary.visits.compliancePct, 91)
   assert.equal(vm.formats.summary.reloads.rows.length, 2)
   assert.equal(vm.formats.summary.reloads.totals.quantity, 7)
-  assert.equal(vm.formats.summary.inventory.rows[0].reloaded, 4)
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
@@ -136,6 +149,7 @@ test('one page summary includes planned and visited customer list with visit tim
         planned_time: '10:00',
         actual_start_time: '2026-05-27 10:18:00',
         result_status: 'visited',
+        has_sale: true,
       },
       {
         id: 2,
@@ -143,6 +157,7 @@ test('one page summary includes planned and visited customer list with visit tim
         customer: 'Cliente Planeado',
         scheduled_time: '09:30',
         result_status: 'not_visited',
+        has_sale: false,
       },
     ],
   })
@@ -154,8 +169,10 @@ test('one page summary includes planned and visited customer list with visit tim
   ])
   assert.equal(vm.formats.summary.visitList.rows[0].visitTime, '')
   assert.equal(vm.formats.summary.visitList.rows[0].status, 'Sin visita')
+  assert.equal(vm.formats.summary.visitList.rows[0].saleStatus, 'No venta')
   assert.equal(vm.formats.summary.visitList.rows[1].visitTime, '10:18')
   assert.equal(vm.formats.summary.visitList.rows[1].status, 'Visitado')
+  assert.equal(vm.formats.summary.visitList.rows[1].saleStatus, 'Venta')
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
@@ -164,4 +181,31 @@ test('one page summary includes planned and visited customer list with visit tim
   assert.match(html, /Sin visita/)
   assert.match(html, /Cliente Visitado/)
   assert.match(html, /10:18/)
+  assert.match(html, /Venta/)
+  assert.match(html, /No venta/)
+})
+
+test('summary html removes recargas column from inventario y corte and shows kilos cash credit metrics', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    sales: [
+      {
+        folio: 'S001',
+        customer_name: 'Cliente A',
+        payment_method: 'cash',
+        amount_total: 100,
+        kg_total: 11,
+      },
+    ],
+    route_stops: [
+      { id: 1, sequence: 10, customer_name: 'PONLE CAFE MORELOS', actual_start_time: '2026-05-27 21:13:00', has_sale: false, state: 'done' },
+    ],
+  })
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /Kilos vendidos/)
+  assert.match(html, /Credito/)
+  assert.match(html, /Cash \/ efectivo/)
+  assert.doesNotMatch(html, /<th>Recargas<\/th>/)
 })
