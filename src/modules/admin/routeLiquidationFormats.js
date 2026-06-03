@@ -726,3 +726,23 @@ export function buildRouteDownloadName(viewModel, formatId) {
   }
   return `${slug(getFormatTitle(formatId))}-${slug(vm.plan.driverName)}-${slug(vm.plan.name)}.pdf`
 }
+
+export function openRouteFormatPrintWindow(
+  viewModel,
+  formatId,
+  browserWindow = globalThis.window,
+  htmlBuilder = buildRouteFormatHtml,
+) {
+  const printWindow = browserWindow?.open?.('', '_blank')
+  if (!printWindow) throw new Error('El navegador bloqueo la ventana de descarga')
+
+  const html = htmlBuilder(viewModel, formatId)
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+  printWindow.document.title = buildRouteDownloadName(viewModel, formatId)
+  printWindow.focus()
+  browserWindow.setTimeout(() => {
+    printWindow.print()
+  }, 350)
+}

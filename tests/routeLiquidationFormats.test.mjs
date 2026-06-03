@@ -5,6 +5,7 @@ import {
   buildRouteFormatsViewModel,
   buildRouteFormatHtml,
   buildRouteDownloadName,
+  openRouteFormatPrintWindow,
 } from '../src/modules/admin/routeLiquidationFormats.js'
 
 const CLOSED_DETAIL = {
@@ -298,4 +299,78 @@ test('summary html uses polished printable layout and cargas section title', () 
   assert.match(html, /Resumen operativo/)
   assert.match(html, /Cargas/)
   assert.doesNotMatch(html, /Recargas/)
+})
+
+test('print window opens synchronously without noopener before building the report html', () => {
+  const vm = buildRouteFormatsViewModel(CLOSED_DETAIL)
+  const calls = []
+  const printWindow = {
+    document: {
+      open() { calls.push('document.open') },
+      write(html) {
+        calls.push('document.write')
+        assert.match(html, /Reporte probado/)
+      },
+      close() { calls.push('document.close') },
+      title: '',
+    },
+    focus() { calls.push('focus') },
+    print() { calls.push('print') },
+  }
+  const browserWindow = {
+    open(...args) {
+      calls.push(`open:${args.length}:${args[2] || ''}`)
+      return printWindow
+    },
+    setTimeout(fn, delay) {
+      calls.push(`setTimeout:${delay}`)
+      fn()
+    },
+  }
+
+  openRouteFormatPrintWindow(
+    vm,
+    'summary',
+    browserWindow,
+    () => {
+      calls.push('buildHtml')
+      return '<!doctype html><title>Reporte probado</title>'
+    },
+  )
+
+  assert.deepEqual(calls, [
+    'open:2:',
+    'buildHtml',
+    'document.open',
+    'document.write',
+    'document.close',
+    'focus',
+    'setTimeout:350',
+    'print',
+  ])
+  assert.equal(printWindow.document.title, 'corte-y-liquidacion-chofer-uno-plan-77.pdf')
+})
+
+test('print window reports blocked popup before building html', () => {
+  const vm = buildRouteFormatsViewModel(CLOSED_DETAIL)
+  let builtHtml = false
+
+  assert.throws(
+    () => openRouteFormatPrintWindow(
+      vm,
+      'summary',
+      {
+        open() {
+          return null
+        },
+        setTimeout() {},
+      },
+      () => {
+        builtHtml = true
+        return '<!doctype html>'
+      },
+    ),
+    /bloqueo/i,
+  )
+  assert.equal(builtHtml, false)
 })

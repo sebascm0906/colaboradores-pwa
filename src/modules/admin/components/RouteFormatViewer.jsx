@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import {
-  buildRouteDownloadName,
-  buildRouteFormatHtml,
   buildRouteFormatsViewModel,
   formatRouteMoney,
+  openRouteFormatPrintWindow,
 } from '../routeLiquidationFormats'
 
 const NUMBER_FORMAT = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 })
@@ -29,17 +28,7 @@ export default function RouteFormatViewer({ detail }) {
     if (!viewModel.enabled) return
     setDownloadError('')
     try {
-      const html = buildRouteFormatHtml(viewModel, selectedFormat)
-      const printWindow = window.open('', '_blank', 'noopener,noreferrer')
-      if (!printWindow) throw new Error('El navegador bloqueo la ventana de descarga')
-      printWindow.document.open()
-      printWindow.document.write(html)
-      printWindow.document.close()
-      printWindow.document.title = buildRouteDownloadName(viewModel, selectedFormat)
-      printWindow.focus()
-      window.setTimeout(() => {
-        printWindow.print()
-      }, 350)
+      openRouteFormatPrintWindow(viewModel, selectedFormat, window)
     } catch (e) {
       setDownloadError(e?.message || 'No se pudo descargar el formato')
     }
