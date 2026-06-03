@@ -206,6 +206,7 @@ test('supervisor route plan preview uses ensure endpoint and reads generated sto
   assert.equal(response.data.customers.length, 1)
   assert.equal(response.data.customers[0].customer_id[0], 301)
   assert.equal(calls.some((call) => call.url.endsWith('/preview_customers')), false)
+  assert.equal(calls.find((call) => call.url.endsWith('/route_plan/ensure')).params.meta.tz, 'America/Mexico_City')
 })
 
 test('supervisor branch configs forbidden response degrades without throwing', async () => {

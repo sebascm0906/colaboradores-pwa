@@ -7911,6 +7911,7 @@ async function directSupervisorVentas(method, path, body) {
     return {
       employee_id: getEmployeeId() || undefined,
       warehouse_id: getWarehouseId() || undefined,
+      tz: 'America/Mexico_City',
     }
   }
 
