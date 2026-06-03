@@ -317,16 +317,14 @@ function normalizeLiquidation(detail = {}) {
   )
   const expected = number(summary.total_expected ?? summary.expected_total ?? (expectedCash + expectedCredit + expectedTransfer))
   const collected = number(summary.total_collected ?? summary.collected_total ?? rows.reduce((sum, row) => sum + row.amount, 0))
-  const cashDifference = number(receivedCash - expectedCash)
-  const effectiveDifference = number(expected - expectedCredit - expectedTransfer - expectedCash)
+  const difference = number(expected - expectedCredit - expectedCash)
 
   return {
     rows,
     totals: {
       expected,
       collected,
-      cashDifference,
-      effectiveDifference,
+      difference,
       credit: expectedCredit,
       cashExpected: expectedCash,
       cashReceived: receivedCash,
@@ -541,8 +539,7 @@ function formatSummaryRows(format) {
       { label: 'Kilos vendidos', value: format.sales.unavailable ? 'N/D' : `${format.sales.kilos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` },
       { label: 'Credito', value: money(format.liquidation.totals.credit) },
       { label: 'Cash / efectivo', value: money(format.liquidation.totals.cashExpected) },
-      { label: 'Diferencia cash', value: money(format.liquidation.totals.cashDifference) },
-      { label: 'Diferencia efectivo', value: money(format.liquidation.totals.effectiveDifference) },
+      { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
     ])}
     <h2>Lista de visitas</h2>
     ${visitTable}
@@ -552,13 +549,12 @@ function formatSummaryRows(format) {
     ${reloadTable}
     <h2>Liquidacion</h2>
     ${table(
-      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia cash', 'Diferencia efectivo'],
+      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia'],
       [[
         money(format.liquidation.totals.credit),
         money(format.liquidation.totals.cashExpected),
         money(format.liquidation.totals.cashReceived),
-        money(format.liquidation.totals.cashDifference),
-        money(format.liquidation.totals.effectiveDifference),
+        money(format.liquidation.totals.difference),
       ]],
     )}
   `
@@ -626,7 +622,7 @@ function formatTotals(vm, formatId) {
     return `<p><strong>Totales:</strong> Cargado ${escapeHtml(format.totals.loaded)} · Entregado ${escapeHtml(format.totals.delivered)} · Devuelto ${escapeHtml(format.totals.returned)} · Merma ${escapeHtml(format.totals.scrap)} · Diferencia ${escapeHtml(format.totals.difference)}</p>`
   }
   if (formatId === 'liquidation') {
-    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia cash:</strong> ${escapeHtml(money(format.totals.cashDifference))} · <strong>Diferencia efectivo:</strong> ${escapeHtml(money(format.totals.effectiveDifference))}</p>`
+    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
   }
   return ''
 }

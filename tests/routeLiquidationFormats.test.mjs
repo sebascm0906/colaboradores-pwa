@@ -60,8 +60,7 @@ test('closed route enables formats and normalizes inventory, scrap, corte, liqui
   assert.equal(vm.formats.liquidation.totals.credit, 50)
   assert.equal(vm.formats.liquidation.totals.cashExpected, 100)
   assert.equal(vm.formats.liquidation.totals.cashReceived, 100)
-  assert.equal(vm.formats.liquidation.totals.cashDifference, 0)
-  assert.equal(vm.formats.liquidation.totals.effectiveDifference, 0)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
   assert.equal(vm.formats.sales.unavailable, true)
 })
 
@@ -208,12 +207,13 @@ test('summary html removes recargas column from inventario y corte and shows kil
   assert.match(html, /Kilos vendidos/)
   assert.match(html, /Credito/)
   assert.match(html, /Cash \/ efectivo/)
-  assert.match(html, /Diferencia cash/)
-  assert.match(html, /Diferencia efectivo/)
+  assert.match(html, /Diferencia/)
+  assert.doesNotMatch(html, /Diferencia cash/)
+  assert.doesNotMatch(html, /Diferencia efectivo/)
   assert.doesNotMatch(html, /<th>Recargas<\/th>/)
 })
 
-test('summary keeps cash and effective differences at zero when route has no credit and no explicit cash capture', () => {
+test('summary keeps single difference at zero when sales match credit plus cash', () => {
   const vm = buildRouteFormatsViewModel({
     ...CLOSED_DETAIL,
     cash_received_amount: null,
@@ -239,6 +239,33 @@ test('summary keeps cash and effective differences at zero when route has no cre
   assert.equal(vm.formats.liquidation.totals.credit, 0)
   assert.equal(vm.formats.liquidation.totals.cashExpected, 5589)
   assert.equal(vm.formats.liquidation.totals.cashReceived, 5589)
-  assert.equal(vm.formats.liquidation.totals.cashDifference, 0)
-  assert.equal(vm.formats.liquidation.totals.effectiveDifference, 0)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
+})
+
+test('summary difference is zero when total sales minus credit equals cash', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    cash_received_amount: 0,
+    summary: {
+      by_method: { cash: 2264, credit: 4339 },
+      payments: { cash: { total: 0 }, credit: { total: 0 } },
+      expected_payments: { cash: { total: 2264 }, credit: { total: 4339 }, transfer: { total: 0 } },
+      total_expected: 6603,
+      total_collected: 6603,
+    },
+    sales: [
+      {
+        folio: 'S004',
+        customer_name: 'Cliente mixto',
+        payment_method: 'cash',
+        amount_total: 6603,
+        kg_total: 20,
+      },
+    ],
+  })
+
+  assert.equal(vm.formats.summary.sales.total, 6603)
+  assert.equal(vm.formats.liquidation.totals.credit, 4339)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 2264)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
 })
