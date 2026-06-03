@@ -11,12 +11,15 @@ import { safeNumber } from '../../lib/safeNumber'
 import { getMyRoutePlan, confirmLiquidacion } from './api'
 import { logScreenError } from '../shared/logScreenError'
 import { buildLiquidacionViewModel } from './liquidacionViewModel'
+import { autoCloseRouteAfterLiquidacion } from './routeAutoClose'
 import {
   fetchLiquidacion,
   saveLiquidacionLocal,
   getLiquidacionLocal,
+  getKmData,
   saveCierreState,
   getCierreState,
+  closeRouteWithValidation,
   fmtMoney,
 } from './routeControlService'
 
@@ -158,10 +161,26 @@ export default function ScreenLiquidacion() {
         cashDiff, creditDiff, transferDiff, totalDiff, notes, paymentBreakdown,
       }
       saveLiquidacionLocal(plan.id, snapshot)
-      saveCierreState(plan.id, { liquidacionDone: true, liquidacionAt: new Date().toISOString() })
+      const autoClose = await autoCloseRouteAfterLiquidacion({
+        plan,
+        getKmData,
+        saveCierreState,
+        closeRouteWithValidation,
+      })
       setConfirmed(true)
       setWarningOpen(null)
-      toast.success(payload.message || 'Liquidación confirmada')
+      if (autoClose.closeResult?.success) {
+        toast.success(`${payload.message || 'Liquidación confirmada'} y ruta cerrada`)
+      } else {
+        const err = new Error(autoClose.closeResult?.errors?.join('. ') || 'No se pudo cerrar ruta automáticamente')
+        err.context = {
+          plan_id: plan.id,
+          employee_id: session?.employee_id,
+          close_result: JSON.stringify(autoClose.closeResult ?? null).slice(0, 500),
+        }
+        logScreenError('ScreenLiquidacion', 'handleConfirm.autoCloseRoute', err)
+        toast.error('Liquidación confirmada, pero no se pudo cerrar la ruta automáticamente. Revisa Cierre de Ruta.')
+      }
     } catch (e) {
       // Network error, 404, 5xx, JSON parse error, etc.
       e.context = {
