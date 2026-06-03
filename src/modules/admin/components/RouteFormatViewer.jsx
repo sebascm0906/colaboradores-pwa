@@ -1,24 +1,15 @@
 import { useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import {
-  buildRouteFormatHtml,
   buildRouteFormatsViewModel,
   formatRouteMoney,
+  openRouteFormatPrintWindow,
 } from '../routeLiquidationFormats'
 
 const NUMBER_FORMAT = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 })
 
 function fmtNum(value) {
   return NUMBER_FORMAT.format(Number(value || 0))
-}
-
-function filenameSafe(value) {
-  return String(value || 'formato-ruta')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
 }
 
 export default function RouteFormatViewer({ detail }) {
@@ -37,16 +28,7 @@ export default function RouteFormatViewer({ detail }) {
     if (!viewModel.enabled) return
     setDownloadError('')
     try {
-      const html = buildRouteFormatHtml(viewModel, selectedFormat)
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${filenameSafe(viewModel.plan.name)}-${selectedFormat}.html`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      openRouteFormatPrintWindow(viewModel, selectedFormat, window)
     } catch (e) {
       setDownloadError(e?.message || 'No se pudo descargar el formato')
     }
@@ -257,7 +239,7 @@ function SummaryReport({ format }) {
     <>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
         gap: 8,
         marginBottom: 12,
       }}>
@@ -267,7 +249,9 @@ function SummaryReport({ format }) {
         <SummaryMetric label="Cumplimiento" value={`${fmtNum(format.visits.compliancePct)}%`} />
         <SummaryMetric label="Total ventas" value={format.sales.unavailable ? 'N/D' : formatRouteMoney(format.sales.total)} />
         <SummaryMetric label="Ventas" value={format.sales.unavailable ? 'N/D' : fmtNum(format.sales.count)} />
-        <SummaryMetric label="Recargas" value={fmtNum(format.reloads.totals.quantity)} />
+        <SummaryMetric label="Kilos vendidos" value={format.sales.unavailable ? 'N/D' : `${fmtNum(format.sales.kilos)} kg`} />
+        <SummaryMetric label="Crédito" value={formatRouteMoney(format.liquidation.totals.credit)} />
+        <SummaryMetric label="Cash / efectivo" value={formatRouteMoney(format.liquidation.totals.cashExpected)} />
         <SummaryMetric label="Diferencia" value={formatRouteMoney(format.liquidation.totals.difference)} />
       </div>
 
@@ -275,12 +259,13 @@ function SummaryReport({ format }) {
       {format.visitList.empty ? (
         <EmptyReport text="Sin lista de visitas disponible." />
       ) : (
-        <Table headers={['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado']} rows={format.visitList.rows.map((row) => [
+        <Table headers={['#', 'Cliente planeado', 'Estado', 'Venta', 'Importe', 'Producto vendido']} rows={format.visitList.rows.map((row) => [
           row.sequence || '-',
           row.customer,
-          row.plannedTime || '-',
-          row.visitTime || '-',
           row.status,
+          row.saleStatus,
+          formatRouteMoney(row.saleAmount),
+          row.soldProduct || '-',
         ])} />
       )}
 
@@ -288,10 +273,9 @@ function SummaryReport({ format }) {
       {format.inventory.empty ? (
         <EmptyReport text="Sin inventario disponible." />
       ) : (
-        <Table headers={['Producto', 'Cargado', 'Recargas', 'Vendido', 'Devuelto', 'Merma', 'Dif.']} rows={format.inventory.rows.map((row) => [
+        <Table headers={['Producto', 'Cargado', 'Vendido', 'Devuelto', 'Merma', 'Dif.']} rows={format.inventory.rows.map((row) => [
           row.product,
           fmtNum(row.loaded),
-          fmtNum(row.reloaded),
           fmtNum(row.delivered),
           fmtNum(row.returned),
           fmtNum(row.scrap),
@@ -299,22 +283,22 @@ function SummaryReport({ format }) {
         ])} />
       )}
 
-      <ReportSectionTitle title="Recargas" />
+      <ReportSectionTitle title="Cargas" />
       {format.reloads.empty ? (
-        <EmptyReport text="Sin recargas registradas." />
+        <EmptyReport text="Sin cargas registradas." />
       ) : (
-        <Table headers={['Folio', 'Producto', 'Cant.', 'Hora']} rows={format.reloads.rows.map((row) => [
+        <Table headers={['Folio', 'Producto', 'Cant.']} rows={format.reloads.rows.map((row) => [
           row.folio,
           row.product,
           fmtNum(row.quantity),
-          row.time || '-',
         ])} />
       )}
 
       <ReportSectionTitle title="Liquidacion" />
-      <Table headers={['Esperado', 'Cobrado', 'Diferencia']} rows={[[
-        formatRouteMoney(format.liquidation.totals.expected),
-        formatRouteMoney(format.liquidation.totals.collected),
+      <Table headers={['Crédito', 'Cash esperado', 'Cash recibido', 'Diferencia']} rows={[[
+        formatRouteMoney(format.liquidation.totals.credit),
+        formatRouteMoney(format.liquidation.totals.cashExpected),
+        formatRouteMoney(format.liquidation.totals.cashReceived),
         formatRouteMoney(format.liquidation.totals.difference),
       ]]} />
     </>
@@ -439,7 +423,7 @@ function LiquidationReport({ format }) {
       ])} />
       <TotalLine
         label="Resumen"
-        value={`Esperado ${formatRouteMoney(format.totals.expected)} · Cobrado ${formatRouteMoney(format.totals.collected)} · Diferencia ${formatRouteMoney(format.totals.difference)}`}
+        value={`Crédito ${formatRouteMoney(format.totals.credit)} · Cash esperado ${formatRouteMoney(format.totals.cashExpected)} · Cash recibido ${formatRouteMoney(format.totals.cashReceived)} · Diferencia ${formatRouteMoney(format.totals.difference)}`}
       />
     </>
   )

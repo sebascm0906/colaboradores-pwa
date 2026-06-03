@@ -4,6 +4,8 @@ import { test } from 'node:test'
 import {
   buildRouteFormatsViewModel,
   buildRouteFormatHtml,
+  buildRouteDownloadName,
+  openRouteFormatPrintWindow,
 } from '../src/modules/admin/routeLiquidationFormats.js'
 
 const CLOSED_DETAIL = {
@@ -14,11 +16,14 @@ const CLOSED_DETAIL = {
   vehicle_name: 'Unidad 12',
   date: '2026-05-27',
   state: 'closed',
+  cash_received_amount: 100,
   summary: {
     by_method: { cash: 100, credit: 50 },
+    payments: { cash: { total: 100 }, credit: { total: 0 } },
+    expected_payments: { cash: { total: 100 }, credit: { total: 50 }, transfer: { total: 0 } },
     total_expected: 150,
-    total_collected: 145,
-    difference: -5,
+    total_collected: 150,
+    difference: -50,
   },
   reconciliation_lines: [
     {
@@ -53,7 +58,11 @@ test('closed route enables formats and normalizes inventory, scrap, corte, liqui
   assert.equal(vm.formats.corte.totals.delivered, 12)
   assert.equal(vm.formats.liquidation.rows.length, 2)
   assert.equal(vm.formats.liquidation.totals.expected, 150)
-  assert.equal(vm.formats.liquidation.totals.collected, 145)
+  assert.equal(vm.formats.liquidation.totals.collected, 150)
+  assert.equal(vm.formats.liquidation.totals.credit, 50)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 100)
+  assert.equal(vm.formats.liquidation.totals.cashReceived, 100)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
   assert.equal(vm.formats.sales.unavailable, true)
 })
 
@@ -72,14 +81,21 @@ test('sales format normalizes common backend sales shapes', () => {
   const vm = buildRouteFormatsViewModel({
     ...CLOSED_DETAIL,
     sale_orders: [
-      { name: 'S001', customer_name: 'Cliente A', payment_method: 'cash', amount_total: 123.5 },
-      { folio: 'S002', partner_name: 'Cliente B', payment_method: 'credit', total: 200 },
+      {
+        name: 'S001',
+        customer_name: 'Cliente A',
+        payment_method: 'cash',
+        amount_total: 123.5,
+        lines: [{ quantity: 2, weight: 5.5 }],
+      },
+      { folio: 'S002', partner_name: 'Cliente B', payment_method: 'credit', total: 200, kg_total: 3 },
     ],
   })
 
   assert.equal(vm.formats.sales.unavailable, false)
   assert.deepEqual(vm.formats.sales.rows.map((row) => row.folio), ['S001', 'S002'])
   assert.equal(vm.formats.sales.totals.amount, 323.5)
+  assert.equal(vm.formats.sales.totals.kilos, 14)
 })
 
 test('downloadable html includes escaped plan and selected format content', () => {
@@ -115,13 +131,12 @@ test('one page summary includes visits and reloads', () => {
   assert.equal(vm.formats.summary.visits.compliancePct, 91)
   assert.equal(vm.formats.summary.reloads.rows.length, 2)
   assert.equal(vm.formats.summary.reloads.totals.quantity, 7)
-  assert.equal(vm.formats.summary.inventory.rows[0].reloaded, 4)
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
-  assert.match(html, /Resumen 1 hoja/)
+  assert.match(html, /Resumen de Liquidacion/)
   assert.match(html, /Visitas planificadas/)
-  assert.match(html, /Recargas/)
+  assert.match(html, /Cargas/)
   assert.match(html, /REC-001/)
 })
 
@@ -136,6 +151,9 @@ test('one page summary includes planned and visited customer list with visit tim
         planned_time: '10:00',
         actual_start_time: '2026-05-27 10:18:00',
         result_status: 'visited',
+        has_sale: true,
+        sales_amount: 123.5,
+        product_sold: 'Bolsa 5kg',
       },
       {
         id: 2,
@@ -143,6 +161,7 @@ test('one page summary includes planned and visited customer list with visit tim
         customer: 'Cliente Planeado',
         scheduled_time: '09:30',
         result_status: 'not_visited',
+        has_sale: false,
       },
     ],
   })
@@ -154,8 +173,12 @@ test('one page summary includes planned and visited customer list with visit tim
   ])
   assert.equal(vm.formats.summary.visitList.rows[0].visitTime, '')
   assert.equal(vm.formats.summary.visitList.rows[0].status, 'Sin visita')
+  assert.equal(vm.formats.summary.visitList.rows[0].saleStatus, 'No venta')
   assert.equal(vm.formats.summary.visitList.rows[1].visitTime, '10:18')
   assert.equal(vm.formats.summary.visitList.rows[1].status, 'Visitado')
+  assert.equal(vm.formats.summary.visitList.rows[1].saleStatus, 'Venta')
+  assert.equal(vm.formats.summary.visitList.rows[1].saleAmount, 123.5)
+  assert.equal(vm.formats.summary.visitList.rows[1].soldProduct, 'Bolsa 5kg')
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
@@ -163,5 +186,245 @@ test('one page summary includes planned and visited customer list with visit tim
   assert.match(html, /Cliente Planeado/)
   assert.match(html, /Sin visita/)
   assert.match(html, /Cliente Visitado/)
-  assert.match(html, /10:18/)
+  assert.match(html, /Producto vendido/)
+  assert.match(html, /\$123.50/)
+  assert.match(html, /Bolsa 5kg/)
+  assert.match(html, /Venta/)
+  assert.match(html, /No venta/)
+})
+
+test('summary html removes recargas column from inventario y corte and shows kilos cash credit metrics', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    sales: [
+      {
+        folio: 'S001',
+        customer_name: 'Cliente A',
+        payment_method: 'cash',
+        amount_total: 100,
+        kg_total: 11,
+      },
+    ],
+    route_stops: [
+      { id: 1, sequence: 10, customer_name: 'PONLE CAFE MORELOS', actual_start_time: '2026-05-27 21:13:00', has_sale: false, state: 'done' },
+    ],
+  })
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /Kilos vendidos/)
+  assert.match(html, /Credito/)
+  assert.match(html, /Cash \/ efectivo/)
+  assert.match(html, /Diferencia/)
+  assert.doesNotMatch(html, /Diferencia cash/)
+  assert.doesNotMatch(html, /Diferencia efectivo/)
+  assert.doesNotMatch(html, /<th>Recargas<\/th>/)
+  assert.doesNotMatch(html, /Hora plan/)
+  assert.doesNotMatch(html, /Hora visita/)
+})
+
+test('summary keeps single difference at zero when sales match credit plus cash', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    cash_received_amount: null,
+    summary: {
+      by_method: { cash: 5589, credit: 0 },
+      payments: { cash: { total: 0 }, credit: { total: 0 } },
+      expected_payments: { cash: { total: 5589 }, credit: { total: 0 }, transfer: { total: 0 } },
+      total_expected: 5589,
+      total_collected: 5589,
+    },
+    sales: [
+      {
+        folio: 'S003',
+        customer_name: 'Cliente contado',
+        payment_method: 'cash',
+        amount_total: 5589,
+        kg_total: 15,
+      },
+    ],
+  })
+
+  assert.equal(vm.formats.summary.sales.total, 5589)
+  assert.equal(vm.formats.liquidation.totals.credit, 0)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 5589)
+  assert.equal(vm.formats.liquidation.totals.cashReceived, 5589)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
+})
+
+test('summary difference is zero when total sales minus credit equals cash', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    cash_received_amount: 0,
+    summary: {
+      by_method: { cash: 2264, credit: 4339 },
+      payments: { cash: { total: 0 }, credit: { total: 0 } },
+      expected_payments: { cash: { total: 2264 }, credit: { total: 4339 }, transfer: { total: 0 } },
+      total_expected: 6603,
+      total_collected: 6603,
+    },
+    sales: [
+      {
+        folio: 'S004',
+        customer_name: 'Cliente mixto',
+        payment_method: 'cash',
+        amount_total: 6603,
+        kg_total: 20,
+      },
+    ],
+  })
+
+  assert.equal(vm.formats.summary.sales.total, 6603)
+  assert.equal(vm.formats.liquidation.totals.credit, 4339)
+  assert.equal(vm.formats.liquidation.totals.cashExpected, 2264)
+  assert.equal(vm.formats.liquidation.totals.difference, 0)
+})
+
+test('download name uses corte y liquidacion plus driver and plan', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    name: 'RPLAN/2026/00300',
+    driver_name: 'Ricardo Miranda',
+  })
+
+  assert.equal(
+    buildRouteDownloadName(vm, 'summary'),
+    'corte-y-liquidacion-ricardo-miranda-rplan-2026-00300.pdf',
+  )
+})
+
+test('summary visit list enriches sales by partner and hides visit time columns', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    sales: [
+      {
+        partner_id: [91, 'Cliente Visitado'],
+        customer_name: 'Cliente Visitado',
+        amount_total: 250,
+        lines: [
+          { product_name: 'Molido Chico', quantity: 2 },
+          { product_name: 'Bolsa 13kg', quantity: 1 },
+        ],
+      },
+    ],
+    route_stops: [
+      {
+        id: 1,
+        sequence: 10,
+        partner_id: [91, 'Cliente Visitado'],
+        partner_name: 'Cliente Visitado',
+        actual_start_time: '2026-05-27 10:18:00',
+        result_status: 'visited',
+      },
+    ],
+  })
+
+  const row = vm.formats.summary.visitList.rows[0]
+  assert.equal(row.saleStatus, 'Venta')
+  assert.equal(row.saleAmount, 250)
+  assert.equal(row.soldProduct, 'Molido Chico, Bolsa 13kg')
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+  assert.match(html, /Importe/)
+  assert.match(html, /Producto vendido/)
+  assert.match(html, /Molido Chico, Bolsa 13kg/)
+  assert.doesNotMatch(html, /Hora plan/)
+  assert.doesNotMatch(html, /Hora visita/)
+})
+
+test('summary html uses polished printable layout and cargas section title', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    reload_lines: [
+      { product_name: 'Bolsa 5kg', quantity: 4, name: 'REC-001', date: '15:20' },
+    ],
+  })
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /class="report-shell"/)
+  assert.match(html, /Resumen operativo/)
+  assert.match(html, /Cargas/)
+  assert.doesNotMatch(html, /Recargas/)
+  assert.doesNotMatch(html, /<th>Hora<\/th>/)
+})
+
+test('print window opens synchronously without noopener before building the report html', () => {
+  const vm = buildRouteFormatsViewModel(CLOSED_DETAIL)
+  const calls = []
+  const printWindow = {
+    document: {
+      open() { calls.push('document.open') },
+      write(html) {
+        calls.push('document.write')
+        assert.match(html, /Reporte probado/)
+      },
+      close() { calls.push('document.close') },
+      title: '',
+    },
+    focus() { calls.push('focus') },
+    print() { calls.push('print') },
+    addEventListener(event, fn, options) {
+      calls.push(`addEventListener:${event}:${options?.once ? 'once' : 'many'}`)
+      fn()
+    },
+  }
+  const browserWindow = {
+    open(...args) {
+      calls.push(`open:${args.length}:${args[2] || ''}`)
+      return printWindow
+    },
+    setTimeout(fn, delay) {
+      calls.push(`setTimeout:${delay}`)
+      fn()
+    },
+  }
+
+  openRouteFormatPrintWindow(
+    vm,
+    'summary',
+    browserWindow,
+    () => {
+      calls.push('buildHtml')
+      return '<!doctype html><title>Reporte probado</title>'
+    },
+  )
+
+  assert.deepEqual(calls, [
+    'open:2:',
+    'buildHtml',
+    'document.open',
+    'document.write',
+    'document.close',
+    'addEventListener:load:once',
+    'setTimeout:150',
+    'focus',
+    'print',
+    'setTimeout:700',
+  ])
+  assert.equal(printWindow.document.title, 'corte-y-liquidacion-chofer-uno-plan-77.pdf')
+})
+
+test('print window reports blocked popup before building html', () => {
+  const vm = buildRouteFormatsViewModel(CLOSED_DETAIL)
+  let builtHtml = false
+
+  assert.throws(
+    () => openRouteFormatPrintWindow(
+      vm,
+      'summary',
+      {
+        open() {
+          return null
+        },
+        setTimeout() {},
+      },
+      () => {
+        builtHtml = true
+        return '<!doctype html>'
+      },
+    ),
+    /bloqueo/i,
+  )
+  assert.equal(builtHtml, false)
 })

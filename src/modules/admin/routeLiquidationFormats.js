@@ -1,5 +1,5 @@
 export const ROUTE_FORMATS = [
-  { id: 'summary', label: 'Resumen 1 hoja' },
+  { id: 'summary', label: 'Resumen de Liquidacion' },
   { id: 'sales', label: 'Ventas' },
   { id: 'inventory', label: 'Inventario cargado' },
   { id: 'scrap', label: 'Mermas' },
@@ -51,15 +51,25 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+function slug(value) {
+  return text(value || 'reporte')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+}
+
 function normalizePlan(detail = {}) {
-  const state = text(detail.state || detail.plan_state).toLowerCase()
+  const plan = detail.plan && typeof detail.plan === 'object' ? detail.plan : {}
+  const state = text(detail.state || plan.state || detail.plan_state).toLowerCase()
   return {
-    id: detail.id || detail.plan_id || '',
-    name: text(detail.name || detail.plan_name || (detail.id ? `Plan #${detail.id}` : 'Plan de ruta')),
-    routeName: text(detail.route_name || detail.route || detail.route_id, 'Ruta'),
-    driverName: text(detail.driver_name || detail.driver || detail.salesperson_name || detail.salesperson, 'Chofer'),
-    vehicleName: text(detail.vehicle_name || detail.vehicle || detail.vehicle_id, ''),
-    date: text(detail.date || detail.route_date || detail.closed_date || detail.validated_date, ''),
+    id: detail.id || plan.id || detail.plan_id || plan.plan_id || '',
+    name: text(detail.name || plan.name || detail.plan_name || (detail.id ? `Plan #${detail.id}` : 'Plan de ruta')),
+    routeName: text(detail.route_name || plan.route_name || detail.route || detail.route_id, 'Ruta'),
+    driverName: text(detail.driver_name || plan.driver_name || detail.driver || detail.salesperson_name || detail.salesperson, 'Chofer'),
+    vehicleName: text(detail.vehicle_name || plan.vehicle_name || detail.vehicle || detail.vehicle_id, ''),
+    date: text(detail.date || plan.date || detail.route_date || detail.closed_date || detail.validated_date, ''),
     state,
   }
 }
@@ -143,6 +153,31 @@ function shortTime(value) {
   return `${match[1].padStart(2, '0')}:${match[2]}`
 }
 
+function normalizeLookupKey(value) {
+  return text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function relationId(value) {
+  if (Array.isArray(value)) return value[0] || ''
+  return value || ''
+}
+
+function productNameFromLine(line = {}) {
+  return text(line.product_name || line.product || line.name || line.product_id, '')
+}
+
+function summarizeProducts(lines = []) {
+  const names = [...new Set(lines.map(productNameFromLine).filter(Boolean))]
+  if (names.length === 0) return ''
+  if (names.length <= 2) return names.join(', ')
+  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+}
+
 function isVisitedStop(row = {}) {
   const status = text(row.result_status || row.status || row.state).toLowerCase()
   if (row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time) return true
@@ -151,26 +186,64 @@ function isVisitedStop(row = {}) {
 }
 
 function normalizeVisitRow(row = {}) {
-  const customerId = row.customer_id?.[0] || row.customer_id || row.partner_id?.[0] || row.partner_id || ''
+  const customerId = relationId(row.customer_id) || relationId(row.partner_id) || ''
   const visited = isVisitedStop(row)
   const visitTime = shortTime(row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time)
+  const hasSale = row.has_sale != null
+    ? Boolean(row.has_sale)
+    : firstNumber(row.sale_order_count, row.sales_count, row.sales_amount) > 0
+  const saleStatus = hasSale ? 'Venta' : 'No venta'
+  const customer = text(
+    row.customer_name || row.partner_name || row.customer || row.partner || row.customer_id || row.partner_id,
+    customerId ? `Cliente #${customerId}` : 'Cliente',
+  )
 
   return {
     id: row.id || customerId || text(row.customer_name || row.customer || row.partner_name),
+    partnerId: customerId,
     sequence: firstNumber(row.sequence, row.stop_sequence, row.order),
-    customer: text(
-      row.customer_name || row.partner_name || row.customer || row.partner || row.customer_id || row.partner_id,
-      customerId ? `Cliente #${customerId}` : 'Cliente',
-    ),
+    customer,
+    customerKey: normalizeLookupKey(customer),
     plannedTime: shortTime(row.planned_time || row.scheduled_time || row.expected_time || row.time_window || row.window || ''),
     visitTime: visited ? visitTime : '',
     status: visited ? 'Visitado' : 'Sin visita',
+    saleStatus,
+    saleAmount: firstNumber(row.sales_amount, row.sale_amount, row.amount_total, row.total),
+    soldProduct: text(row.product_sold || row.sold_product || row.product_names || row.products || row.product_name, ''),
   }
 }
 
-function normalizeVisitList(detail = {}) {
+function buildSalesLookup(salesRows = []) {
+  return salesRows.reduce((acc, sale) => {
+    const applySale = (existing = {}) => ({
+      amount: number(existing.amount) + number(sale.amount),
+      products: [...new Set([...(existing.products || []), sale.productSummary].filter(Boolean))],
+    })
+    if (sale.partnerId) {
+      acc.byPartner[String(sale.partnerId)] = applySale(acc.byPartner[String(sale.partnerId)])
+    }
+    const key = normalizeLookupKey(sale.customer)
+    if (key) acc.byCustomer[key] = applySale(acc.byCustomer[key])
+    return acc
+  }, { byPartner: {}, byCustomer: {} })
+}
+
+function enrichVisitWithSale(row, salesLookup) {
+  const sale = salesLookup.byPartner[String(row.partnerId)] || salesLookup.byCustomer[row.customerKey] || null
+  if (!sale) return row
+  return {
+    ...row,
+    saleStatus: sale.amount > 0 ? 'Venta' : row.saleStatus,
+    saleAmount: row.saleAmount || sale.amount,
+    soldProduct: row.soldProduct || sale.products.join(', '),
+  }
+}
+
+function normalizeVisitList(detail = {}, salesRows = []) {
+  const salesLookup = buildSalesLookup(salesRows)
   const rows = rawVisitRows(detail)
     .map(normalizeVisitRow)
+    .map((row) => enrichVisitWithSale(row, salesLookup))
     .sort((a, b) => {
       if (a.sequence !== b.sequence) return a.sequence - b.sequence
       return a.customer.localeCompare(b.customer, 'es')
@@ -289,14 +362,42 @@ function normalizePaymentEntries(summary = {}) {
 
 function normalizeLiquidation(detail = {}) {
   const summary = detail.summary || detail.liquidation_summary || {}
+  const expectedBuckets = summary.expected_payments || {}
+  const paymentBuckets = summary.payments || {}
   const rows = normalizePaymentEntries(summary)
+  const expectedCash = firstNumber(expectedBuckets.cash?.total, expectedBuckets.cash, summary.total_expected)
+  const expectedCredit = firstNumber(expectedBuckets.credit?.total, expectedBuckets.credit)
+  const expectedTransfer = firstNumber(expectedBuckets.transfer?.total, expectedBuckets.transfer)
+  const hasExplicitCashReceived = [
+    detail.cash_received_amount,
+    detail.plan?.cash_received_amount,
+  ].some((value) => value != null && value !== false && value !== '')
+  const receivedCash = hasExplicitCashReceived
+    ? firstNumber(
+      detail.cash_received_amount,
+      detail.plan?.cash_received_amount,
+    )
+    : expectedCash
+  const receivedTransfer = firstNumber(
+    paymentBuckets.transfer?.total,
+    summary.by_method?.transfer,
+  )
+  const expected = number(summary.total_expected ?? summary.expected_total ?? (expectedCash + expectedCredit + expectedTransfer))
   const collected = number(summary.total_collected ?? summary.collected_total ?? rows.reduce((sum, row) => sum + row.amount, 0))
-  const expected = number(summary.total_expected ?? summary.expected_total ?? collected)
-  const difference = number(summary.difference ?? (collected - expected))
+  const difference = number(expected - expectedCredit - expectedCash)
 
   return {
     rows,
-    totals: { expected, collected, difference },
+    totals: {
+      expected,
+      collected,
+      difference,
+      credit: expectedCredit,
+      cashExpected: expectedCash,
+      cashReceived: receivedCash,
+      transfer: expectedTransfer,
+      transferReceived: receivedTransfer,
+    },
     empty: rows.length === 0 && expected === 0 && collected === 0,
   }
 }
@@ -317,21 +418,39 @@ function normalizeSale(row = {}) {
   const customer = text(row.customer_name || row.partner_name || row.customer || row.partner_id, 'Cliente')
   const method = text(row.payment_method || row.method || row.payment_type || row.payment_label, '')
   const amount = number(row.amount_total ?? row.total ?? row.amount ?? row.price_total)
+  const lines = Array.isArray(row.lines) ? row.lines : []
+  const productSummary = text(row.product_sold || row.sold_product || row.product_names || row.products || row.product_name, summarizeProducts(lines))
+  const kilos = number(
+    row.kg_total
+    ?? lines.reduce((sum, line) => sum + number(line.kg_total ?? ((line.weight || 0) * (line.quantity || 0))), 0),
+  )
 
   return {
     id: row.id || folio,
+    partnerId: relationId(row.partner_id || row.customer_id),
     folio,
     customer,
     method,
     amount,
+    kilos,
+    productSummary,
   }
 }
 
 function normalizeSales(detail = {}) {
   const rows = rawSales(detail).map(normalizeSale)
+  const byMethod = rows.reduce((acc, row) => {
+    const key = text(row.method).toLowerCase() || 'cash'
+    acc[key] = number(acc[key]) + number(row.amount)
+    return acc
+  }, {})
   return {
     rows,
-    totals: { amount: rows.reduce((sum, row) => sum + row.amount, 0) },
+    totals: {
+      amount: rows.reduce((sum, row) => sum + row.amount, 0),
+      kilos: rows.reduce((sum, row) => sum + row.kilos, 0),
+      byMethod,
+    },
     unavailable: rows.length === 0,
   }
 }
@@ -345,15 +464,18 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
     sales: {
       total: sales.totals.amount,
       count: sales.rows.length,
+      kilos: sales.totals.kilos,
+      credit: liquidation.totals.credit,
+      cash: liquidation.totals.cashExpected,
+      cashReceived: liquidation.totals.cashReceived,
       unavailable: sales.unavailable,
     },
-    visitList: normalizeVisitList(detail),
+    visitList: normalizeVisitList(detail, sales.rows),
     inventory: {
       rows: lines.map((line) => ({
         id: line.id,
         product: line.product,
         loaded: line.loaded,
-        reloaded: number(reloadTotalsByProduct[line.product]),
         delivered: line.delivered,
         returned: line.returned,
         scrap: line.scrap,
@@ -361,7 +483,6 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
       })),
       totals: {
         loaded: lineTotals.loaded,
-        reloaded: totalReloaded,
         delivered: lineTotals.delivered,
         returned: lineTotals.returned,
         scrap: lineTotals.scrap,
@@ -446,11 +567,10 @@ function formatSummaryRows(format) {
   const inventoryTable = format.inventory.empty
     ? '<p class="empty">Sin inventario disponible.</p>'
     : table(
-      ['Producto', 'Cargado', 'Recargas', 'Vendido', 'Devuelto', 'Merma', 'Dif.'],
+      ['Producto', 'Cargado', 'Vendido', 'Devuelto', 'Merma', 'Dif.'],
       format.inventory.rows.map((row) => [
         row.product,
         row.loaded,
-        row.reloaded,
         row.delivered,
         row.returned,
         row.scrap,
@@ -458,25 +578,33 @@ function formatSummaryRows(format) {
       ]),
     )
   const reloadTable = format.reloads.empty
-    ? '<p class="empty">Sin recargas registradas.</p>'
+    ? '<p class="empty">Sin cargas registradas.</p>'
     : table(
-      ['Folio', 'Producto', 'Cant.', 'Hora'],
-      format.reloads.rows.map((row) => [row.folio, row.product, row.quantity, row.time || '-']),
+      ['Folio', 'Producto', 'Cant.'],
+      format.reloads.rows.map((row) => [row.folio, row.product, row.quantity]),
     )
   const visitTable = format.visitList.empty
     ? '<p class="empty">Sin lista de visitas disponible.</p>'
     : table(
-      ['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado'],
+      ['#', 'Cliente planeado', 'Estado', 'Venta', 'Importe', 'Producto vendido'],
       format.visitList.rows.map((row) => [
         row.sequence || '-',
         row.customer,
-        row.plannedTime || '-',
-        row.visitTime || '-',
         row.status,
+        row.saleStatus,
+        money(row.saleAmount),
+        row.soldProduct || '-',
       ]),
     )
 
   return `
+    <section class="hero-card">
+      <div>
+        <p class="eyebrow">Resumen operativo</p>
+        <h2 class="hero-title">Corte y liquidacion de ruta</h2>
+        <p class="hero-copy">Resumen consolidado de visitas, inventario, cargas y liquidacion del repartidor.</p>
+      </div>
+    </section>
     ${metricGrid([
       { label: 'Visitas planificadas', value: format.visits.planned },
       { label: 'Visitas realizadas', value: format.visits.done },
@@ -484,21 +612,24 @@ function formatSummaryRows(format) {
       { label: 'Cumplimiento', value: `${format.visits.compliancePct}%` },
       { label: 'Total ventas', value: format.sales.unavailable ? 'N/D' : money(format.sales.total) },
       { label: 'Ventas', value: format.sales.unavailable ? 'N/D' : format.sales.count },
-      { label: 'Recargas', value: format.reloads.totals.quantity },
+      { label: 'Kilos vendidos', value: format.sales.unavailable ? 'N/D' : `${format.sales.kilos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` },
+      { label: 'Credito', value: money(format.liquidation.totals.credit) },
+      { label: 'Cash / efectivo', value: money(format.liquidation.totals.cashExpected) },
       { label: 'Diferencia', value: money(format.liquidation.totals.difference) },
     ])}
     <h2>Lista de visitas</h2>
     ${visitTable}
     <h2>Inventario y corte</h2>
     ${inventoryTable}
-    <h2>Recargas</h2>
+    <h2>Cargas</h2>
     ${reloadTable}
     <h2>Liquidacion</h2>
     ${table(
-      ['Esperado', 'Cobrado', 'Diferencia'],
+      ['Credito', 'Cash esperado', 'Cash recibido', 'Diferencia'],
       [[
-        money(format.liquidation.totals.expected),
-        money(format.liquidation.totals.collected),
+        money(format.liquidation.totals.credit),
+        money(format.liquidation.totals.cashExpected),
+        money(format.liquidation.totals.cashReceived),
         money(format.liquidation.totals.difference),
       ]],
     )}
@@ -567,7 +698,7 @@ function formatTotals(vm, formatId) {
     return `<p><strong>Totales:</strong> Cargado ${escapeHtml(format.totals.loaded)} · Entregado ${escapeHtml(format.totals.delivered)} · Devuelto ${escapeHtml(format.totals.returned)} · Merma ${escapeHtml(format.totals.scrap)} · Diferencia ${escapeHtml(format.totals.difference)}</p>`
   }
   if (formatId === 'liquidation') {
-    return `<p><strong>Esperado:</strong> ${escapeHtml(money(format.totals.expected))} · <strong>Cobrado:</strong> ${escapeHtml(money(format.totals.collected))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
+    return `<p><strong>Crédito:</strong> ${escapeHtml(money(format.totals.credit))} · <strong>Cash esperado:</strong> ${escapeHtml(money(format.totals.cashExpected))} · <strong>Cash recibido:</strong> ${escapeHtml(money(format.totals.cashReceived))} · <strong>Diferencia:</strong> ${escapeHtml(money(format.totals.difference))}</p>`
   }
   return ''
 }
@@ -587,37 +718,100 @@ export function buildRouteFormatHtml(viewModel, formatId) {
   <title>${escapeHtml(title)} - ${escapeHtml(vm.plan.name)}</title>
   <style>
     @page { size: letter; margin: 12mm; }
-    body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 11px; }
-    header { border-bottom: 2px solid #111827; margin-bottom: 18px; padding-bottom: 12px; }
-    h1 { font-size: 20px; margin: 0 0 6px; }
-    h2 { font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; }
-    .meta { color: #4b5563; font-size: 11px; line-height: 1.5; }
-    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0; }
-    .metric { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px; background: #f9fafb; }
-    .metric span { display: block; color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-    .metric strong { display: block; margin-top: 3px; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-    th, td { border: 1px solid #d1d5db; padding: 5px 6px; font-size: 10px; text-align: left; }
-    th { background: #f3f4f6; font-weight: 700; }
-    .totals { margin-top: 14px; font-size: 13px; }
-    .empty { padding: 14px; border: 1px dashed #d1d5db; color: #6b7280; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #14213d; margin: 0; font-size: 11px; background: #f4f7fb; }
+    .report-shell { background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 1px solid #d8e2f0; border-radius: 18px; padding: 20px; }
+    header { margin-bottom: 18px; padding: 18px; border: 1px solid #dbe5f2; border-radius: 16px; background: linear-gradient(135deg, #f8fbff 0%, #edf4ff 100%); }
+    .header-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    h2 { font-size: 12px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.1em; color: #5c6f82; }
+    .eyebrow { margin: 0; color: #5c6f82; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+    .meta { color: #516173; font-size: 11px; line-height: 1.6; }
+    .meta-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-top: 12px; }
+    .meta-card { padding: 12px 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 14px; }
+    .meta-label { display: block; color: #6b7c8f; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+    .report-chip { padding: 8px 12px; border-radius: 999px; background: #143d73; color: white; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+    .hero-card { padding: 14px 16px; border: 1px solid #dbe5f2; border-radius: 16px; background: #ffffff; margin-bottom: 14px; }
+    .hero-title { font-size: 18px; margin: 4px 0 6px; }
+    .hero-copy { margin: 0; color: #617386; font-size: 11px; }
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 18px; }
+    .metric { border: 1px solid #dbe5f2; border-radius: 14px; padding: 10px; background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%); min-height: 68px; }
+    .metric span { display: block; color: #6b7c8f; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric strong { display: block; margin-top: 6px; font-size: 16px; line-height: 1.2; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 6px; border: 1px solid #dbe5f2; border-radius: 14px; overflow: hidden; }
+    th, td { padding: 8px 10px; font-size: 10px; text-align: left; }
+    th { background: #eef4fb; color: #607386; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #dbe5f2; }
+    td { border-bottom: 1px solid #ebf1f8; }
+    tbody tr:nth-child(even) td { background: #fbfdff; }
+    tbody tr:last-child td { border-bottom: none; }
+    .totals { margin-top: 16px; font-size: 12px; color: #243447; padding: 12px 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 14px; }
+    .empty { padding: 16px; border: 1px dashed #c9d6e6; color: #6b7c8f; background: #fbfdff; border-radius: 14px; }
   </style>
 </head>
 <body>
+  <div class="report-shell">
   <header>
-    <h1>${escapeHtml(title)}</h1>
-    <div class="meta">
+    <div class="header-top">
+      <div>
+        <p class="eyebrow">Liquidaciones de ruta</p>
+        <h1>${escapeHtml(title)}</h1>
+      </div>
+      <div class="report-chip">Corte y liquidacion</div>
+    </div>
+    <div class="meta-card meta">
       <div><strong>Plan:</strong> ${escapeHtml(vm.plan.name)}</div>
       <div><strong>Ruta:</strong> ${escapeHtml(vm.plan.routeName)} · <strong>Chofer:</strong> ${escapeHtml(vm.plan.driverName)}</div>
       <div><strong>Unidad:</strong> ${escapeHtml(vm.plan.vehicleName || '-')} · <strong>Fecha:</strong> ${escapeHtml(vm.plan.date || '-')}</div>
     </div>
+    <div class="meta-card">
+      <span class="meta-label">Resumen del reparto</span>
+      <div class="meta">Chofer: ${escapeHtml(vm.plan.driverName)}<br>Unidad: ${escapeHtml(vm.plan.vehicleName || '-')}<br>Fecha: ${escapeHtml(vm.plan.date || '-')}</div>
+    </div>
   </header>
   ${body}
   <div class="totals">${formatTotals(vm, formatId)}</div>
+  </div>
 </body>
 </html>`
 }
 
 export function formatRouteMoney(value) {
   return money(value)
+}
+
+export function buildRouteDownloadName(viewModel, formatId) {
+  const vm = viewModel || buildRouteFormatsViewModel({})
+  if (formatId === 'summary') {
+    return `${slug('Corte y liquidacion')}-${slug(vm.plan.driverName)}-${slug(vm.plan.name)}.pdf`
+  }
+  return `${slug(getFormatTitle(formatId))}-${slug(vm.plan.driverName)}-${slug(vm.plan.name)}.pdf`
+}
+
+export function openRouteFormatPrintWindow(
+  viewModel,
+  formatId,
+  browserWindow = globalThis.window,
+  htmlBuilder = buildRouteFormatHtml,
+) {
+  const printWindow = browserWindow?.open?.('', '_blank')
+  if (!printWindow) throw new Error('El navegador bloqueo la ventana de descarga')
+
+  const html = htmlBuilder(viewModel, formatId)
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+  printWindow.document.title = buildRouteDownloadName(viewModel, formatId)
+
+  let printed = false
+  const printReport = () => {
+    if (printed) return
+    printed = true
+    printWindow.focus()
+    printWindow.print()
+  }
+
+  printWindow.addEventListener?.('load', () => {
+    browserWindow.setTimeout(printReport, 150)
+  }, { once: true })
+  browserWindow.setTimeout(printReport, 700)
 }

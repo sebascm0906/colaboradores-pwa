@@ -29,6 +29,15 @@ export default function TransformationHistoryList({ items, sw, onCancel, cancell
               <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '4px 0 0' }}>
                 Barras: {Number(item.input_qty_units || item.input_qty || 0).toFixed(0)} · Salida: {Number(item.actual_output_qty_units || item.output_qty_units || 0).toFixed(2)}
               </p>
+              {item.create_date ? (
+                <p style={{ ...typo.caption, color: TOKENS.colors.textMuted, margin: '2px 0 0' }}>
+                  {new Date(item.create_date.replace(' ', 'T') + 'Z').toLocaleString('es-MX', {
+                    day: '2-digit', month: 'short',
+                    hour: '2-digit', minute: '2-digit',
+                    timeZone: 'America/Mexico_City',
+                  })}
+                </p>
+              ) : null}
               <p style={{ ...typo.caption, color: item.irregularity_flag ? TOKENS.colors.warning : TOKENS.colors.success, margin: '4px 0 0' }}>
                 Esperado {Number(item.expected_output_qty_units || 0).toFixed(2)} · Variacion {Number(item.variance_units || 0).toFixed(2)}
               </p>
