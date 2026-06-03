@@ -1,5 +1,5 @@
 export const ROUTE_FORMATS = [
-  { id: 'summary', label: 'Resumen 1 hoja' },
+  { id: 'summary', label: 'Resumen de Liquidacion' },
   { id: 'sales', label: 'Ventas' },
   { id: 'inventory', label: 'Inventario cargado' },
   { id: 'scrap', label: 'Mermas' },
@@ -153,6 +153,31 @@ function shortTime(value) {
   return `${match[1].padStart(2, '0')}:${match[2]}`
 }
 
+function normalizeLookupKey(value) {
+  return text(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function relationId(value) {
+  if (Array.isArray(value)) return value[0] || ''
+  return value || ''
+}
+
+function productNameFromLine(line = {}) {
+  return text(line.product_name || line.product || line.name || line.product_id, '')
+}
+
+function summarizeProducts(lines = []) {
+  const names = [...new Set(lines.map(productNameFromLine).filter(Boolean))]
+  if (names.length === 0) return ''
+  if (names.length <= 2) return names.join(', ')
+  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+}
+
 function isVisitedStop(row = {}) {
   const status = text(row.result_status || row.status || row.state).toLowerCase()
   if (row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time) return true
@@ -161,31 +186,64 @@ function isVisitedStop(row = {}) {
 }
 
 function normalizeVisitRow(row = {}) {
-  const customerId = row.customer_id?.[0] || row.customer_id || row.partner_id?.[0] || row.partner_id || ''
+  const customerId = relationId(row.customer_id) || relationId(row.partner_id) || ''
   const visited = isVisitedStop(row)
   const visitTime = shortTime(row.actual_start_time || row.start_time || row.visit_time || row.visited_at || row.actual_end_time)
   const hasSale = row.has_sale != null
     ? Boolean(row.has_sale)
     : firstNumber(row.sale_order_count, row.sales_count, row.sales_amount) > 0
   const saleStatus = hasSale ? 'Venta' : 'No venta'
+  const customer = text(
+    row.customer_name || row.partner_name || row.customer || row.partner || row.customer_id || row.partner_id,
+    customerId ? `Cliente #${customerId}` : 'Cliente',
+  )
 
   return {
     id: row.id || customerId || text(row.customer_name || row.customer || row.partner_name),
+    partnerId: customerId,
     sequence: firstNumber(row.sequence, row.stop_sequence, row.order),
-    customer: text(
-      row.customer_name || row.partner_name || row.customer || row.partner || row.customer_id || row.partner_id,
-      customerId ? `Cliente #${customerId}` : 'Cliente',
-    ),
+    customer,
+    customerKey: normalizeLookupKey(customer),
     plannedTime: shortTime(row.planned_time || row.scheduled_time || row.expected_time || row.time_window || row.window || ''),
     visitTime: visited ? visitTime : '',
     status: visited ? 'Visitado' : 'Sin visita',
     saleStatus,
+    saleAmount: firstNumber(row.sales_amount, row.sale_amount, row.amount_total, row.total),
+    soldProduct: text(row.product_sold || row.sold_product || row.product_names || row.products || row.product_name, ''),
   }
 }
 
-function normalizeVisitList(detail = {}) {
+function buildSalesLookup(salesRows = []) {
+  return salesRows.reduce((acc, sale) => {
+    const applySale = (existing = {}) => ({
+      amount: number(existing.amount) + number(sale.amount),
+      products: [...new Set([...(existing.products || []), sale.productSummary].filter(Boolean))],
+    })
+    if (sale.partnerId) {
+      acc.byPartner[String(sale.partnerId)] = applySale(acc.byPartner[String(sale.partnerId)])
+    }
+    const key = normalizeLookupKey(sale.customer)
+    if (key) acc.byCustomer[key] = applySale(acc.byCustomer[key])
+    return acc
+  }, { byPartner: {}, byCustomer: {} })
+}
+
+function enrichVisitWithSale(row, salesLookup) {
+  const sale = salesLookup.byPartner[String(row.partnerId)] || salesLookup.byCustomer[row.customerKey] || null
+  if (!sale) return row
+  return {
+    ...row,
+    saleStatus: sale.amount > 0 ? 'Venta' : row.saleStatus,
+    saleAmount: row.saleAmount || sale.amount,
+    soldProduct: row.soldProduct || sale.products.join(', '),
+  }
+}
+
+function normalizeVisitList(detail = {}, salesRows = []) {
+  const salesLookup = buildSalesLookup(salesRows)
   const rows = rawVisitRows(detail)
     .map(normalizeVisitRow)
+    .map((row) => enrichVisitWithSale(row, salesLookup))
     .sort((a, b) => {
       if (a.sequence !== b.sequence) return a.sequence - b.sequence
       return a.customer.localeCompare(b.customer, 'es')
@@ -360,20 +418,22 @@ function normalizeSale(row = {}) {
   const customer = text(row.customer_name || row.partner_name || row.customer || row.partner_id, 'Cliente')
   const method = text(row.payment_method || row.method || row.payment_type || row.payment_label, '')
   const amount = number(row.amount_total ?? row.total ?? row.amount ?? row.price_total)
+  const lines = Array.isArray(row.lines) ? row.lines : []
+  const productSummary = text(row.product_sold || row.sold_product || row.product_names || row.products || row.product_name, summarizeProducts(lines))
   const kilos = number(
     row.kg_total
-    ?? (Array.isArray(row.lines)
-      ? row.lines.reduce((sum, line) => sum + number(line.kg_total ?? ((line.weight || 0) * (line.quantity || 0))), 0)
-      : 0),
+    ?? lines.reduce((sum, line) => sum + number(line.kg_total ?? ((line.weight || 0) * (line.quantity || 0))), 0),
   )
 
   return {
     id: row.id || folio,
+    partnerId: relationId(row.partner_id || row.customer_id),
     folio,
     customer,
     method,
     amount,
     kilos,
+    productSummary,
   }
 }
 
@@ -410,7 +470,7 @@ function buildSummary({ detail, lines, lineTotals, reloads, sales, liquidation }
       cashReceived: liquidation.totals.cashReceived,
       unavailable: sales.unavailable,
     },
-    visitList: normalizeVisitList(detail),
+    visitList: normalizeVisitList(detail, sales.rows),
     inventory: {
       rows: lines.map((line) => ({
         id: line.id,
@@ -520,20 +580,20 @@ function formatSummaryRows(format) {
   const reloadTable = format.reloads.empty
     ? '<p class="empty">Sin cargas registradas.</p>'
     : table(
-      ['Folio', 'Producto', 'Cant.', 'Hora'],
-      format.reloads.rows.map((row) => [row.folio, row.product, row.quantity, row.time || '-']),
+      ['Folio', 'Producto', 'Cant.'],
+      format.reloads.rows.map((row) => [row.folio, row.product, row.quantity]),
     )
   const visitTable = format.visitList.empty
     ? '<p class="empty">Sin lista de visitas disponible.</p>'
     : table(
-      ['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado', 'Venta'],
+      ['#', 'Cliente planeado', 'Estado', 'Venta', 'Importe', 'Producto vendido'],
       format.visitList.rows.map((row) => [
         row.sequence || '-',
         row.customer,
-        row.plannedTime || '-',
-        row.visitTime || '-',
         row.status,
         row.saleStatus,
+        money(row.saleAmount),
+        row.soldProduct || '-',
       ]),
     )
 
@@ -741,8 +801,17 @@ export function openRouteFormatPrintWindow(
   printWindow.document.write(html)
   printWindow.document.close()
   printWindow.document.title = buildRouteDownloadName(viewModel, formatId)
-  printWindow.focus()
-  browserWindow.setTimeout(() => {
+
+  let printed = false
+  const printReport = () => {
+    if (printed) return
+    printed = true
+    printWindow.focus()
     printWindow.print()
-  }, 350)
+  }
+
+  printWindow.addEventListener?.('load', () => {
+    browserWindow.setTimeout(printReport, 150)
+  }, { once: true })
+  browserWindow.setTimeout(printReport, 700)
 }

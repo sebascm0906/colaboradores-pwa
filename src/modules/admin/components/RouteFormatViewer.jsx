@@ -259,13 +259,13 @@ function SummaryReport({ format }) {
       {format.visitList.empty ? (
         <EmptyReport text="Sin lista de visitas disponible." />
       ) : (
-        <Table headers={['#', 'Cliente planeado', 'Hora plan', 'Hora visita', 'Estado', 'Venta']} rows={format.visitList.rows.map((row) => [
+        <Table headers={['#', 'Cliente planeado', 'Estado', 'Venta', 'Importe', 'Producto vendido']} rows={format.visitList.rows.map((row) => [
           row.sequence || '-',
           row.customer,
-          row.plannedTime || '-',
-          row.visitTime || '-',
           row.status,
           row.saleStatus,
+          formatRouteMoney(row.saleAmount),
+          row.soldProduct || '-',
         ])} />
       )}
 
@@ -287,11 +287,10 @@ function SummaryReport({ format }) {
       {format.reloads.empty ? (
         <EmptyReport text="Sin cargas registradas." />
       ) : (
-        <Table headers={['Folio', 'Producto', 'Cant.', 'Hora']} rows={format.reloads.rows.map((row) => [
+        <Table headers={['Folio', 'Producto', 'Cant.']} rows={format.reloads.rows.map((row) => [
           row.folio,
           row.product,
           fmtNum(row.quantity),
-          row.time || '-',
         ])} />
       )}
 

@@ -134,7 +134,7 @@ test('one page summary includes visits and reloads', () => {
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
-  assert.match(html, /Resumen 1 hoja/)
+  assert.match(html, /Resumen de Liquidacion/)
   assert.match(html, /Visitas planificadas/)
   assert.match(html, /Cargas/)
   assert.match(html, /REC-001/)
@@ -152,6 +152,8 @@ test('one page summary includes planned and visited customer list with visit tim
         actual_start_time: '2026-05-27 10:18:00',
         result_status: 'visited',
         has_sale: true,
+        sales_amount: 123.5,
+        product_sold: 'Bolsa 5kg',
       },
       {
         id: 2,
@@ -175,6 +177,8 @@ test('one page summary includes planned and visited customer list with visit tim
   assert.equal(vm.formats.summary.visitList.rows[1].visitTime, '10:18')
   assert.equal(vm.formats.summary.visitList.rows[1].status, 'Visitado')
   assert.equal(vm.formats.summary.visitList.rows[1].saleStatus, 'Venta')
+  assert.equal(vm.formats.summary.visitList.rows[1].saleAmount, 123.5)
+  assert.equal(vm.formats.summary.visitList.rows[1].soldProduct, 'Bolsa 5kg')
 
   const html = buildRouteFormatHtml(vm, 'summary')
 
@@ -182,7 +186,9 @@ test('one page summary includes planned and visited customer list with visit tim
   assert.match(html, /Cliente Planeado/)
   assert.match(html, /Sin visita/)
   assert.match(html, /Cliente Visitado/)
-  assert.match(html, /10:18/)
+  assert.match(html, /Producto vendido/)
+  assert.match(html, /\$123.50/)
+  assert.match(html, /Bolsa 5kg/)
   assert.match(html, /Venta/)
   assert.match(html, /No venta/)
 })
@@ -213,6 +219,8 @@ test('summary html removes recargas column from inventario y corte and shows kil
   assert.doesNotMatch(html, /Diferencia cash/)
   assert.doesNotMatch(html, /Diferencia efectivo/)
   assert.doesNotMatch(html, /<th>Recargas<\/th>/)
+  assert.doesNotMatch(html, /Hora plan/)
+  assert.doesNotMatch(html, /Hora visita/)
 })
 
 test('summary keeps single difference at zero when sales match credit plus cash', () => {
@@ -285,6 +293,45 @@ test('download name uses corte y liquidacion plus driver and plan', () => {
   )
 })
 
+test('summary visit list enriches sales by partner and hides visit time columns', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    sales: [
+      {
+        partner_id: [91, 'Cliente Visitado'],
+        customer_name: 'Cliente Visitado',
+        amount_total: 250,
+        lines: [
+          { product_name: 'Molido Chico', quantity: 2 },
+          { product_name: 'Bolsa 13kg', quantity: 1 },
+        ],
+      },
+    ],
+    route_stops: [
+      {
+        id: 1,
+        sequence: 10,
+        partner_id: [91, 'Cliente Visitado'],
+        partner_name: 'Cliente Visitado',
+        actual_start_time: '2026-05-27 10:18:00',
+        result_status: 'visited',
+      },
+    ],
+  })
+
+  const row = vm.formats.summary.visitList.rows[0]
+  assert.equal(row.saleStatus, 'Venta')
+  assert.equal(row.saleAmount, 250)
+  assert.equal(row.soldProduct, 'Molido Chico, Bolsa 13kg')
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+  assert.match(html, /Importe/)
+  assert.match(html, /Producto vendido/)
+  assert.match(html, /Molido Chico, Bolsa 13kg/)
+  assert.doesNotMatch(html, /Hora plan/)
+  assert.doesNotMatch(html, /Hora visita/)
+})
+
 test('summary html uses polished printable layout and cargas section title', () => {
   const vm = buildRouteFormatsViewModel({
     ...CLOSED_DETAIL,
@@ -299,6 +346,7 @@ test('summary html uses polished printable layout and cargas section title', () 
   assert.match(html, /Resumen operativo/)
   assert.match(html, /Cargas/)
   assert.doesNotMatch(html, /Recargas/)
+  assert.doesNotMatch(html, /<th>Hora<\/th>/)
 })
 
 test('print window opens synchronously without noopener before building the report html', () => {
@@ -316,6 +364,10 @@ test('print window opens synchronously without noopener before building the repo
     },
     focus() { calls.push('focus') },
     print() { calls.push('print') },
+    addEventListener(event, fn, options) {
+      calls.push(`addEventListener:${event}:${options?.once ? 'once' : 'many'}`)
+      fn()
+    },
   }
   const browserWindow = {
     open(...args) {
@@ -344,9 +396,11 @@ test('print window opens synchronously without noopener before building the repo
     'document.open',
     'document.write',
     'document.close',
+    'addEventListener:load:once',
+    'setTimeout:150',
     'focus',
-    'setTimeout:350',
     'print',
+    'setTimeout:700',
   ])
   assert.equal(printWindow.document.title, 'corte-y-liquidacion-chofer-uno-plan-77.pdf')
 })
