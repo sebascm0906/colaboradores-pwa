@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { normalizeLiquidationListResponse } from '../src/modules/admin/liquidacionesResponse.js'
+import * as liquidaciones from '../src/modules/admin/liquidacionesResponse.js'
+
+const { normalizeLiquidationListResponse } = liquidaciones
 
 test('liquidation list response surfaces forbidden envelopes instead of empty rows', () => {
   assert.throws(
@@ -23,5 +25,15 @@ test('liquidation list response accepts plans inside data envelope', () => {
       },
     }),
     [{ id: 17, name: 'R-17' }],
+  )
+})
+
+test('liquidation history default date range starts and ends today', () => {
+  assert.deepEqual(
+    liquidaciones.getDefaultLiquidationHistoryDateRange(new Date('2026-06-03T18:30:00-06:00')),
+    {
+      dateFrom: '2026-06-03',
+      dateTo: '2026-06-03',
+    },
   )
 })

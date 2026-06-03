@@ -22,9 +22,9 @@ import {
   getLiquidationsHistory,
 } from '../api'
 import { BACKEND_CAPS } from '../adminService'
-import { localDateString } from '../../../lib/api'
 import RouteFormatViewer from '../components/RouteFormatViewer'
 import {
+  getDefaultLiquidationHistoryDateRange,
   normalizeLiquidationDetailResponse,
   normalizeLiquidationListResponse,
 } from '../liquidacionesResponse'
@@ -557,12 +557,10 @@ export default function AdminLiquidacionesForm() {
 
 // ─── LiquidacionesHistory — tab "Validadas" ─────────────────────────────────
 function LiquidacionesHistory({ companyId, warehouseId, initialSelectedId = null }) {
-  const today = new Date()
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
-  const toIso = (d) => localDateString(d)
+  const defaultRange = getDefaultLiquidationHistoryDateRange()
 
-  const [dateFrom, setDateFrom] = useState(toIso(firstOfMonth))
-  const [dateTo, setDateTo] = useState(toIso(today))
+  const [dateFrom, setDateFrom] = useState(defaultRange.dateFrom)
+  const [dateTo, setDateTo] = useState(defaultRange.dateTo)
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

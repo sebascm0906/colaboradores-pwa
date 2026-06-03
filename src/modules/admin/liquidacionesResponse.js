@@ -3,6 +3,14 @@ function unwrapResponse(response) {
   return response
 }
 
+function localIsoDate(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function assertOkResponse(response) {
   const envelope = unwrapResponse(response)
   if (envelope?.ok === false) {
@@ -26,4 +34,12 @@ export function normalizeLiquidationListResponse(response, listKeys = ['plans'])
 export function normalizeLiquidationDetailResponse(response) {
   const envelope = assertOkResponse(response)
   return envelope?.data ?? envelope ?? null
+}
+
+export function getDefaultLiquidationHistoryDateRange(today = new Date()) {
+  const currentDay = localIsoDate(today)
+  return {
+    dateFrom: currentDay,
+    dateTo: currentDay,
+  }
 }
