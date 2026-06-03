@@ -261,8 +261,28 @@ function normalizeText(value) {
 
 const modelFieldSupportCache = new Map()
 const modelFieldInfoCache = new Map()
+const KNOWN_MODEL_FIELDS = {
+  'gf.route': new Set([
+    'active',
+    'company_id',
+    'warehouse_dispatch_id',
+    'location_en_ruta_id',
+    'salesperson_employee_id',
+    'driver_employee_id',
+    'assistant_employee_id',
+  ]),
+  'gf.saleops.forecast': new Set([
+    'id',
+    'state',
+    'date_target',
+    'route_plan_id',
+  ]),
+}
 
 async function modelHasField(model, fieldName) {
+  if (Object.prototype.hasOwnProperty.call(KNOWN_MODEL_FIELDS, model)) {
+    return KNOWN_MODEL_FIELDS[model].has(fieldName)
+  }
   const cacheKey = `${model}:${fieldName}`
   if (modelFieldSupportCache.has(cacheKey)) {
     return modelFieldSupportCache.get(cacheKey)
