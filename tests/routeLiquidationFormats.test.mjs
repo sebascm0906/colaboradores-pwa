@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   buildRouteFormatsViewModel,
   buildRouteFormatHtml,
+  buildRouteDownloadName,
 } from '../src/modules/admin/routeLiquidationFormats.js'
 
 const CLOSED_DETAIL = {
@@ -134,7 +135,7 @@ test('one page summary includes visits and reloads', () => {
 
   assert.match(html, /Resumen 1 hoja/)
   assert.match(html, /Visitas planificadas/)
-  assert.match(html, /Recargas/)
+  assert.match(html, /Cargas/)
   assert.match(html, /REC-001/)
 })
 
@@ -268,4 +269,33 @@ test('summary difference is zero when total sales minus credit equals cash', () 
   assert.equal(vm.formats.liquidation.totals.credit, 4339)
   assert.equal(vm.formats.liquidation.totals.cashExpected, 2264)
   assert.equal(vm.formats.liquidation.totals.difference, 0)
+})
+
+test('download name uses corte y liquidacion plus driver and plan', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    name: 'RPLAN/2026/00300',
+    driver_name: 'Ricardo Miranda',
+  })
+
+  assert.equal(
+    buildRouteDownloadName(vm, 'summary'),
+    'corte-y-liquidacion-ricardo-miranda-rplan-2026-00300.pdf',
+  )
+})
+
+test('summary html uses polished printable layout and cargas section title', () => {
+  const vm = buildRouteFormatsViewModel({
+    ...CLOSED_DETAIL,
+    reload_lines: [
+      { product_name: 'Bolsa 5kg', quantity: 4, name: 'REC-001', date: '15:20' },
+    ],
+  })
+
+  const html = buildRouteFormatHtml(vm, 'summary')
+
+  assert.match(html, /class="report-shell"/)
+  assert.match(html, /Resumen operativo/)
+  assert.match(html, /Cargas/)
+  assert.doesNotMatch(html, /Recargas/)
 })

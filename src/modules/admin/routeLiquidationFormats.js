@@ -51,6 +51,15 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
+function slug(value) {
+  return text(value || 'reporte')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+}
+
 function normalizePlan(detail = {}) {
   const plan = detail.plan && typeof detail.plan === 'object' ? detail.plan : {}
   const state = text(detail.state || plan.state || detail.plan_state).toLowerCase()
@@ -509,7 +518,7 @@ function formatSummaryRows(format) {
       ]),
     )
   const reloadTable = format.reloads.empty
-    ? '<p class="empty">Sin recargas registradas.</p>'
+    ? '<p class="empty">Sin cargas registradas.</p>'
     : table(
       ['Folio', 'Producto', 'Cant.', 'Hora'],
       format.reloads.rows.map((row) => [row.folio, row.product, row.quantity, row.time || '-']),
@@ -529,6 +538,13 @@ function formatSummaryRows(format) {
     )
 
   return `
+    <section class="hero-card">
+      <div>
+        <p class="eyebrow">Resumen operativo</p>
+        <h2 class="hero-title">Corte y liquidacion de ruta</h2>
+        <p class="hero-copy">Resumen consolidado de visitas, inventario, cargas y liquidacion del repartidor.</p>
+      </div>
+    </section>
     ${metricGrid([
       { label: 'Visitas planificadas', value: format.visits.planned },
       { label: 'Visitas realizadas', value: format.visits.done },
@@ -545,7 +561,7 @@ function formatSummaryRows(format) {
     ${visitTable}
     <h2>Inventario y corte</h2>
     ${inventoryTable}
-    <h2>Recargas</h2>
+    <h2>Cargas</h2>
     ${reloadTable}
     <h2>Liquidacion</h2>
     ${table(
@@ -642,37 +658,71 @@ export function buildRouteFormatHtml(viewModel, formatId) {
   <title>${escapeHtml(title)} - ${escapeHtml(vm.plan.name)}</title>
   <style>
     @page { size: letter; margin: 12mm; }
-    body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 11px; }
-    header { border-bottom: 2px solid #111827; margin-bottom: 18px; padding-bottom: 12px; }
-    h1 { font-size: 20px; margin: 0 0 6px; }
-    h2 { font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; }
-    .meta { color: #4b5563; font-size: 11px; line-height: 1.5; }
-    .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 12px 0; }
-    .metric { border: 1px solid #d1d5db; border-radius: 6px; padding: 7px; background: #f9fafb; }
-    .metric span { display: block; color: #6b7280; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-    .metric strong { display: block; margin-top: 3px; font-size: 13px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-    th, td { border: 1px solid #d1d5db; padding: 5px 6px; font-size: 10px; text-align: left; }
-    th { background: #f3f4f6; font-weight: 700; }
-    .totals { margin-top: 14px; font-size: 13px; }
-    .empty { padding: 14px; border: 1px dashed #d1d5db; color: #6b7280; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; color: #14213d; margin: 0; font-size: 11px; background: #f4f7fb; }
+    .report-shell { background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); border: 1px solid #d8e2f0; border-radius: 18px; padding: 20px; }
+    header { margin-bottom: 18px; padding: 18px; border: 1px solid #dbe5f2; border-radius: 16px; background: linear-gradient(135deg, #f8fbff 0%, #edf4ff 100%); }
+    .header-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+    h1 { font-size: 22px; margin: 4px 0 8px; }
+    h2 { font-size: 12px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: 0.1em; color: #5c6f82; }
+    .eyebrow { margin: 0; color: #5c6f82; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+    .meta { color: #516173; font-size: 11px; line-height: 1.6; }
+    .meta-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-top: 12px; }
+    .meta-card { padding: 12px 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 14px; }
+    .meta-label { display: block; color: #6b7c8f; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+    .report-chip { padding: 8px 12px; border-radius: 999px; background: #143d73; color: white; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+    .hero-card { padding: 14px 16px; border: 1px solid #dbe5f2; border-radius: 16px; background: #ffffff; margin-bottom: 14px; }
+    .hero-title { font-size: 18px; margin: 4px 0 6px; }
+    .hero-copy { margin: 0; color: #617386; font-size: 11px; }
+    .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 18px; }
+    .metric { border: 1px solid #dbe5f2; border-radius: 14px; padding: 10px; background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%); min-height: 68px; }
+    .metric span { display: block; color: #6b7c8f; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric strong { display: block; margin-top: 6px; font-size: 16px; line-height: 1.2; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 6px; border: 1px solid #dbe5f2; border-radius: 14px; overflow: hidden; }
+    th, td { padding: 8px 10px; font-size: 10px; text-align: left; }
+    th { background: #eef4fb; color: #607386; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #dbe5f2; }
+    td { border-bottom: 1px solid #ebf1f8; }
+    tbody tr:nth-child(even) td { background: #fbfdff; }
+    tbody tr:last-child td { border-bottom: none; }
+    .totals { margin-top: 16px; font-size: 12px; color: #243447; padding: 12px 14px; background: #fff; border: 1px solid #dbe5f2; border-radius: 14px; }
+    .empty { padding: 16px; border: 1px dashed #c9d6e6; color: #6b7c8f; background: #fbfdff; border-radius: 14px; }
   </style>
 </head>
 <body>
+  <div class="report-shell">
   <header>
-    <h1>${escapeHtml(title)}</h1>
-    <div class="meta">
+    <div class="header-top">
+      <div>
+        <p class="eyebrow">Liquidaciones de ruta</p>
+        <h1>${escapeHtml(title)}</h1>
+      </div>
+      <div class="report-chip">Corte y liquidacion</div>
+    </div>
+    <div class="meta-card meta">
       <div><strong>Plan:</strong> ${escapeHtml(vm.plan.name)}</div>
       <div><strong>Ruta:</strong> ${escapeHtml(vm.plan.routeName)} · <strong>Chofer:</strong> ${escapeHtml(vm.plan.driverName)}</div>
       <div><strong>Unidad:</strong> ${escapeHtml(vm.plan.vehicleName || '-')} · <strong>Fecha:</strong> ${escapeHtml(vm.plan.date || '-')}</div>
     </div>
+    <div class="meta-card">
+      <span class="meta-label">Resumen del reparto</span>
+      <div class="meta">Chofer: ${escapeHtml(vm.plan.driverName)}<br>Unidad: ${escapeHtml(vm.plan.vehicleName || '-')}<br>Fecha: ${escapeHtml(vm.plan.date || '-')}</div>
+    </div>
   </header>
   ${body}
   <div class="totals">${formatTotals(vm, formatId)}</div>
+  </div>
 </body>
 </html>`
 }
 
 export function formatRouteMoney(value) {
   return money(value)
+}
+
+export function buildRouteDownloadName(viewModel, formatId) {
+  const vm = viewModel || buildRouteFormatsViewModel({})
+  if (formatId === 'summary') {
+    return `${slug('Corte y liquidacion')}-${slug(vm.plan.driverName)}-${slug(vm.plan.name)}.pdf`
+  }
+  return `${slug(getFormatTitle(formatId))}-${slug(vm.plan.driverName)}-${slug(vm.plan.name)}.pdf`
 }

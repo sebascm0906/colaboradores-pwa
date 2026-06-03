@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { TOKENS } from '../../../tokens'
 import {
+  buildRouteDownloadName,
   buildRouteFormatHtml,
   buildRouteFormatsViewModel,
   formatRouteMoney,
@@ -10,15 +11,6 @@ const NUMBER_FORMAT = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 
 
 function fmtNum(value) {
   return NUMBER_FORMAT.format(Number(value || 0))
-}
-
-function filenameSafe(value) {
-  return String(value || 'formato-ruta')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
 }
 
 export default function RouteFormatViewer({ detail }) {
@@ -38,15 +30,16 @@ export default function RouteFormatViewer({ detail }) {
     setDownloadError('')
     try {
       const html = buildRouteFormatHtml(viewModel, selectedFormat)
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${filenameSafe(viewModel.plan.name)}-${selectedFormat}.html`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      const printWindow = window.open('', '_blank', 'noopener,noreferrer')
+      if (!printWindow) throw new Error('El navegador bloqueo la ventana de descarga')
+      printWindow.document.open()
+      printWindow.document.write(html)
+      printWindow.document.close()
+      printWindow.document.title = buildRouteDownloadName(viewModel, selectedFormat)
+      printWindow.focus()
+      window.setTimeout(() => {
+        printWindow.print()
+      }, 350)
     } catch (e) {
       setDownloadError(e?.message || 'No se pudo descargar el formato')
     }
@@ -301,9 +294,9 @@ function SummaryReport({ format }) {
         ])} />
       )}
 
-      <ReportSectionTitle title="Recargas" />
+      <ReportSectionTitle title="Cargas" />
       {format.reloads.empty ? (
-        <EmptyReport text="Sin recargas registradas." />
+        <EmptyReport text="Sin cargas registradas." />
       ) : (
         <Table headers={['Folio', 'Producto', 'Cant.', 'Hora']} rows={format.reloads.rows.map((row) => [
           row.folio,
