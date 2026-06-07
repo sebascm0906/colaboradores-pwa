@@ -25,6 +25,7 @@
 
 import { api } from '../../lib/api.js'
 import {
+  resolveEmployeeMonthlySalesActual,
   resolveMonthlySalesActual,
   resolveMonthlySalesTarget,
 } from './monthSales.js'
@@ -121,7 +122,7 @@ export async function getDayOverview(date) {
         progress: route?.progress || 0,
         effectiveness: route?.effectiveness || 0,
         sales_target: target?.sales_target || 0,
-        sales_actual: target?.sales_actual || 0,
+        sales_actual: resolveEmployeeMonthlySalesActual(emp.id, target, monthSales),
         has_route: !!route,
         status: !route ? 'no_route' : compliance >= 80 ? 'good' : compliance >= 50 ? 'warning' : 'critical',
         // Departure tracking

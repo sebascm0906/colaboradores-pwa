@@ -36,6 +36,7 @@ import {
   SUPV_ROUTE_EMPLOYEE_FIELDS,
 } from '../modules/supervisor-ventas/teamScope.js'
 import {
+  buildEmployeeMonthlySalesFromRouteData,
   buildCedisMonthlySalesDomain,
   sumSaleOrderTotals,
 } from '../modules/supervisor-ventas/monthSales.js'
@@ -8687,6 +8688,7 @@ async function directSupervisorVentas(method, path, body) {
 
   if (cleanPath === '/pwa-supv/month-sales-summary' && method === 'GET') {
     const warehouseId = Number(query.get('warehouse_id') || getWarehouseId() || 0)
+    const scope = await supervisorAnalyticScope()
     const requestedDate = String(query.get('date') || '')
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)
       ? new Date(`${requestedDate}T12:00:00`)
@@ -8707,6 +8709,46 @@ async function directSupervisorVentas(method, path, body) {
       sudo: 1,
     })
     const rows = pickListResponse(result)
+    const planRows = scope.analyticAccountId
+      ? pickListResponse(await readModelSorted('gf.route.plan', {
+          fields: ['id', 'date', 'driver_employee_id', 'salesperson_employee_id'],
+          domain: [
+            ['date', '>=', startMonth],
+            ['date', '<', endMonth],
+            ...(companyId ? [['company_id', '=', companyId]] : []),
+          ],
+          sort_column: 'date',
+          sort_desc: false,
+          limit: 1000,
+          sudo: 1,
+        })).filter((row) => employeeInScope(row, scope))
+      : []
+    const planIds = planRows.map((row) => Number(row.id || 0)).filter(Boolean)
+    const stopRows = planIds.length
+      ? pickListResponse(await readModelSorted('gf.route.stop', {
+          fields: ['id', 'route_plan_id', 'sale_order_ids'],
+          domain: [['route_plan_id', 'in', planIds]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: 5000,
+          sudo: 1,
+        }))
+      : []
+    const routeSaleOrderIds = [...new Set(stopRows.flatMap((row) => (
+      Array.isArray(row.sale_order_ids)
+        ? row.sale_order_ids.map((value) => Array.isArray(value) ? Number(value[0] || 0) : Number(value || 0)).filter(Boolean)
+        : []
+    )))]
+    const routeSaleOrders = routeSaleOrderIds.length
+      ? pickListResponse(await readModelSorted('sale.order', {
+          fields: ['id', 'amount_total'],
+          domain: [['id', 'in', routeSaleOrderIds]],
+          sort_column: 'id',
+          sort_desc: false,
+          limit: routeSaleOrderIds.length,
+          sudo: 1,
+        }))
+      : []
     return {
       start_month: startMonth,
       end_month: endMonth,
@@ -8714,6 +8756,11 @@ async function directSupervisorVentas(method, path, body) {
       company_id: companyId || 0,
       sales_count: rows.length,
       sales_actual: sumSaleOrderTotals(rows),
+      employee_sales: buildEmployeeMonthlySalesFromRouteData({
+        plans: planRows,
+        stops: stopRows,
+        saleOrders: routeSaleOrders,
+      }),
     }
   }
 
