@@ -24,7 +24,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { api } from '../../lib/api.js'
-import { resolveMonthlySalesActual } from './monthSales.js'
+import {
+  resolveMonthlySalesActual,
+  resolveMonthlySalesTarget,
+} from './monthSales.js'
 
 // Re-export all existing + new API functions for convenience
 export {
@@ -142,7 +145,7 @@ export async function getDayOverview(date) {
   const totalStops = vendors.reduce((s, v) => s + v.stops_total, 0)
   const doneStops = vendors.reduce((s, v) => s + v.stops_done, 0)
   const avgCompliance = totalStops > 0 ? Math.round((doneStops / totalStops) * 100) : 0
-  const totalSalesTarget = targets.reduce((s, t) => s + (t.sales_target || 0), 0)
+  const totalSalesTarget = resolveMonthlySalesTarget(targets, dateStr)
   const totalSalesActual = resolveMonthlySalesActual(targets, monthSales)
 
   // Departure aggregates

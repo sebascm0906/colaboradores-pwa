@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildCedisMonthlySalesDomain,
+  resolveMonthlySalesTarget,
   sumSaleOrderTotals,
 } from '../src/modules/supervisor-ventas/monthSales.js'
 import { getDayOverview } from '../src/modules/supervisor-ventas/supvService.js'
@@ -87,6 +88,11 @@ test('sumSaleOrderTotals adds all valid monthly sale totals', () => {
     { amount_total: '379.50' },
     { amount_total: null },
   ]), 500)
+})
+
+test('resolveMonthlySalesTarget uses 1,800,000 as June target when Odoo has no target', () => {
+  assert.equal(resolveMonthlySalesTarget([], '2026-06-07'), 1800000)
+  assert.equal(resolveMonthlySalesTarget([{ sales_target: 0 }], '2026-06-07'), 1800000)
 })
 
 test('getDayOverview uses monthly CEDIS sales total instead of stale target actuals', async () => {

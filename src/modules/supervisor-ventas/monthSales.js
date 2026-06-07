@@ -1,3 +1,9 @@
+const JUNE_SALES_TARGET = 1800000
+
+function isJuneDate(dateStr) {
+  return /^\d{4}-06-\d{2}$/.test(String(dateStr || ''))
+}
+
 export function buildCedisMonthlySalesDomain({
   startMonth,
   endMonth,
@@ -27,4 +33,12 @@ export function resolveMonthlySalesActual(targets = [], summary = null) {
   return (Array.isArray(targets) ? targets : []).reduce((sum, target) => (
     sum + (Number(target?.sales_actual || 0) || 0)
   ), 0)
+}
+
+export function resolveMonthlySalesTarget(targets = [], dateStr = '') {
+  const configuredTarget = (Array.isArray(targets) ? targets : []).reduce((sum, target) => (
+    sum + (Number(target?.sales_target || 0) || 0)
+  ), 0)
+  if (configuredTarget > 0) return configuredTarget
+  return isJuneDate(dateStr) ? JUNE_SALES_TARGET : 0
 }
