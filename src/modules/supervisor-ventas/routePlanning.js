@@ -191,6 +191,26 @@ export function normalizeActiveRoutePlan(row = {}) {
   }
 }
 
+export function filterActiveRoutePlansByScope(plans = [], scopedVendors = []) {
+  const allowedEmployeeIds = new Set(
+    (Array.isArray(scopedVendors) ? scopedVendors : [])
+      .map((vendor) => Number(vendor?.id || 0))
+      .filter(Boolean),
+  )
+  const allowedRouteIds = new Set(
+    (Array.isArray(scopedVendors) ? scopedVendors : [])
+      .map((vendor) => Number(vendor?.route_id || 0))
+      .filter(Boolean),
+  )
+  if (!allowedEmployeeIds.size && !allowedRouteIds.size) return []
+
+  return (Array.isArray(plans) ? plans : []).filter((plan) => {
+    const driverId = Number(plan?.driver_id || 0)
+    const routeId = Number(plan?.route_id || 0)
+    return allowedEmployeeIds.has(driverId) || allowedRouteIds.has(routeId)
+  })
+}
+
 export function normalizeRoutePlanCustomer(row = {}) {
   const customerRef = row.customer_id || row.partner_id || row.id
   const customerId = toM2oId(customerRef) || toNumber(row.customer_id || row.partner_id || row.id)

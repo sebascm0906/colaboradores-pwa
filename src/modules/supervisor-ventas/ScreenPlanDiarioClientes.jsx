@@ -8,11 +8,13 @@ import {
   searchPlanningCustomers,
 } from './api'
 import {
+  filterActiveRoutePlansByScope,
   getSupervisorRouteErrorMessage,
   normalizeActiveRoutePlan,
   normalizeCustomerSearchResult,
 } from './routePlanning'
 import { logScreenError } from '../shared/logScreenError'
+import { getDayOverview } from './supvService'
 
 function getTodayDateString(baseDate = new Date()) {
   const pad = (n) => String(n).padStart(2, '0')
@@ -61,8 +63,14 @@ export default function ScreenPlanDiarioClientes() {
     setLoading(true)
     setError('')
     try {
-      const result = await getActiveRoutePlans(dateTarget)
-      const rows = unwrapList(result).map(normalizeActiveRoutePlan).filter((plan) => plan.id)
+      const [result, overview] = await Promise.all([
+        getActiveRoutePlans(dateTarget),
+        getDayOverview(dateTarget),
+      ])
+      const rows = filterActiveRoutePlansByScope(
+        unwrapList(result).map(normalizeActiveRoutePlan).filter((plan) => plan.id),
+        overview?.vendors || [],
+      )
       setPlans(rows)
       setSelectedPlanId((current) => {
         if (current && rows.some((plan) => String(plan.id) === String(current))) return current
