@@ -2,17 +2,11 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { TOKENS, getTypo } from '../../tokens'
 import { ScreenShell, EmptyState } from '../entregas/components'
 import { getDayOverview, getRouteStops } from './supvService'
+import { isStopUnvisited } from './stopVisitState.js'
 
 /* ============================================================================
    ScreenClientesSinVisitar — Unvisited clients across all vendors today
 ============================================================================ */
-
-const VISITED_STATES = ['visited', 'done', 'completed']
-
-function isVisited(resultStatus) {
-  if (!resultStatus) return false
-  return VISITED_STATES.includes(resultStatus.toLowerCase().trim())
-}
 
 export default function ScreenClientesSinVisitar() {
   const [sw, setSw] = useState(window.innerWidth)
@@ -72,7 +66,7 @@ export default function ScreenClientesSinVisitar() {
 
         for (const { vendor, stops } of results) {
           scheduled += stops.length
-          const notVisited = stops.filter((s) => !isVisited(s.result_status))
+          const notVisited = stops.filter((s) => isStopUnvisited(s))
           unvisited += notVisited.length
           if (notVisited.length > 0) {
             groups.push({

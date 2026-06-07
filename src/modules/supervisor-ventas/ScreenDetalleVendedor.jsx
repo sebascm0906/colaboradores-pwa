@@ -6,6 +6,12 @@ import {
   getDayOverview, getRouteStops, getComplianceColor, getStatusColor,
   fmtMoney, fmtTime, getDepartureStatus, getLiquidationStatus,
 } from './supvService'
+import {
+  deriveStopVisitState,
+  isStopVisited,
+  isStopUnvisited,
+  isStopWithSale,
+} from './stopVisitState.js'
 
 /* ============================================================================
    ScreenDetalleVendedor — Vendor detail with route stops, departure,
@@ -58,9 +64,9 @@ export default function ScreenDetalleVendedor() {
   const statusColor = vendor ? getStatusColor(vendor.status) : TOKENS.colors.textMuted
 
   // Stop summary counts
-  const visited = stops.filter((s) => isVisited(s.result_status)).length
-  const notVisited = stops.filter((s) => isNotVisited(s.result_status)).length
-  const withSale = stops.filter((s) => s.sales_count > 0).length
+  const visited = stops.filter((s) => isStopVisited(s)).length
+  const notVisited = stops.filter((s) => isStopUnvisited(s)).length
+  const withSale = stops.filter((s) => isStopWithSale(s)).length
 
   /* ── Loading ─────────────────────────────────────────────────────────────── */
   if (loading) {
@@ -273,8 +279,9 @@ function StatusCard({ typo, label, value, sub, color }) {
 }
 
 function StopCard({ stop, typo }) {
-  const resultColor = getResultColor(stop.result_status)
-  const resultLabel = getResultLabel(stop.result_status)
+  const visitState = deriveStopVisitState(stop)
+  const resultColor = visitState.color
+  const resultLabel = visitState.label
 
   return (
     <div style={{
@@ -300,7 +307,7 @@ function StopCard({ stop, typo }) {
         }}>
           {stop.customer || 'Cliente'}
         </span>
-        <StatusBadge status={resultToBadgeStatus(stop.result_status)} label={resultLabel} />
+        <StatusBadge status={visitState.badgeStatus} label={resultLabel} />
       </div>
 
       {/* Row 2: Details */}
@@ -361,46 +368,6 @@ function SummaryItem({ typo, label, value, color }) {
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
-
-function isVisited(rs) {
-  if (!rs) return false
-  const s = String(rs).toLowerCase()
-  return s.includes('visited') || s.includes('done') || s === 'completed'
-}
-
-function isNotVisited(rs) {
-  if (!rs) return false
-  const s = String(rs).toLowerCase()
-  return s.includes('not_visited') || s === 'skipped' || s === 'not visited'
-}
-
-function getResultColor(rs) {
-  if (!rs) return TOKENS.colors.warning
-  const s = String(rs).toLowerCase()
-  if (s.includes('not_visited') || s === 'skipped' || s === 'not visited') return TOKENS.colors.error
-  if (s.includes('visited') || s.includes('done') || s === 'completed') return TOKENS.colors.success
-  if (s.includes('progress')) return TOKENS.colors.blue2
-  return TOKENS.colors.warning // pending
-}
-
-function getResultLabel(rs) {
-  if (!rs) return 'Pendiente'
-  const s = String(rs).toLowerCase()
-  if (s.includes('not_visited') || s === 'not visited') return 'No visitado'
-  if (s === 'skipped') return 'Omitido'
-  if (s.includes('visited') || s.includes('done') || s === 'completed') return 'Visitado'
-  if (s.includes('progress')) return 'En progreso'
-  return 'Pendiente'
-}
-
-function resultToBadgeStatus(rs) {
-  if (!rs) return 'pending'
-  const s = String(rs).toLowerCase()
-  if (s.includes('not_visited') || s === 'skipped' || s === 'not visited') return 'error'
-  if (s.includes('visited') || s.includes('done') || s === 'completed') return 'done'
-  if (s.includes('progress')) return 'in_progress'
-  return 'pending'
-}
 
 function vendorStatusToBadge(status) {
   if (status === 'good') return 'done'
