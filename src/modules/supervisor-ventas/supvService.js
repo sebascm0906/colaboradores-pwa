@@ -23,12 +23,14 @@
 // se podrá mostrar venta diaria real.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { api } from '../../lib/api.js'
+import { api, getSession } from '../../lib/api.js'
 import {
   resolveEmployeeMonthlySalesActual,
   resolveMonthlySalesActual,
   resolveMonthlySalesTarget,
 } from './monthSales.js'
+import { getLiquidationsHistory, getPendingLiquidations } from '../admin/api.js'
+import { normalizeLiquidationListResponse } from '../admin/liquidacionesResponse.js'
 
 // Re-export all existing + new API functions for convenience
 export {
@@ -75,18 +77,44 @@ function getTodayStr() {
 export async function getDayOverview(date) {
   const dateStr = date || getTodayStr()
   const isToday = dateStr === getTodayStr()
+  const session = getSession()
+  const companyId = Number(session.company_id || 0) || undefined
+  const warehouseId = Number(session.warehouse_id || 0) || undefined
 
-  const [teamRes, routesRes, targetsRes, monthSalesRes] = await Promise.allSettled([
+  const [
+    teamRes,
+    routesRes,
+    targetsRes,
+    monthSalesRes,
+    pendingLiquidationsRes,
+    validatedLiquidationsRes,
+  ] = await Promise.allSettled([
     api('GET', '/pwa-supv/team'),
     api('GET', `/pwa-supv/team-routes?date=${dateStr}`),
     api('GET', '/pwa-supv/team-targets'),
     api('GET', `/pwa-supv/month-sales-summary?date=${dateStr}`),
+    getPendingLiquidations({ companyId, warehouseId }),
+    getLiquidationsHistory({
+      companyId,
+      warehouseId,
+      dateFrom: dateStr,
+      dateTo: dateStr,
+      limit: 100,
+      offset: 0,
+    }),
   ])
 
   const team = teamRes.status === 'fulfilled' ? (Array.isArray(teamRes.value) ? teamRes.value : []) : []
   const routes = routesRes.status === 'fulfilled' ? (Array.isArray(routesRes.value) ? routesRes.value : []) : []
   const targets = targetsRes.status === 'fulfilled' ? (Array.isArray(targetsRes.value) ? targetsRes.value : []) : []
   const monthSales = monthSalesRes.status === 'fulfilled' ? (monthSalesRes.value || null) : null
+  const pendingLiquidations = pendingLiquidationsRes.status === 'fulfilled'
+    ? normalizeLiquidationListResponse(pendingLiquidationsRes.value)
+    : []
+  const validatedLiquidations = validatedLiquidationsRes.status === 'fulfilled'
+    ? normalizeLiquidationListResponse(validatedLiquidationsRes.value, ['plans', 'history'])
+    : []
+  const liquidatedPlanIds = buildLiquidatedPlanIdSet(pendingLiquidations, validatedLiquidations)
 
   // Map routes to drivers/salespersons
   const routeByDriver = {}
@@ -137,7 +165,7 @@ export async function getDayOverview(date) {
         reconciliation_name: route?.reconciliation_name || '',
         force_close_reason: route?.force_close_reason || null,
         is_closed: !!route?.closure_time,
-        is_liquidated: !!route?.reconciliation_id,
+        is_liquidated: liquidatedPlanIds.has(Number(route?.id || 0)),
       }
     })
     .sort((a, b) => a.compliance - b.compliance) // worst first
@@ -357,4 +385,13 @@ export function getLiquidationStatus(v) {
   if (v.is_liquidated) return { label: 'Liquidado', color: '#22c55e' }
   if (v.is_closed) return { label: 'Cerrado (sin liquidar)', color: '#f59e0b' }
   return { label: 'En ruta', color: 'rgba(255,255,255,0.5)' }
+}
+
+export function buildLiquidatedPlanIdSet(pendingRows = [], validatedRows = []) {
+  const ids = new Set()
+  for (const row of [...pendingRows, ...validatedRows]) {
+    const planId = Number(row?.plan_id ?? row?.id ?? 0)
+    if (planId > 0) ids.add(planId)
+  }
+  return ids
 }
