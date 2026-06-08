@@ -41,6 +41,10 @@ import {
   sumSaleOrderTotals,
 } from '../modules/supervisor-ventas/monthSales.js'
 import {
+  buildSupervisorCustomerDomains,
+  resolveSupervisorCustomerAnalyticUnitId,
+} from '../modules/supervisor-ventas/customerScope.js'
+import {
   normalizeOdooPickingId,
   normalizePtTransferActionId,
 } from '../modules/entregas/ptTransferGuards.js'
@@ -1085,27 +1089,25 @@ async function readSupervisorCustomerRows(domain, limit = 200) {
 
 async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 200 } = {}) {
   const safeLimit = Math.min(Number(limit || 200) || 200, 500)
-  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
+  const analyticUnitId = resolveSupervisorCustomerAnalyticUnitId({
+    sessionAnalyticAccountId: sessionAnalyticAccountId(),
+    employeeAnalyticAccountId: await readEmployeeAnalyticAccountId(getEmployeeId()),
+    fallbackAnalyticUnitId: await resolvePosCustomerAnalyticUnitId(),
+  })
+  const baseDomain = buildSupervisorCustomerDomains(analyticUnitId)
   const query = String(q || '').trim()
   const rows = []
 
   if (!query) {
-    for (const baseDomain of baseDomains) {
-      if (rows.length >= safeLimit) break
-      addUniquePosCustomers(rows, await readSupervisorCustomerRows(baseDomain, safeLimit - rows.length))
-    }
+    addUniquePosCustomers(rows, await readSupervisorCustomerRows(baseDomain, safeLimit))
   } else {
     const searchFields = ['name', 'display_name', 'email', 'ref', 'phone', 'mobile']
-    for (const baseDomain of baseDomains) {
+    for (const field of searchFields) {
       if (rows.length >= safeLimit) break
-      for (const field of searchFields) {
-        if (rows.length >= safeLimit) break
-        addUniquePosCustomers(
-          rows,
-          await readSupervisorCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
-        )
-      }
+      addUniquePosCustomers(
+        rows,
+        await readSupervisorCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
+      )
     }
   }
 
@@ -8307,16 +8309,13 @@ async function directSupervisorVentas(method, path, body) {
       return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
     }
 
-    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
-    const baseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
-    let customer = null
-    for (const baseDomain of baseDomains) {
-      const rows = await readSupervisorCustomerRows([...baseDomain, ['id', '=', customerId]], 1)
-      if (rows[0]) {
-        customer = rows[0]
-        break
-      }
-    }
+    const analyticUnitId = resolveSupervisorCustomerAnalyticUnitId({
+      sessionAnalyticAccountId: sessionAnalyticAccountId(),
+      employeeAnalyticAccountId: await readEmployeeAnalyticAccountId(getEmployeeId()),
+      fallbackAnalyticUnitId: await resolvePosCustomerAnalyticUnitId(),
+    })
+    const customerDomain = [...buildSupervisorCustomerDomains(analyticUnitId), ['id', '=', customerId]]
+    const customer = (await readSupervisorCustomerRows(customerDomain, 1))[0] || null
     if (!customer?.id) {
       return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
     }
