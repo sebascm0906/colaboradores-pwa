@@ -104,6 +104,7 @@ const ScreenCierreRuta      = lazy(() => import('./modules/ruta/ScreenCierreRuta
 const ScreenDashboardVentas  = lazy(() => import('./modules/supervisor-ventas/ScreenDashboardVentas'))
 const ScreenPronostico       = lazy(() => import('./modules/supervisor-ventas/ScreenPronostico'))
 const ScreenPlanDiarioClientes = lazy(() => import('./modules/supervisor-ventas/ScreenPlanDiarioClientes'))
+const ScreenClientesSupervisor = lazy(() => import('./modules/supervisor-ventas/ScreenClientesSupervisor'))
 const ScreenMetasVendedores  = lazy(() => import('./modules/supervisor-ventas/ScreenMetasVendedores'))
 const ScreenTareasSupervisor     = lazy(() => import('./modules/supervisor-ventas/ScreenTareasSupervisor'))
 const ScreenNotasCliente         = lazy(() => import('./modules/supervisor-ventas/ScreenNotasCliente'))
@@ -523,6 +524,7 @@ export default function App() {
             <Route path="/equipo/dashboard" element={<PrivateRoute><ScreenDashboardVentas /></PrivateRoute>} />
             <Route path="/equipo/pronostico" element={<PrivateRoute><ScreenPronostico /></PrivateRoute>} />
             <Route path="/equipo/planes/clientes" element={<PrivateRoute><ScreenPlanDiarioClientes /></PrivateRoute>} />
+            <Route path="/equipo/clientes" element={<PrivateRoute><ScreenClientesSupervisor /></PrivateRoute>} />
             <Route path="/equipo/metas" element={<PrivateRoute><ScreenMetasVendedores /></PrivateRoute>} />
             <Route path="/equipo/tareas" element={<PrivateRoute><ScreenTareasSupervisor /></PrivateRoute>} />
             <Route path="/equipo/notas" element={<PrivateRoute><ScreenNotasCliente /></PrivateRoute>} />

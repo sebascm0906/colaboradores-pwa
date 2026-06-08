@@ -101,6 +101,20 @@ export function searchPlanningCustomers(query) {
   return api('GET', `/pwa-supv/customers/search${qs}`)
 }
 
+/** Clientes del CEDIS del supervisor para consulta/edicion */
+export function getSupervisorCustomers(query) {
+  const qs = query ? `?q=${encodeURIComponent(query)}` : ''
+  return api('GET', `/pwa-supv/customers${qs}`)
+}
+
+/** Actualizar datos editables de un cliente del scope del supervisor */
+export function updateSupervisorCustomer(customerId, values) {
+  return api('POST', '/pwa-supv/customers/update', {
+    customer_id: Number(customerId || 0),
+    values: values && typeof values === 'object' ? values : {},
+  })
+}
+
 /** Agregar un cliente como parada manual a un plan activo */
 export function addCustomerToRoutePlan(routePlanId, customerId, notes = '') {
   return api('POST', '/pwa-supv/route-plan-add-customer', {

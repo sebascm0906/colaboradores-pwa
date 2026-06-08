@@ -629,6 +629,26 @@ function shapePosCustomer(row = {}) {
   }
 }
 
+function shapeSupervisorCustomer(row = {}) {
+  return {
+    id: Number(row.id || 0),
+    name: row.name || row.display_name || '',
+    display_name: row.display_name || row.name || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    mobile: row.mobile || '',
+    ref: row.ref || '',
+    street: row.street || '',
+    street2: row.street2 || '',
+    city: row.city || '',
+    state_id: row.state_id || false,
+    zip: row.zip || '',
+    latitude: row.latitude ?? row.partner_latitude ?? false,
+    longitude: row.longitude ?? row.partner_longitude ?? false,
+    [POS_CUSTOMER_ANALYTIC_FIELD]: row[POS_CUSTOMER_ANALYTIC_FIELD] || false,
+  }
+}
+
 const POS_PRODUCT_FIELDS = ['id', 'display_name', 'name', 'list_price', 'lst_price', 'barcode', 'weight', 'sale_ok', 'available_in_pos']
 const POS_PRICELIST_ITEM_FIELDS = [
   'id',
@@ -1046,6 +1066,57 @@ async function readPosCustomerRows(domain, limit) {
     limit,
     sudo: 1,
   }))
+}
+
+async function readSupervisorCustomerRows(domain, limit = 200) {
+  return pickListResponse(await readModelSorted('res.partner', {
+    fields: [
+      'id', 'name', 'display_name', 'email', 'phone', 'mobile', 'ref',
+      'street', 'street2', 'city', 'state_id', 'zip',
+      'latitude', 'longitude', POS_CUSTOMER_ANALYTIC_FIELD,
+    ],
+    domain,
+    sort_column: 'name',
+    sort_desc: false,
+    limit,
+    sudo: 1,
+  }))
+}
+
+async function listSupervisorCustomersFromModels({ companyId, q = '', limit = 200 } = {}) {
+  const safeLimit = Math.min(Number(limit || 200) || 200, 500)
+  const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
+  const baseDomains = buildPosCustomerBaseDomains(Number(companyId || 0), analyticUnitId)
+  const query = String(q || '').trim()
+  const rows = []
+
+  if (!query) {
+    for (const baseDomain of baseDomains) {
+      if (rows.length >= safeLimit) break
+      addUniquePosCustomers(rows, await readSupervisorCustomerRows(baseDomain, safeLimit - rows.length))
+    }
+  } else {
+    const searchFields = ['name', 'display_name', 'email', 'ref', 'phone', 'mobile']
+    for (const baseDomain of baseDomains) {
+      if (rows.length >= safeLimit) break
+      for (const field of searchFields) {
+        if (rows.length >= safeLimit) break
+        addUniquePosCustomers(
+          rows,
+          await readSupervisorCustomerRows([...baseDomain, [field, 'ilike', query]], safeLimit - rows.length),
+        )
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    message: 'OK',
+    data: {
+      customers: rows.map(shapeSupervisorCustomer),
+      total: rows.length,
+    },
+  }
 }
 
 async function searchPosCustomersFromModels({ companyId, q = '', limit = 30 } = {}) {
@@ -8220,6 +8291,92 @@ async function directSupervisorVentas(method, path, body) {
       meta: supervisorMeta(),
       data: { q: query.get('q') || '' },
     })
+  }
+
+  if (cleanPath === '/pwa-supv/customers' && method === 'GET') {
+    return listSupervisorCustomersFromModels({
+      companyId,
+      q: query.get('q') || '',
+      limit: 250,
+    })
+  }
+
+  if (cleanPath === '/pwa-supv/customers/update' && method === 'POST') {
+    const customerId = Number(body?.customer_id || 0)
+    if (!customerId) {
+      return { ok: false, status: 'error', code: 'customer_id_required', message: 'customer_id requerido.' }
+    }
+
+    const analyticUnitId = await resolvePosCustomerAnalyticUnitId()
+    const baseDomains = buildPosCustomerIdBaseDomains(Number(companyId || 0), analyticUnitId)
+    let customer = null
+    for (const baseDomain of baseDomains) {
+      const rows = await readSupervisorCustomerRows([...baseDomain, ['id', '=', customerId]], 1)
+      if (rows[0]) {
+        customer = rows[0]
+        break
+      }
+    }
+    if (!customer?.id) {
+      return { ok: false, status: 'error', code: 'customer_not_found', message: 'Cliente fuera de tu sucursal o no encontrado.' }
+    }
+
+    const rawValues = body?.values && typeof body.values === 'object' ? body.values : {}
+    const allowedFields = ['name', 'phone', 'email', 'latitude', 'longitude']
+    const updates = {}
+
+    for (const field of allowedFields) {
+      if (!Object.prototype.hasOwnProperty.call(rawValues, field)) continue
+      const value = rawValues[field]
+      if (field === 'name') {
+        const cleanValue = String(value ?? '').trim()
+        if (!cleanValue) {
+          return { ok: false, status: 'error', code: 'name_required', message: 'El nombre del cliente es obligatorio.' }
+        }
+        updates.name = cleanValue
+        continue
+      }
+      if (field === 'phone' || field === 'email') {
+        const cleanValue = String(value ?? '').trim()
+        updates[field] = cleanValue || false
+        continue
+      }
+      if (value === false || value === null || String(value).trim() === '') {
+        updates[field] = false
+        continue
+      }
+      const numberValue = Number(value)
+      if (!Number.isFinite(numberValue)) {
+        return {
+          ok: false,
+          status: 'error',
+          code: `${field}_invalid`,
+          message: field === 'latitude' ? 'La latitud debe ser numerica.' : 'La longitud debe ser numerica.',
+        }
+      }
+      updates[field] = numberValue
+    }
+
+    if (!Object.keys(updates).length) {
+      return { ok: true, status: 'ok', message: 'Sin cambios', data: shapeSupervisorCustomer(customer) }
+    }
+
+    await createUpdate({
+      model: 'res.partner',
+      method: 'update',
+      ids: [customerId],
+      dict: updates,
+      sudo: 1,
+      app: 'pwa_colaboradores',
+    })
+
+    const refreshedRows = await readSupervisorCustomerRows([['id', '=', customerId]], 1)
+    return {
+      ok: true,
+      status: 'ok',
+      message: 'Cliente actualizado.',
+      data: shapeSupervisorCustomer(refreshedRows[0] || { ...customer, ...updates, id: customerId }),
+    }
   }
 
   const cleanNumberList = (values) => (Array.isArray(values) ? values : [])
