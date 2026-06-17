@@ -1,4 +1,4 @@
-export const MAX_CHECKLIST_PHOTO_SIZE_BYTES = 2 * 1024 * 1024
+export const MAX_CHECKLIST_PHOTO_SIZE_BYTES = 15 * 1024 * 1024
 
 export function normalizeChecklistPhotoValue(value) {
   if (typeof value !== 'string') return value

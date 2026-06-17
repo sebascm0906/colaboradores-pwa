@@ -44,6 +44,6 @@ test('validateChecklistPhotoFile rejects images that exceed the size limit', () 
       type: 'image/png',
       size: MAX_CHECKLIST_PHOTO_SIZE_BYTES + 1,
     }),
-    'La foto debe ser menor a 2 MB.',
+    'La foto debe ser menor a 15 MB.',
   )
 })
